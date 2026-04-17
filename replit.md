@@ -25,3 +25,47 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## 건설UP App
+
+Korean construction job listing website at `artifacts/geonseolup/`.
+
+### Architecture
+- **Frontend**: React + Vite + Tailwind CSS + Wouter router
+- **Database**: Firebase Firestore (direct from frontend, no backend)
+- **Firebase project**: geonseolup (hardcoded config)
+- **Preview path**: `/` (port 19759)
+
+### Features
+- Real-time job listings via Firebase Firestore (with localStorage fallback)
+- 15 sample jobs for fallback when Firebase is empty/unavailable
+- Filters: region (17 regions), job type (14 types), welding subtype (TIG/아크/CO2/PVC)
+- Keyword search, sort (newest/salary high/salary low)
+- Preset presets: salary top, meal+lodging, new today, welding, fire guard
+- Job detail page with phone/SMS CTA
+- Job posting form (pending approval flow)
+- Admin panel with password auth (default: 1234), job management, pending approval, settings
+
+### Key Files
+- `src/App.tsx` — Router with pages
+- `src/lib/firebase.ts` — Firestore CRUD wrapper with fallback
+- `src/lib/utils.ts` — Utilities (formatDate, job icons, badge colors, viewed tracking)
+- `src/data/sampleJobs.ts` — 15 sample jobs for offline/fallback
+- `src/components/Header.tsx` — Top nav with contact modal and kakao share
+- `src/components/JobCard.tsx` — Job card with call/SMS/detail buttons
+- `src/pages/Home.tsx` — Main job listing with filters
+- `src/pages/Detail.tsx` — Job detail page
+- `src/pages/Post.tsx` — Job posting form
+- `src/pages/Admin.tsx` — Admin panel
+
+### Brand Colors
+- Primary: `#f97316` (orange)
+- Secondary: `#1e3a5f` (navy)
+
+### localStorage Keys
+- `cj_admin_auth` — admin auth token
+- `cj_admin_pw` — admin password (default: 1234)
+- `cj_viewed_jobs` — viewed job IDs (max 500)
+- `cj_contact_email` / `cj_contact_kakao` / `cj_contact_label` — contact info
+- `cj_share_url` — custom share URL
+- `cj_dup_settings` — { autoHideHours } (0=disabled)
