@@ -147,7 +147,19 @@ ${items}
     res.send(xml);
   } catch (err) {
     console.error("[RSS] Error generating feed:", err);
-    res.status(500).send("RSS 피드 생성 중 오류가 발생했습니다.");
+    const fallbackXml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>건설UP - 건설 현장 일자리 정보</title>
+    <link>https://geonseolup.com</link>
+    <description>전국 건설 현장 일자리 정보를 실시간으로 제공합니다.</description>
+    <language>ko</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <atom:link href="https://geonseolup.com/rss" rel="self" type="application/rss+xml"/>
+  </channel>
+</rss>`;
+    res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
+    res.status(200).send(fallbackXml);
   }
 });
 
