@@ -199,6 +199,27 @@ export default function Admin() {
     notice: localStorage.getItem('cj_footer_notice') || '※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.',
   });
 
+  const IMG_AD_SLOTS = [
+    { key: 'main_top', label: '홈 상단 배너' },
+    { key: 'main_infeed', label: '홈 인피드' },
+    { key: 'main_bottom', label: '홈 하단 배너' },
+    { key: 'detail_top', label: '상세 상단 배너' },
+    { key: 'detail_bottom', label: '상세 하단 배너' },
+  ];
+  const [imgAdSlot, setImgAdSlot] = useState('main_top');
+  const [imgAdData, setImgAdData] = useState<Record<string, { src: string; url: string }>>(() => {
+    const result: Record<string, { src: string; url: string }> = {};
+    for (const s of [
+      'main_top', 'main_infeed', 'main_bottom', 'detail_top', 'detail_bottom',
+    ]) {
+      result[s] = {
+        src: localStorage.getItem(`cj_imgad_${s}_src`) || '',
+        url: localStorage.getItem(`cj_imgad_${s}_url`) || '',
+      };
+    }
+    return result;
+  });
+
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -1562,6 +1583,136 @@ export default function Admin() {
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* 이미지 광고 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">🖼️ 이미지 광고 설정</h2>
+              <p className="text-sm text-gray-500 mb-4">이미지 파일을 업로드하고 클릭 시 이동할 URL을 설정합니다. 이미지 광고가 우선 적용됩니다.</p>
+
+              {/* 슬롯 탭 */}
+              <div className="flex gap-2 flex-wrap mb-5">
+                {IMG_AD_SLOTS.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => setImgAdSlot(s.key)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors font-[inherit] cursor-pointer ${
+                      imgAdSlot === s.key
+                        ? 'bg-[#f97316] text-white border-[#f97316]'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-[#f97316]'
+                    }`}
+                  >
+                    {s.label}
+                    {imgAdData[s.key]?.src && <span className="ml-1 text-[10px]">●</span>}
+                  </button>
+                ))}
+              </div>
+
+              {/* 현재 슬롯 편집 */}
+              {(() => {
+                const current = imgAdData[imgAdSlot] || { src: '', url: '' };
+                return (
+                  <div className="grid gap-4">
+                    {/* 이미지 미리보기 */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-2">이미지 미리보기</label>
+                      {current.src ? (
+                        <div className="relative">
+                          <img
+                            src={current.src}
+                            alt="광고 미리보기"
+                            className="w-full rounded-lg object-cover border border-gray-200"
+                            style={{ maxHeight: 180 }}
+                          />
+                          <button
+                            onClick={() => setImgAdData((p) => ({ ...p, [imgAdSlot]: { ...p[imgAdSlot], src: '' } }))}
+                            className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-lg cursor-pointer border-none font-[inherit] hover:bg-red-600"
+                          >
+                            ✕ 제거
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-full rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center py-8 bg-gray-50">
+                          <span className="text-2xl mb-2">🖼️</span>
+                          <p className="text-xs text-gray-500">이미지를 업로드해 주세요</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 파일 업로드 */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-2">이미지 파일 선택</label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <span className="bg-[#1e3a5f] text-white text-sm px-4 py-2 rounded-lg font-bold hover:bg-[#16304f] transition-colors">
+                          📁 파일 선택
+                        </span>
+                        <span className="text-xs text-gray-500">{current.src ? '변경하려면 새 파일 선택' : 'JPG · PNG · WebP · GIF 권장'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 3 * 1024 * 1024) {
+                              showToast('⚠️ 파일 크기가 3MB를 초과합니다');
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              const src = ev.target?.result as string;
+                              setImgAdData((p) => ({ ...p, [imgAdSlot]: { ...p[imgAdSlot], src } }));
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {/* 클릭 링크 */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                        클릭 시 이동 URL <span className="text-gray-400 font-normal">(비워두면 링크 없음)</span>
+                      </label>
+                      <input
+                        type="url"
+                        value={current.url}
+                        onChange={(e) => setImgAdData((p) => ({ ...p, [imgAdSlot]: { ...p[imgAdSlot], url: e.target.value } }))}
+                        placeholder="https://example.com"
+                        className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                      />
+                    </div>
+
+                    {/* 버튼 */}
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        className="flex items-center gap-2 bg-[#f97316] text-white border-none py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                        onClick={() => {
+                          localStorage.setItem(`cj_imgad_${imgAdSlot}_src`, current.src);
+                          localStorage.setItem(`cj_imgad_${imgAdSlot}_url`, current.url);
+                          showToast('✅ 이미지 광고가 저장됐습니다');
+                        }}
+                      >
+                        💾 저장
+                      </button>
+                      {current.src && (
+                        <button
+                          className="flex items-center gap-2 bg-white text-red-500 border border-red-300 py-2.5 px-5 rounded-xl text-[14px] font-bold cursor-pointer hover:bg-red-50 transition-colors font-[inherit]"
+                          onClick={() => {
+                            localStorage.removeItem(`cj_imgad_${imgAdSlot}_src`);
+                            localStorage.removeItem(`cj_imgad_${imgAdSlot}_url`);
+                            setImgAdData((p) => ({ ...p, [imgAdSlot]: { src: '', url: '' } }));
+                            showToast('🗑️ 이미지 광고가 삭제됐습니다');
+                          }}
+                        >
+                          🗑️ 삭제
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 광고 코드 설정 */}

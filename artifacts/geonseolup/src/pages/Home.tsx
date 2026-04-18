@@ -28,7 +28,37 @@ function getAutoHideHours(): number {
   }
 }
 
+function getImgAd(slotSuffix: string): { src: string; url: string } | null {
+  const src = localStorage.getItem(`cj_imgad_${slotSuffix}_src`) || '';
+  if (!src) return null;
+  return { src, url: localStorage.getItem(`cj_imgad_${slotSuffix}_url`) || '' };
+}
+
 function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHeight?: number; maxWidth?: string }) {
+  const slotSuffix = storageKey.replace('cj_ad_', '');
+  const imgAd = getImgAd(slotSuffix);
+
+  if (imgAd) {
+    const inner = (
+      <img
+        src={imgAd.src}
+        alt="광고"
+        className="w-full rounded-lg block"
+        style={{ minHeight: minHeight ?? 90, objectFit: 'cover', cursor: imgAd.url ? 'pointer' : 'default' }}
+      />
+    );
+    return (
+      <div className="w-full my-1 flex justify-center">
+        <div style={{ width: maxWidth || '100%' }}>
+          <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
+          {imgAd.url
+            ? <a href={imgAd.url} target="_blank" rel="noopener noreferrer">{inner}</a>
+            : inner}
+        </div>
+      </div>
+    );
+  }
+
   const code = localStorage.getItem(storageKey) || '';
   if (!code.trim()) return null;
   return (
@@ -275,22 +305,33 @@ export default function Home() {
     state.keyword || state.region !== '전체' || state.job !== '전체' || state.weldSub !== '전체';
 
   const infeedCode = localStorage.getItem('cj_ad_main_infeed') || '';
+  const infeedImgAd = getImgAd('main_infeed');
 
   function buildGridItems() {
     const items: React.ReactNode[] = [];
     pageItems.forEach((job, idx) => {
       items.push(<JobCard key={job.id} job={job} />);
       const isLastItem = idx === pageItems.length - 1;
-      if (infeedCode.trim() && !isLastItem && (idx + 1) % INFEED_EVERY === 0) {
+      const showInfeed = !isLastItem && (idx + 1) % INFEED_EVERY === 0;
+      if (showInfeed && (infeedImgAd || infeedCode.trim())) {
+        const infeedContent = infeedImgAd ? (
+          infeedImgAd.url
+            ? <a href={infeedImgAd.url} target="_blank" rel="noopener noreferrer">
+                <img src={infeedImgAd.src} alt="광고" className="w-full rounded-lg block" style={{ minHeight: homeSettings.adInfeedHeight, objectFit: 'cover', cursor: 'pointer' }} />
+              </a>
+            : <img src={infeedImgAd.src} alt="광고" className="w-full rounded-lg block" style={{ minHeight: homeSettings.adInfeedHeight, objectFit: 'cover' }} />
+        ) : (
+          <div
+            className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
+            style={{ background: '#fffde7', minHeight: homeSettings.adInfeedHeight }}
+            dangerouslySetInnerHTML={{ __html: infeedCode }}
+          />
+        );
         items.push(
           <div key={`infeed-${idx}`} className="col-span-full flex justify-center">
             <div style={{ width: homeSettings.adMaxWidth }}>
               <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
-              <div
-                className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
-                style={{ background: '#fffde7', minHeight: homeSettings.adInfeedHeight }}
-                dangerouslySetInnerHTML={{ __html: infeedCode }}
-              />
+              {infeedContent}
             </div>
           </div>
         );
