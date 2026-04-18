@@ -50,7 +50,6 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
     return (
       <div className="w-full my-1 flex justify-center">
         <div style={{ width: maxWidth || '100%' }}>
-          <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
           {imgAd.url
             ? <a href={imgAd.url} target="_blank" rel="noopener noreferrer">{inner}</a>
             : inner}
@@ -64,7 +63,6 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
   return (
     <div className="w-full my-1 flex justify-center">
       <div style={{ width: maxWidth || '100%' }}>
-        <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
         <div
           className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
           style={{ background: '#fffde7', minHeight: minHeight ?? 90 }}
@@ -330,7 +328,6 @@ export default function Home() {
         items.push(
           <div key={`infeed-${idx}`} className="col-span-full flex justify-center">
             <div style={{ width: homeSettings.adMaxWidth }}>
-              <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
               {infeedContent}
             </div>
           </div>
