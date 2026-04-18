@@ -200,7 +200,7 @@ export default function JobCard({ job, isDupOld }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex gap-[5px] flex-1 min-w-0">
-          {hasPhone && (
+          {hasPhone && revealed && (
             <>
               <a
                 href={telHref}
