@@ -4,6 +4,7 @@ import Home from '@/pages/Home';
 import Detail from '@/pages/Detail';
 import Post from '@/pages/Post';
 import Admin from '@/pages/Admin';
+import VisitorWidget from '@/components/VisitorWidget';
 
 function NotFound() {
   return (
@@ -76,6 +77,7 @@ function App() {
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <Router />
+      <VisitorWidget />
     </WouterRouter>
   );
 }

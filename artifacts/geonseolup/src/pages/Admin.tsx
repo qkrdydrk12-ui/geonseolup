@@ -173,6 +173,7 @@ export default function Admin() {
       localStorage.setItem(ADMIN_KEY, '1');
       setAuthed(true);
       setPwError(false);
+      window.dispatchEvent(new Event('admin-login'));
     } else {
       setPwError(true);
     }
