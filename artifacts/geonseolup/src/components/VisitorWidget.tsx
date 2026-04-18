@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 const TOTAL_KEY = 'cj_visit_total';
 const LOG_KEY = 'cj_visit_log';
@@ -39,13 +39,12 @@ function recordVisit() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
-  const trimmed = log.filter((d) => d >= cutoffStr);
-  localStorage.setItem(LOG_KEY, JSON.stringify(trimmed));
+  localStorage.setItem(LOG_KEY, JSON.stringify(log.filter((d) => d >= cutoffStr)));
 }
 
 export default function VisitorWidget() {
-  const isAdmin = useCallback(() => !!localStorage.getItem(ADMIN_KEY), []);
-  const [open, setOpen] = useState(() => isAdmin());
+  const [authed, setAuthed] = useState(() => !!localStorage.getItem(ADMIN_KEY));
+  const [open, setOpen] = useState(false);
   const [stats, setStats] = useState(getStats);
 
   useEffect(() => {
@@ -56,11 +55,18 @@ export default function VisitorWidget() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key === ADMIN_KEY) {
-        if (e.newValue) setOpen(true);
-        setStats(getStats());
+        const loggedIn = !!e.newValue;
+        setAuthed(loggedIn);
+        if (loggedIn) {
+          setOpen(true);
+          setStats(getStats());
+        } else {
+          setOpen(false);
+        }
       }
     }
     function onAdminLogin() {
+      setAuthed(true);
       setOpen(true);
       setStats(getStats());
     }
@@ -73,8 +79,8 @@ export default function VisitorWidget() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin()) setOpen(true);
-  }, [isAdmin]);
+    if (authed) setOpen(true);
+  }, [authed]);
 
   function resetStats() {
     if (!confirm('방문자 통계를 초기화하시겠습니까?')) return;
@@ -82,6 +88,8 @@ export default function VisitorWidget() {
     localStorage.removeItem(LOG_KEY);
     setStats({ total: 0, today: 0, yesterday: 0, week: 0 });
   }
+
+  if (!authed) return null;
 
   return (
     <div className="fixed bottom-5 right-5 z-[9000] font-[inherit]">
