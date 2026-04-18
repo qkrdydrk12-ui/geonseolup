@@ -122,9 +122,9 @@ export default function Admin() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState('');
   const [settings, setSettings] = useState({
-    adminPw: localStorage.getItem('cj_admin_pw') || '1234',
-    contactEmail: localStorage.getItem('cj_contact_email') || '',
-    contactKakao: localStorage.getItem('cj_contact_kakao') || '',
+    adminPw: localStorage.getItem('cj_admin_pw') || 'wns585426!@',
+    contactEmail: localStorage.getItem('cj_contact_email') || 'qkrdydrk@naver.com',
+    contactKakao: localStorage.getItem('cj_contact_kakao') || '010-5567-2710',
     contactLabel: localStorage.getItem('cj_contact_label') || '',
     autoHideHours: '',
     shareUrl: localStorage.getItem('cj_share_url') || '',
@@ -173,8 +173,8 @@ export default function Admin() {
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    const storedPw = localStorage.getItem('cj_admin_pw') || '1234';
-    const storedId = localStorage.getItem('cj_admin_id') || 'admin';
+    const storedPw = localStorage.getItem('cj_admin_pw') || 'wns585426!@';
+    const storedId = localStorage.getItem('cj_admin_id') || 'qkrdydrk12';
     if (adminId === storedId && password === storedPw) {
       localStorage.setItem(ADMIN_KEY, '1');
       setAuthed(true);
@@ -485,12 +485,11 @@ export default function Admin() {
                   <p className="text-sm text-gray-700 font-semibold mb-1">확인이 완료되었습니다</p>
                   <p className="text-xs text-gray-500 mb-5 leading-relaxed">
                     관리자에게 아이디/비밀번호 재발급을 요청해 주세요.<br />
-                    {localStorage.getItem('cj_contact_email') && (
-                      <>📧 {localStorage.getItem('cj_contact_email')}</>
-                    )}
-                    {localStorage.getItem('cj_contact_kakao') && (
-                      <><br />💛 카카오 {localStorage.getItem('cj_contact_kakao')}</>
-                    )}
+                    {(() => {
+                      const email = localStorage.getItem('cj_contact_email') || 'qkrdydrk@naver.com';
+                      const kakao = localStorage.getItem('cj_contact_kakao') || '010-5567-2710';
+                      return (<>📧 {email}<br />📞 {kakao}</>);
+                    })()}
                   </p>
                   <button
                     onClick={() => setShowFindModal(false)}
@@ -1139,7 +1138,7 @@ export default function Admin() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      defaultValue={localStorage.getItem('cj_admin_id') || 'admin'}
+                      defaultValue={localStorage.getItem('cj_admin_id') || 'qkrdydrk12'}
                       id="admin-id-input"
                       placeholder="관리자 아이디"
                       className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
