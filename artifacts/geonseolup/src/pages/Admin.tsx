@@ -149,6 +149,15 @@ export default function Admin() {
     return stored.autoHideHours != null ? String(stored.autoHideHours) : '48';
   });
   const [dupStats, setDupStats] = useState({ visible: 0, autoHidden: 0, manualHidden: 0, similarPairs: 0 });
+  const [adPageTab, setAdPageTab] = useState<'main' | 'detail'>('main');
+  const [adCodes, setAdCodes] = useState({
+    mainTop: localStorage.getItem('cj_ad_main_top') || '',
+    mainInfeed: localStorage.getItem('cj_ad_main_infeed') || '',
+    mainBottom: localStorage.getItem('cj_ad_main_bottom') || '',
+    detailTop: localStorage.getItem('cj_ad_detail_top') || '',
+    detailInfeed: localStorage.getItem('cj_ad_detail_infeed') || '',
+    detailBottom: localStorage.getItem('cj_ad_detail_bottom') || '',
+  });
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -1028,6 +1037,137 @@ export default function Admin() {
                 >
                   변경
                 </button>
+              </div>
+            </div>
+
+            {/* 광고 코드 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-2 flex items-center gap-2">
+                📢 광고 코드 설정
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                각 영역에 애드센스 또는 기타 광고 코드를 붙여넣으세요.<br />
+                저장 후 메인/상세 페이지에 즉시 반영됩니다. 비워두면 광고 영역이 숨겨집니다.
+              </p>
+
+              {/* 페이지 서브탭 */}
+              <div className="flex gap-2 mb-5">
+                {([
+                  { id: 'main', icon: '🏠', label: '메인 페이지' },
+                  { id: 'detail', icon: '📄', label: '상세 페이지' },
+                ] as const).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setAdPageTab(t.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold border-2 cursor-pointer font-[inherit] transition-colors ${
+                      adPageTab === t.id
+                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {t.icon} {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {adPageTab === 'main' && (
+                <div className="grid gap-4">
+                  {[
+                    { key: 'mainTop', label: '① 상단 배너 광고', hint: '상단 헤더 아래' },
+                    { key: 'mainInfeed', label: '② 인피드 광고', hint: '카드 6개마다 자동 삽입' },
+                    { key: 'mainBottom', label: '③ 하단 배너 광고', hint: '푸터 위' },
+                  ].map((slot) => (
+                    <div key={slot.key}>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        {slot.label} <span className="text-xs font-normal text-gray-400">({slot.hint})</span>
+                      </label>
+                      <textarea
+                        value={adCodes[slot.key as keyof typeof adCodes]}
+                        onChange={(e) => setAdCodes((p) => ({ ...p, [slot.key]: e.target.value }))}
+                        rows={4}
+                        placeholder="광고 코드 붙여넣기"
+                        className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-mono font-[inherit] focus:border-[#f97316] resize-y min-h-[80px]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adPageTab === 'detail' && (
+                <div className="grid gap-4">
+                  {[
+                    { key: 'detailTop', label: '① 상단 배너 광고', hint: '상단 헤더 아래' },
+                    { key: 'detailInfeed', label: '② 인피드 광고', hint: '본문 중간 삽입' },
+                    { key: 'detailBottom', label: '③ 하단 배너 광고', hint: '푸터 위' },
+                  ].map((slot) => (
+                    <div key={slot.key}>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        {slot.label} <span className="text-xs font-normal text-gray-400">({slot.hint})</span>
+                      </label>
+                      <textarea
+                        value={adCodes[slot.key as keyof typeof adCodes]}
+                        onChange={(e) => setAdCodes((p) => ({ ...p, [slot.key]: e.target.value }))}
+                        rows={4}
+                        placeholder="광고 코드 붙여넣기"
+                        className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-mono font-[inherit] focus:border-[#f97316] resize-y min-h-[80px]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-5">
+                <button
+                  className="flex items-center gap-2 bg-[#f97316] text-white border-none py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                  onClick={() => {
+                    localStorage.setItem('cj_ad_main_top', adCodes.mainTop);
+                    localStorage.setItem('cj_ad_main_infeed', adCodes.mainInfeed);
+                    localStorage.setItem('cj_ad_main_bottom', adCodes.mainBottom);
+                    localStorage.setItem('cj_ad_detail_top', adCodes.detailTop);
+                    localStorage.setItem('cj_ad_detail_infeed', adCodes.detailInfeed);
+                    localStorage.setItem('cj_ad_detail_bottom', adCodes.detailBottom);
+                    showToast('✅ 광고 코드가 저장됐습니다');
+                  }}
+                >
+                  💾 광고 코드 저장
+                </button>
+                <button
+                  className="flex items-center gap-2 bg-red-50 text-red-500 border-2 border-red-300 py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-red-100 transition-colors font-[inherit]"
+                  onClick={() => {
+                    if (!confirm('모든 광고 코드를 초기화하시겠습니까?')) return;
+                    const empty = { mainTop: '', mainInfeed: '', mainBottom: '', detailTop: '', detailInfeed: '', detailBottom: '' };
+                    setAdCodes(empty);
+                    ['cj_ad_main_top','cj_ad_main_infeed','cj_ad_main_bottom','cj_ad_detail_top','cj_ad_detail_infeed','cj_ad_detail_bottom'].forEach((k) => localStorage.removeItem(k));
+                    showToast('🗑 광고 코드가 초기화됐습니다');
+                  }}
+                >
+                  🗑 전체 초기화
+                </button>
+              </div>
+              <p className="mt-3 text-xs text-amber-600 flex items-center gap-1">
+                <span>💡</span> 비워두면 해당 광고 영역 자체가 화면에서 숨겨집니다.
+              </p>
+            </div>
+
+            {/* 현황 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 flex items-center gap-2">
+                📊 현황
+              </h2>
+              <div className="grid gap-2 text-sm text-gray-700">
+                {[
+                  { icon: '📄', label: '총 등록 공고', value: jobs.length },
+                  { icon: '👁', label: '공개 중', value: jobs.filter((j) => !j.hidden).length },
+                  { icon: '🙈', label: '숨김 중', value: jobs.filter((j) => !!j.hidden).length },
+                  { icon: '🔧', label: '용접 계열', value: jobs.filter((j) => j.job === '용접' || j.weldSub).length },
+                  { icon: '🔥', label: '화기감시자', value: jobs.filter((j) => j.job === '화기감시자').length },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center gap-2">
+                    <span className="text-base">{row.icon}</span>
+                    <span className="text-gray-600">{row.label}:</span>
+                    <strong className="text-gray-900">{row.value}건</strong>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
