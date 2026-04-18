@@ -220,6 +220,10 @@ export default function Admin() {
     return result;
   });
 
+  const [contactLimitInput, setContactLimitInput] = useState(
+    localStorage.getItem('cj_contact_daily_limit') || '20'
+  );
+
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -1238,6 +1242,100 @@ export default function Admin() {
                 <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
                   <span>💡</span> 기본 아이디: <strong>admin</strong> / 기본 비밀번호: <strong>1234</strong>
                 </p>
+              </div>
+            </div>
+
+            {/* 연락처 조회 제한 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">🔒 연락처 조회 제한</h2>
+              <p className="text-sm text-gray-500 mb-5">사용자가 하루에 열람 가능한 연락처 수를 제한합니다. 초과 시 "과도한 조회로 제한되었습니다" 메시지가 표시됩니다.</p>
+
+              {/* 현재 설정 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                <div className="bg-orange-50 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <span className="text-2xl">📋</span>
+                  <div>
+                    <div className="text-xs text-gray-500 font-semibold">하루 최대 열람 수</div>
+                    <div className="text-xl font-extrabold text-[#f97316]">
+                      {localStorage.getItem('cj_contact_daily_limit') || '20'}개
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-blue-50 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <span className="text-2xl">📊</span>
+                  <div>
+                    <div className="text-xs text-gray-500 font-semibold">오늘의 내 열람 수</div>
+                    <div className="text-xl font-extrabold text-blue-600">
+                      {(() => {
+                        try {
+                          const log = JSON.parse(localStorage.getItem('cj_contact_log') || '[]') as number[];
+                          const today = new Date().toDateString();
+                          return log.filter((ts) => new Date(ts).toDateString() === today).length;
+                        } catch { return 0; }
+                      })()}개
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 제한 수 설정 */}
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  하루 최대 연락처 열람 수 설정
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={contactLimitInput}
+                    onChange={(e) => setContactLimitInput(e.target.value)}
+                    className="w-32 py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                  <span className="text-sm text-gray-500 self-center">개 / 일</span>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {[5, 10, 20, 30, 50].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setContactLimitInput(String(n))}
+                      className={`px-3 py-1 rounded-full text-xs font-bold border cursor-pointer font-[inherit] transition-colors ${
+                        contactLimitInput === String(n)
+                          ? 'bg-[#f97316] text-white border-[#f97316]'
+                          : 'bg-white text-gray-600 border-gray-300 hover:border-[#f97316]'
+                      }`}
+                    >
+                      {n}개
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  className="flex items-center gap-2 bg-[#f97316] text-white border-none py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                  onClick={() => {
+                    const val = Math.max(1, parseInt(contactLimitInput) || 20);
+                    setContactLimitInput(String(val));
+                    localStorage.setItem('cj_contact_daily_limit', String(val));
+                    showToast(`✅ 하루 ${val}개로 제한이 설정됐습니다`);
+                  }}
+                >
+                  💾 제한 저장
+                </button>
+                <button
+                  className="flex items-center gap-2 bg-white text-gray-600 border border-gray-300 py-2.5 px-5 rounded-xl text-[14px] font-semibold cursor-pointer hover:border-red-400 hover:text-red-500 transition-colors font-[inherit]"
+                  onClick={() => {
+                    if (confirm('오늘 조회 기록을 초기화하시겠습니까?')) {
+                      const log = JSON.parse(localStorage.getItem('cj_contact_log') || '[]') as number[];
+                      const today = new Date().toDateString();
+                      localStorage.setItem('cj_contact_log', JSON.stringify(log.filter((ts) => new Date(ts).toDateString() !== today)));
+                      showToast('🔄 오늘 조회 기록이 초기화됐습니다');
+                    }
+                  }}
+                >
+                  🔄 오늘 기록 초기화
+                </button>
               </div>
             </div>
 

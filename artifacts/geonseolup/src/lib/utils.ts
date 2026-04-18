@@ -147,3 +147,28 @@ export function markViewed(id: string): void {
   const trimmed = arr.length > 500 ? arr.slice(arr.length - 500) : arr;
   localStorage.setItem('cj_viewed_jobs', JSON.stringify(trimmed));
 }
+
+export function getContactDailyLimit(): number {
+  return Math.max(1, parseInt(localStorage.getItem('cj_contact_daily_limit') || '20') || 20);
+}
+
+export function getTodayContactCount(): number {
+  try {
+    const log = JSON.parse(localStorage.getItem('cj_contact_log') || '[]') as number[];
+    const today = new Date().toDateString();
+    return log.filter((ts) => new Date(ts).toDateString() === today).length;
+  } catch { return 0; }
+}
+
+export function recordContactReveal(): void {
+  try {
+    const log = JSON.parse(localStorage.getItem('cj_contact_log') || '[]') as number[];
+    log.push(Date.now());
+    const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+    localStorage.setItem('cj_contact_log', JSON.stringify(log.filter((ts) => ts > cutoff)));
+  } catch {}
+}
+
+export function isContactBlocked(): boolean {
+  return getTodayContactCount() >= getContactDailyLimit();
+}

@@ -11,6 +11,10 @@ import {
   getViewed,
   markViewed,
   WELD_SUBS,
+  isContactBlocked,
+  recordContactReveal,
+  getTodayContactCount,
+  getContactDailyLimit,
 } from '@/lib/utils';
 
 interface Props {
@@ -30,6 +34,7 @@ export default function JobCard({ job, isDupOld }: Props) {
   const [, setLocation] = useLocation();
   const [detailOpen, setDetailOpen] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
   const _isHot = isHot(job.date);
@@ -157,14 +162,23 @@ export default function JobCard({ job, isDupOld }: Props) {
             <span className="flex-1 flex items-center gap-1.5 min-w-0">
               {revealed ? (
                 <span className="font-semibold text-gray-800 break-all">{job.contact || '문의'}</span>
+              ) : blocked ? (
+                <span className="text-[11px] text-red-500 font-bold">🚫 과도한 조회로 제한되었습니다</span>
               ) : (
                 <>
                   <span className="font-semibold text-gray-400 tracking-wide">{maskContact(job.contact || '')}</span>
                   <button
-                    onClick={() => setRevealed(true)}
+                    onClick={() => {
+                      if (isContactBlocked()) {
+                        setBlocked(true);
+                        return;
+                      }
+                      recordContactReveal();
+                      setRevealed(true);
+                    }}
                     className="shrink-0 text-[10px] bg-[#f97316] text-white px-2 py-[3px] rounded-full font-bold cursor-pointer border-none hover:bg-[#ea580c] transition-colors whitespace-nowrap"
                   >
-                    👁 보기
+                    👁 보기 ({getTodayContactCount()}/{getContactDailyLimit()})
                   </button>
                 </>
               )}
