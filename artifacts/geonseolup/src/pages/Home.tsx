@@ -38,18 +38,30 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
   const slotSuffix = storageKey.replace('cj_ad_', '');
   const imgAd = getImgAd(slotSuffix);
 
+  const containerStyle: React.CSSProperties = {
+    width: '100%',
+    maxWidth: maxWidth || '100%',
+  };
+
   if (imgAd) {
     const inner = (
       <img
         src={imgAd.src}
         alt="광고"
-        className="w-full rounded-lg block"
-        style={{ minHeight: minHeight ?? 90, objectFit: 'cover', cursor: imgAd.url ? 'pointer' : 'default' }}
+        className="block rounded-lg"
+        style={{
+          width: '100%',
+          height: 'auto',
+          minHeight: minHeight ?? 60,
+          maxHeight: 200,
+          objectFit: 'cover',
+          cursor: imgAd.url ? 'pointer' : 'default',
+        }}
       />
     );
     return (
-      <div className="w-full my-1 flex justify-center">
-        <div style={{ width: maxWidth || '100%' }}>
+      <div className="w-full my-1 flex justify-center overflow-hidden">
+        <div style={containerStyle}>
           {imgAd.url
             ? <a href={imgAd.url} target="_blank" rel="noopener noreferrer">{inner}</a>
             : inner}
@@ -61,11 +73,11 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
   const code = localStorage.getItem(storageKey) || '';
   if (!code.trim()) return null;
   return (
-    <div className="w-full my-1 flex justify-center">
-      <div style={{ width: maxWidth || '100%' }}>
+    <div className="w-full my-1 flex justify-center overflow-hidden">
+      <div style={containerStyle}>
         <div
           className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
-          style={{ background: '#fffde7', minHeight: minHeight ?? 90 }}
+          style={{ background: '#fffde7', minHeight: minHeight ?? 60 }}
           dangerouslySetInnerHTML={{ __html: code }}
         />
       </div>
@@ -321,12 +333,19 @@ export default function Home() {
       const isLastItem = idx === pageItems.length - 1;
       const showInfeed = !isLastItem && (idx + 1) % INFEED_EVERY === 0;
       if (showInfeed && (infeedImgAd || infeedCode.trim())) {
+        const imgStyle: React.CSSProperties = {
+          width: '100%',
+          height: 'auto',
+          minHeight: homeSettings.adInfeedHeight,
+          maxHeight: 200,
+          objectFit: 'cover',
+        };
         const infeedContent = infeedImgAd ? (
           infeedImgAd.url
             ? <a href={infeedImgAd.url} target="_blank" rel="noopener noreferrer">
-                <img src={infeedImgAd.src} alt="광고" className="w-full rounded-lg block" style={{ minHeight: homeSettings.adInfeedHeight, objectFit: 'cover', cursor: 'pointer' }} />
+                <img src={infeedImgAd.src} alt="광고" className="block rounded-lg" style={{ ...imgStyle, cursor: 'pointer' }} />
               </a>
-            : <img src={infeedImgAd.src} alt="광고" className="w-full rounded-lg block" style={{ minHeight: homeSettings.adInfeedHeight, objectFit: 'cover' }} />
+            : <img src={infeedImgAd.src} alt="광고" className="block rounded-lg" style={imgStyle} />
         ) : (
           <div
             className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
@@ -335,8 +354,8 @@ export default function Home() {
           />
         );
         items.push(
-          <div key={`infeed-${idx}`} className="col-span-full flex justify-center">
-            <div style={{ width: homeSettings.adMaxWidth }}>
+          <div key={`infeed-${idx}`} className="col-span-full flex justify-center overflow-hidden">
+            <div style={{ width: '100%', maxWidth: homeSettings.adMaxWidth }}>
               {infeedContent}
             </div>
           </div>
