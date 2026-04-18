@@ -31,6 +31,14 @@ export default function Post() {
 
   const showWeld = form.job === '용접';
 
+  function containsPhone(text: string): boolean {
+    const digits = text.replace(/[^0-9]/g, '');
+    return digits.length >= 9;
+  }
+
+  const titleHasPhone = containsPhone(form.title);
+  const detailHasPhone = containsPhone(form.detail);
+
   function setField(key: string, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
   }
@@ -68,9 +76,13 @@ export default function Post() {
     e.preventDefault();
     setError('');
     if (!form.title.trim()) { setError('공고 제목을 입력해주세요.'); return; }
+    if (titleHasPhone) { setError('공고 제목에 전화번호를 입력할 수 없습니다. 연락처란을 이용해주세요.'); return; }
     if (!form.region) { setError('지역을 선택해주세요.'); return; }
     if (!form.job) { setError('직종을 선택해주세요.'); return; }
+    if (detailHasPhone) { setError('비고/추가 정보란에 전화번호를 입력할 수 없습니다. 연락처란을 이용해주세요.'); return; }
     if (!form.contact.trim()) { setError('연락처를 입력해주세요.'); return; }
+    const contactDigits = form.contact.replace(/[^0-9]/g, '');
+    if (contactDigits.length !== 11) { setError('연락처는 11자리 숫자로 입력해주세요. (예: 010-0000-0000)'); return; }
     if (!agreed) { setError('이용 규칙에 동의해주세요.'); return; }
 
     const cooldownRemain = checkCooldown(form.contact);
@@ -176,9 +188,15 @@ export default function Post() {
                   maxLength={60}
                   onChange={(e) => setField('title', e.target.value)}
                   placeholder="예: 대구 TIG 용접사 급구 (일당 35만)"
-                  className={inputCls}
+                  className={`${inputCls} ${titleHasPhone ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`}
                 />
-                <div className="text-right text-xs text-gray-400 mt-1">{form.title.length}/60자</div>
+                <div className="flex items-center justify-between mt-1">
+                  {titleHasPhone
+                    ? <span className="text-xs text-red-600 font-semibold">🚫 제목에 전화번호를 입력할 수 없습니다</span>
+                    : <span />
+                  }
+                  <span className="text-xs text-gray-400">{form.title.length}/60자</span>
+                </div>
               </div>
 
               {/* 지역 + 직종 */}
@@ -355,9 +373,19 @@ export default function Post() {
                   }}
                   placeholder="예: 주 5일, 2주 이상 가능자, 용접기능사 우대"
                   rows={4}
-                  className="w-full py-3 px-4 border border-gray-300 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 transition-all resize-none"
+                  className={`w-full py-3 px-4 border rounded-lg text-sm outline-none font-[inherit] transition-all resize-none ${
+                    detailHasPhone
+                      ? 'border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-100'
+                      : 'border-gray-300 focus:border-[#f97316] focus:ring-2 focus:ring-orange-100'
+                  }`}
                 />
-                <div className="text-right text-xs text-gray-400 mt-1">{form.detail.length}/200자</div>
+                <div className="flex items-center justify-between mt-1">
+                  {detailHasPhone
+                    ? <span className="text-xs text-red-600 font-semibold">🚫 비고란에 전화번호를 입력할 수 없습니다</span>
+                    : <span />
+                  }
+                  <span className="text-xs text-gray-400">{form.detail.length}/200자</span>
+                </div>
               </div>
             </div>
           </div>
@@ -377,8 +405,18 @@ export default function Post() {
                   value={form.contact}
                   onChange={(e) => setField('contact', e.target.value)}
                   placeholder="예: 010-0000-0000"
-                  className={inputCls}
+                  className={(() => {
+                    const digits = form.contact.replace(/[^0-9]/g, '');
+                    const invalid = form.contact.length > 0 && digits.length !== 11;
+                    return `${inputCls} ${invalid ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`;
+                  })()}
                 />
+                {(() => {
+                  const digits = form.contact.replace(/[^0-9]/g, '');
+                  if (form.contact.length === 0) return <p className="text-xs text-gray-400 mt-1">숫자 11자리 (예: 010-1234-5678)</p>;
+                  if (digits.length !== 11) return <p className="text-xs text-red-600 font-semibold mt-1">🚫 연락처는 11자리 숫자여야 합니다 (현재 {digits.length}자리)</p>;
+                  return <p className="text-xs text-emerald-600 font-semibold mt-1">✔ 올바른 형식입니다</p>;
+                })()}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">
