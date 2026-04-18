@@ -80,11 +80,13 @@ function ContactModal({ isOpen, onClose }: ContactModalProps) {
 
 export default function Header() {
   const [contactOpen, setContactOpen] = useState(false);
+  const siteName = localStorage.getItem('cj_site_name') || '건설UP';
+  const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
 
   async function doKakaoShare() {
     const url = location.href;
-    const title = '건설UP - 건설 현장 일자리 정보';
-    const desc = '배관·용접·조공·화기감시자 등 전국 건설 현장 구인 공고';
+    const title = `${siteName} - ${siteSubtitle}`;
+    const desc = localStorage.getItem('cj_footer_text') || '배관·용접·조공·화기감시자 등 전국 건설 현장 구인 공고';
 
     if (navigator.share) {
       try {
@@ -116,8 +118,8 @@ export default function Header() {
               건
             </div>
             <div>
-              <span className="text-[17px] font-bold tracking-tight block">건설UP</span>
-              <span className="text-[10px] opacity-70 block leading-none">건설 현장 일자리 정보</span>
+              <span className="text-[17px] font-bold tracking-tight block">{siteName}</span>
+              <span className="text-[10px] opacity-70 block leading-none">{siteSubtitle}</span>
             </div>
           </Link>
 

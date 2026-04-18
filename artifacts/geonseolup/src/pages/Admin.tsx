@@ -124,6 +124,23 @@ export default function Admin() {
     autoHideHours: '',
     shareUrl: localStorage.getItem('cj_share_url') || '',
   });
+  const [siteText, setSiteText] = useState({
+    siteName: localStorage.getItem('cj_site_name') || '',
+    siteSubtitle: localStorage.getItem('cj_site_subtitle') || '',
+    mainDesc: localStorage.getItem('cj_main_desc') || '',
+    footerText: localStorage.getItem('cj_footer_text') || '',
+  });
+  const [designTab, setDesignTab] = useState<'text' | 'font' | 'color'>('text');
+  const [fontSettings, setFontSettings] = useState({
+    titleSize: localStorage.getItem('cj_font_title') || '',
+    bodySize: localStorage.getItem('cj_font_body') || '',
+    badgeSize: localStorage.getItem('cj_font_badge') || '',
+  });
+  const [colorSettings, setColorSettings] = useState({
+    primary: localStorage.getItem('cj_color_primary') || '#f97316',
+    secondary: localStorage.getItem('cj_color_secondary') || '#1e3a5f',
+    accent: localStorage.getItem('cj_color_accent') || '#fee500',
+  });
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -262,6 +279,20 @@ export default function Admin() {
       localStorage.setItem('cj_dup_settings', JSON.stringify({ ...prev, autoHideHours: parseInt(settings.autoHideHours) }));
     }
     showToast('✅ 설정이 저장됐습니다');
+  }
+
+  function saveDesignSettings() {
+    localStorage.setItem('cj_site_name', siteText.siteName);
+    localStorage.setItem('cj_site_subtitle', siteText.siteSubtitle);
+    localStorage.setItem('cj_main_desc', siteText.mainDesc);
+    localStorage.setItem('cj_footer_text', siteText.footerText);
+    localStorage.setItem('cj_font_title', fontSettings.titleSize);
+    localStorage.setItem('cj_font_body', fontSettings.bodySize);
+    localStorage.setItem('cj_font_badge', fontSettings.badgeSize);
+    localStorage.setItem('cj_color_primary', colorSettings.primary);
+    localStorage.setItem('cj_color_secondary', colorSettings.secondary);
+    localStorage.setItem('cj_color_accent', colorSettings.accent);
+    showToast('✅ 디자인 설정이 저장됐습니다');
   }
 
   if (!authed) {
@@ -558,34 +589,198 @@ export default function Admin() {
 
         {/* 설정 */}
         {tab === 'settings' && (
-          <div className="bg-white rounded-xl p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100">⚙️ 설정</h2>
-            <div className="grid gap-4 max-w-[560px]">
-              {[
-                { key: 'adminPw', label: '관리자 비밀번호', placeholder: '비밀번호', type: 'password' },
-                { key: 'contactEmail', label: '문의 이메일', placeholder: 'example@email.com', type: 'email' },
-                { key: 'contactKakao', label: '카카오톡 ID / 오픈채팅 URL', placeholder: 'kakao ID 또는 https://open.kakao.com/...', type: 'text' },
-                { key: 'contactLabel', label: '문의 안내 문구', placeholder: '구인/구직 관련 문의는 아래 연락처로 연락주세요.', type: 'text' },
-                { key: 'shareUrl', label: '공유 URL (SNS 공유 시 사용)', placeholder: 'https://yoursite.com', type: 'text' },
-                { key: 'autoHideHours', label: '공고 자동 숨김 (시간)', placeholder: '예: 48 (48시간 이후 자동숨김, 0=비활성화)', type: 'number' },
-              ].map((item) => (
-                <div key={item.key}>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">{item.label}</label>
-                  <input
-                    type={item.type}
-                    value={settings[item.key as keyof typeof settings]}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, [item.key]: e.target.value }))}
-                    placeholder={item.placeholder}
-                    className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
-                  />
+          <div className="flex flex-col gap-5">
+            {/* 사이트 텍스트 & 디자인 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">
+                🎨 사이트 텍스트 &amp; 디자인 설정
+              </h2>
+              <p className="text-sm text-gray-500 mb-5">저장 즉시 메인·상세 페이지에 반영됩니다. 비워두면 기본값이 사용됩니다.</p>
+
+              {/* 서브탭 */}
+              <div className="flex gap-2 mb-6">
+                {([
+                  { id: 'text', icon: '📝', label: '텍스트' },
+                  { id: 'font', icon: '🔡', label: '글꼴 크기' },
+                  { id: 'color', icon: '🎨', label: '색상' },
+                ] as const).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setDesignTab(t.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold border-2 cursor-pointer font-[inherit] transition-colors ${
+                      designTab === t.id
+                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {t.icon} {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* 텍스트 탭 */}
+              {designTab === 'text' && (
+                <div className="grid gap-5 max-w-[680px]">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                      사이트 이름 <span className="text-xs font-normal text-gray-400">(헤더 로고)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={siteText.siteName}
+                      onChange={(e) => setSiteText((p) => ({ ...p, siteName: e.target.value }))}
+                      placeholder="예: 건설UP"
+                      className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                      헤더 서브 문구 <span className="text-xs font-normal text-gray-400">(로고 아래 작은 글씨)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={siteText.siteSubtitle}
+                      onChange={(e) => setSiteText((p) => ({ ...p, siteSubtitle: e.target.value }))}
+                      placeholder="예: 건설 현장 일자리 정보"
+                      className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                      메인 페이지 설명 <span className="text-xs font-normal text-gray-400">(빈 결과 화면 등에 사용)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={siteText.mainDesc}
+                      onChange={(e) => setSiteText((p) => ({ ...p, mainDesc: e.target.value }))}
+                      placeholder="예: 전국 건설 현장 구인공고"
+                      className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                      푸터 텍스트 <span className="text-xs font-normal text-gray-400">(하단 설명 문구)</span>
+                    </label>
+                    <textarea
+                      value={siteText.footerText}
+                      onChange={(e) => setSiteText((p) => ({ ...p, footerText: e.target.value }))}
+                      placeholder="예: 배관·용접·조공 등 건설 현장 일자리 정보"
+                      rows={3}
+                      className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f] resize-y min-h-[80px]"
+                    />
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* 글꼴 크기 탭 */}
+              {designTab === 'font' && (
+                <div className="grid gap-5 max-w-[680px]">
+                  {[
+                    { key: 'titleSize', label: '공고 제목 크기', placeholder: '예: 16px 또는 1rem', hint: '카드·상세 페이지 공고 제목' },
+                    { key: 'bodySize', label: '본문 글씨 크기', placeholder: '예: 14px 또는 0.875rem', hint: '일반 텍스트·설명 영역' },
+                    { key: 'badgeSize', label: '뱃지 글씨 크기', placeholder: '예: 11px 또는 0.7rem', hint: 'NEW·직종 뱃지 등' },
+                  ].map((item) => (
+                    <div key={item.key}>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">
+                        {item.label} <span className="text-xs font-normal text-gray-400">({item.hint})</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={fontSettings[item.key as keyof typeof fontSettings]}
+                        onChange={(e) => setFontSettings((p) => ({ ...p, [item.key]: e.target.value }))}
+                        placeholder={item.placeholder}
+                        className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 색상 탭 */}
+              {designTab === 'color' && (
+                <div className="grid gap-5 max-w-[680px]">
+                  {[
+                    { key: 'primary', label: '주 색상 (Primary)', hint: '헤더·버튼·강조색', default: '#f97316' },
+                    { key: 'secondary', label: '보조 색상 (Secondary)', hint: '타이틀·네비게이션', default: '#1e3a5f' },
+                    { key: 'accent', label: '강조 색상 (Accent)', hint: '카카오 공유 버튼 등', default: '#fee500' },
+                  ].map((item) => (
+                    <div key={item.key}>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">
+                        {item.label} <span className="text-xs font-normal text-gray-400">({item.hint})</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={colorSettings[item.key as keyof typeof colorSettings]}
+                          onChange={(e) => setColorSettings((p) => ({ ...p, [item.key]: e.target.value }))}
+                          className="w-10 h-10 rounded-lg border-2 border-gray-200 cursor-pointer p-0.5 bg-white"
+                        />
+                        <input
+                          type="text"
+                          value={colorSettings[item.key as keyof typeof colorSettings]}
+                          onChange={(e) => setColorSettings((p) => ({ ...p, [item.key]: e.target.value }))}
+                          placeholder={item.default}
+                          className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setColorSettings((p) => ({ ...p, [item.key]: item.default }))}
+                          className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-2 font-[inherit] bg-white cursor-pointer whitespace-nowrap"
+                        >
+                          기본값
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                    <p className="text-xs font-bold text-gray-500 mb-3">미리보기</p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="px-3 py-1.5 rounded-lg text-white text-sm font-bold" style={{ background: colorSettings.primary }}>주 색상</span>
+                      <span className="px-3 py-1.5 rounded-lg text-white text-sm font-bold" style={{ background: colorSettings.secondary }}>보조 색상</span>
+                      <span className="px-3 py-1.5 rounded-lg text-sm font-bold" style={{ background: colorSettings.accent, color: '#3c1e1e' }}>강조 색상</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button
-                className="bg-[#1e3a5f] text-white border-none py-3 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit]"
-                onClick={saveSettings}
+                className="mt-6 bg-[#1e3a5f] text-white border-none py-3 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit]"
+                onClick={saveDesignSettings}
               >
-                💾 설정 저장
+                💾 디자인 설정 저장
               </button>
+            </div>
+
+            {/* 기본 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100">⚙️ 기본 설정</h2>
+              <div className="grid gap-4 max-w-[560px]">
+                {[
+                  { key: 'adminPw', label: '관리자 비밀번호', placeholder: '비밀번호', type: 'password' },
+                  { key: 'contactEmail', label: '문의 이메일', placeholder: 'example@email.com', type: 'email' },
+                  { key: 'contactKakao', label: '카카오톡 ID / 오픈채팅 URL', placeholder: 'kakao ID 또는 https://open.kakao.com/...', type: 'text' },
+                  { key: 'contactLabel', label: '문의 안내 문구', placeholder: '구인/구직 관련 문의는 아래 연락처로 연락주세요.', type: 'text' },
+                  { key: 'shareUrl', label: '공유 URL (SNS 공유 시 사용)', placeholder: 'https://yoursite.com', type: 'text' },
+                  { key: 'autoHideHours', label: '공고 자동 숨김 (시간)', placeholder: '예: 48 (48시간 이후 자동숨김, 0=비활성화)', type: 'number' },
+                ].map((item) => (
+                  <div key={item.key}>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">{item.label}</label>
+                    <input
+                      type={item.type}
+                      value={settings[item.key as keyof typeof settings]}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, [item.key]: e.target.value }))}
+                      placeholder={item.placeholder}
+                      className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                    />
+                  </div>
+                ))}
+                <button
+                  className="bg-[#1e3a5f] text-white border-none py-3 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit]"
+                  onClick={saveSettings}
+                >
+                  💾 설정 저장
+                </button>
+              </div>
             </div>
           </div>
         )}
