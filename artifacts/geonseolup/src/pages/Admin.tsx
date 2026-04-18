@@ -144,6 +144,11 @@ export default function Admin() {
   const [reviewMode, setReviewMode] = useState(
     localStorage.getItem('cj_review_mode') === 'on'
   );
+  const [autoHideHours, setAutoHideHours] = useState<string>(() => {
+    const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
+    return stored.autoHideHours != null ? String(stored.autoHideHours) : '48';
+  });
+  const [dupStats, setDupStats] = useState({ visible: 0, autoHidden: 0, manualHidden: 0, similarPairs: 0 });
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -170,16 +175,46 @@ export default function Admin() {
     setPassword('');
   }
 
+  function computeDupStats(jobList: typeof jobs, hideHours: string) {
+    const hours = parseInt(hideHours) || 0;
+    const now = Date.now();
+    let visible = 0, autoHidden = 0, manualHidden = 0;
+    const contactMap = new Map<string, number>();
+    for (const j of jobList) {
+      if (j.hidden) { manualHidden++; continue; }
+      const ageH = (now - new Date(j.date).getTime()) / 36e5;
+      if (hours > 0 && ageH >= hours) { autoHidden++; } else { visible++; }
+      if (j.contact?.trim()) {
+        const key = j.contact.trim();
+        contactMap.set(key, (contactMap.get(key) || 0) + 1);
+      }
+    }
+    const similarPairs = [...contactMap.values()].filter((v) => v > 1).length;
+    setDupStats({ visible, autoHidden, manualHidden, similarPairs });
+  }
+
   async function loadJobs() {
     setLoading(true);
     const data = await fbLoadJobs();
-    setJobs(data.length ? data : SAMPLE_JOBS);
+    const list = data.length ? data : SAMPLE_JOBS;
+    setJobs(list);
+    const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
+    const hours = stored.autoHideHours != null ? String(stored.autoHideHours) : '48';
+    computeDupStats(list, hours);
     setLoading(false);
   }
 
   async function loadPending() {
     const data = await fbLoadPending();
     setPending(data);
+  }
+
+  function saveAutoHide() {
+    const h = parseInt(autoHideHours) || 0;
+    const prev = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
+    localStorage.setItem('cj_dup_settings', JSON.stringify({ ...prev, autoHideHours: h }));
+    computeDupStats(jobs, autoHideHours);
+    showToast('✅ 자동숨김 설정이 저장됐습니다');
   }
 
   useEffect(() => {
@@ -644,6 +679,70 @@ export default function Admin() {
               )}
             </div>
 
+            {/* 중복 공고 관리 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-3 flex items-center gap-2">
+                🔄 중복 공고 관리
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                같은 연락처의 이전 공고는 하단으로 자동 이동되며, 일정 시간이 지난 공고는 메인 목록에서 자동으로 숨겨집니다.<br />
+                데이터는 삭제되지 않으며 관리 탭에서 언제든 확인할 수 있습니다.
+              </p>
+
+              {/* 자동숨김 시간 */}
+              <p className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">
+                <span>⏰</span> 공고 자동숨김 시간
+              </p>
+              <div className="flex items-center gap-3 mb-2">
+                <select
+                  value={autoHideHours}
+                  onChange={(e) => setAutoHideHours(e.target.value)}
+                  className="py-2.5 px-3.5 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none bg-white font-[inherit] focus:border-[#f97316] appearance-none cursor-pointer min-w-[220px]"
+                >
+                  <option value="0">비활성화 (자동숨김 안함)</option>
+                  <option value="24">24시간 후 자동숨김</option>
+                  <option value="48">48시간 후 자동숨김 (기본)</option>
+                  <option value="72">72시간 후 자동숨김</option>
+                  <option value="168">7일 후 자동숨김</option>
+                  <option value="336">14일 후 자동숨김</option>
+                </select>
+                <button
+                  onClick={saveAutoHide}
+                  className="bg-[#f97316] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit] whitespace-nowrap"
+                >
+                  저장
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mb-6">설정한 시간이 지난 공고는 메인 목록에서 자동으로 사라집니다. (데이터 유지)</p>
+
+              {/* 공고 현황 요약 */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                  <span>📊</span> 공고 현황 요약
+                </p>
+                <button
+                  onClick={() => { loadJobs(); }}
+                  className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 bg-white cursor-pointer hover:bg-gray-50 font-[inherit] text-gray-600 whitespace-nowrap"
+                >
+                  🔄 새로고침
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { icon: '✅', label: '노출 중', value: dupStats.visible, color: 'text-emerald-600' },
+                  { icon: '⏱️', label: '자동숨김', value: dupStats.autoHidden, color: 'text-amber-500' },
+                  { icon: '🙈', label: '수동숨김', value: dupStats.manualHidden, color: 'text-gray-500' },
+                  { icon: '🔍', label: '유사공고 쌍', value: dupStats.similarPairs, color: 'text-purple-600' },
+                ].map((s) => (
+                  <div key={s.label} className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                    <div className="text-2xl mb-1">{s.icon}</div>
+                    <div className={`text-2xl font-extrabold mb-1 ${s.color}`}>{s.value}</div>
+                    <div className="text-xs text-gray-500 font-medium">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* 사이트 텍스트 & 디자인 설정 */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">
@@ -815,7 +914,6 @@ export default function Admin() {
                   { key: 'contactKakao', label: '카카오톡 ID / 오픈채팅 URL', placeholder: 'kakao ID 또는 https://open.kakao.com/...', type: 'text' },
                   { key: 'contactLabel', label: '문의 안내 문구', placeholder: '구인/구직 관련 문의는 아래 연락처로 연락주세요.', type: 'text' },
                   { key: 'shareUrl', label: '공유 URL (SNS 공유 시 사용)', placeholder: 'https://yoursite.com', type: 'text' },
-                  { key: 'autoHideHours', label: '공고 자동 숨김 (시간)', placeholder: '예: 48 (48시간 이후 자동숨김, 0=비활성화)', type: 'number' },
                 ].map((item) => (
                   <div key={item.key}>
                     <label className="block text-sm font-bold text-gray-700 mb-2">{item.label}</label>
