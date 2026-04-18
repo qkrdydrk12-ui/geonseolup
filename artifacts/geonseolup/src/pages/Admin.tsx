@@ -234,6 +234,10 @@ export default function Admin() {
   const [contactLimitInput, setContactLimitInput] = useState(
     localStorage.getItem('cj_contact_daily_limit') || '20'
   );
+  const [googleVerifyCode, setGoogleVerifyCode] = useState(
+    localStorage.getItem('cj_google_verify') || ''
+  );
+  const [googleVerifyMethod, setGoogleVerifyMethod] = useState<'html' | 'dns'>('html');
 
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1965,6 +1969,162 @@ export default function Admin() {
               <p className="mt-3 text-xs text-amber-600 flex items-center gap-1">
                 <span>💡</span> 비워두면 해당 광고 영역 자체가 화면에서 숨겨집니다.
               </p>
+            </div>
+
+            {/* 구글 서치 콘솔 연동 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 className="text-lg font-bold text-[#1e3a5f] flex items-center gap-2">
+                  🔍 구글 서치 콘솔 연동
+                </h2>
+                {googleVerifyCode ? (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">✅ 인증 코드 저장됨</span>
+                ) : (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-gray-100 text-gray-500">미연동</span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mb-5">
+                Google Search Console에서 도메인 소유권을 인증하세요. 검색 노출 및 SEO 관리에 필요합니다.
+              </p>
+
+              {/* 방법 선택 탭 */}
+              <div className="flex gap-2 mb-5">
+                {[
+                  { key: 'html' as const, label: '① HTML 메타 태그' },
+                  { key: 'dns' as const, label: '② DNS TXT 레코드' },
+                ].map((m) => (
+                  <button
+                    key={m.key}
+                    onClick={() => setGoogleVerifyMethod(m.key)}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold border cursor-pointer font-[inherit] transition-colors ${
+                      googleVerifyMethod === m.key
+                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-[#1e3a5f]'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {googleVerifyMethod === 'html' ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-800 space-y-1.5">
+                    <p className="font-bold">📋 적용 방법</p>
+                    <ol className="list-decimal list-inside space-y-1 text-xs leading-relaxed">
+                      <li><a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="underline font-semibold">search.google.com/search-console</a> 접속 → 속성 추가</li>
+                      <li>URL 접두어 방식 선택 → <strong>https://geonseolup.com</strong> 입력</li>
+                      <li>확인 방법: <strong>HTML 태그</strong> 선택</li>
+                      <li>아래에 표시된 인증 코드를 복사하여 입력란에 붙여넣기</li>
+                      <li>저장 버튼 클릭 → Google에서 자동으로 메타 태그 확인</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                      google-site-verification 인증 코드
+                    </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      Google Search Console에서 보여주는 메타 태그의 <code className="bg-gray-100 px-1 rounded">content</code> 값을 입력하세요
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={googleVerifyCode}
+                        onChange={(e) => setGoogleVerifyCode(e.target.value.trim())}
+                        placeholder="예: l4zDs-p4J7QbOLz50rVdfxE9wRU_ivHQ0obfKP"
+                        className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f] font-mono"
+                      />
+                      <button
+                        className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit] whitespace-nowrap"
+                        onClick={() => {
+                          if (!googleVerifyCode.trim()) { showToast('⚠️ 인증 코드를 입력해주세요'); return; }
+                          localStorage.setItem('cj_google_verify', googleVerifyCode.trim());
+                          showToast('✅ 구글 인증 코드가 저장됐습니다');
+                          window.dispatchEvent(new Event('google-verify-updated'));
+                        }}
+                      >
+                        저장
+                      </button>
+                      {googleVerifyCode && (
+                        <button
+                          className="bg-red-50 text-red-500 border border-red-300 py-2.5 px-4 rounded-xl text-sm font-bold cursor-pointer hover:bg-red-100 transition-colors font-[inherit]"
+                          onClick={() => {
+                            localStorage.removeItem('cj_google_verify');
+                            setGoogleVerifyCode('');
+                            showToast('🗑 인증 코드가 삭제됐습니다');
+                            window.dispatchEvent(new Event('google-verify-updated'));
+                          }}
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {googleVerifyCode && (
+                    <div className="bg-gray-50 rounded-xl p-4 border border-dashed border-gray-300">
+                      <p className="text-xs font-bold text-gray-600 mb-2">🏷 사이트에 자동 적용되는 메타 태그:</p>
+                      <code className="text-xs text-gray-700 break-all">
+                        {`<meta name="google-site-verification" content="${googleVerifyCode}">`}
+                      </code>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-amber-50 rounded-xl p-4 text-sm text-amber-800 space-y-1.5">
+                    <p className="font-bold">📋 DNS TXT 레코드 적용 방법</p>
+                    <ol className="list-decimal list-inside space-y-1 text-xs leading-relaxed">
+                      <li><a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="underline font-semibold">search.google.com/search-console</a> 접속 → 속성 추가</li>
+                      <li>도메인 방식 선택 → <strong>geonseolup.com</strong> 입력</li>
+                      <li>Google이 제공하는 TXT 레코드 값 복사</li>
+                      <li>도메인 구매처(GoDaddy, Namecheap, 가비아 등) DNS 관리 페이지 접속</li>
+                      <li>TXT 레코드 추가: 호스트 <code className="bg-amber-100 px-1 rounded">@</code>, 값에 복사한 TXT 값 붙여넣기</li>
+                      <li>저장 후 Google Search Console에서 확인 클릭 (최대 48시간 소요)</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                      TXT 레코드 값 메모 (참고용)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={googleVerifyCode}
+                        onChange={(e) => setGoogleVerifyCode(e.target.value.trim())}
+                        placeholder="google-site-verification=xxxx..."
+                        className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f] font-mono"
+                      />
+                      <button
+                        className="bg-gray-100 text-gray-700 border border-gray-300 py-2.5 px-4 rounded-xl text-sm font-bold cursor-pointer hover:bg-gray-200 transition-colors font-[inherit]"
+                        onClick={() => {
+                          if (!googleVerifyCode) return;
+                          navigator.clipboard.writeText(`google-site-verification=${googleVerifyCode}`).then(() => showToast('📋 복사됐습니다'));
+                        }}
+                      >
+                        복사
+                      </button>
+                      <button
+                        className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit]"
+                        onClick={() => {
+                          localStorage.setItem('cj_google_verify', googleVerifyCode.trim());
+                          showToast('✅ 저장됐습니다');
+                        }}
+                      >
+                        저장
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1.5">DNS TXT 레코드 값을 여기에 메모해두면 나중에 참고할 수 있습니다.</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-dashed border-gray-300 text-xs text-gray-600">
+                    <p className="font-bold mb-1.5">DNS 레코드 설정 예시:</p>
+                    <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                      <div><p className="font-bold text-gray-500 mb-1">유형</p><p className="bg-white rounded px-2 py-1 border">TXT</p></div>
+                      <div><p className="font-bold text-gray-500 mb-1">호스트</p><p className="bg-white rounded px-2 py-1 border">@</p></div>
+                      <div><p className="font-bold text-gray-500 mb-1">값</p><p className="bg-white rounded px-2 py-1 border truncate">google-site-...</p></div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 현황 */}

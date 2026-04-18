@@ -1,10 +1,35 @@
 import { Switch, Route, Router as WouterRouter } from 'wouter';
+import { useEffect } from 'react';
 import Header from '@/components/Header';
 import Home from '@/pages/Home';
 import Detail from '@/pages/Detail';
 import Post from '@/pages/Post';
 import Admin from '@/pages/Admin';
 import VisitorWidget from '@/components/VisitorWidget';
+
+function useGoogleVerifyMeta() {
+  useEffect(() => {
+    function applyMeta() {
+      const code = localStorage.getItem('cj_google_verify');
+      const existing = document.querySelector('meta[name="google-site-verification"]');
+      if (code) {
+        if (existing) {
+          existing.setAttribute('content', code);
+        } else {
+          const meta = document.createElement('meta');
+          meta.name = 'google-site-verification';
+          meta.content = code;
+          document.head.appendChild(meta);
+        }
+      } else if (existing) {
+        existing.remove();
+      }
+    }
+    applyMeta();
+    window.addEventListener('google-verify-updated', applyMeta);
+    return () => window.removeEventListener('google-verify-updated', applyMeta);
+  }, []);
+}
 
 function NotFound() {
   return (
@@ -74,6 +99,7 @@ function DetailHeader() {
 }
 
 function App() {
+  useGoogleVerifyMeta();
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <Router />
