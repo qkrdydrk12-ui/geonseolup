@@ -552,13 +552,13 @@ export default function Home() {
           </a>
         </div>
         <p className="text-sm font-bold mb-1">
-          <strong>건설UP</strong> — 전국 건설 현장 일자리 정보
+          {localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보'}
         </p>
         <p className="text-xs text-white/70 mb-2">
-          배관 · 용접(TIG/아크/CO2/PVC) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장
+          {localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장'}
         </p>
         <p className="text-[11px] text-white/45">
-          ※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.
+          {localStorage.getItem('cj_footer_notice') || '※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.'}
         </p>
       </footer>
 

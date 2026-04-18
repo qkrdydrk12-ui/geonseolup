@@ -193,6 +193,12 @@ export default function Admin() {
   const [newRegionInput, setNewRegionInput] = useState('');
   const [newJobInput, setNewJobInput] = useState('');
 
+  const [footerText, setFooterText] = useState({
+    title: localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보',
+    jobs: localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장',
+    notice: localStorage.getItem('cj_footer_notice') || '※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.',
+  });
+
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -1338,6 +1344,70 @@ export default function Admin() {
                 }}
               >
                 💾 홈 화면 설정 저장
+              </button>
+            </div>
+
+            {/* 푸터 텍스트 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">✏️ 하단 텍스트 설정</h2>
+              <p className="text-sm text-gray-500 mb-5">홈 화면 하단 푸터에 표시되는 세 줄의 텍스트를 수정합니다.</p>
+
+              {/* 미리보기 */}
+              <div className="rounded-xl mb-5 px-4 py-4 text-center" style={{ background: '#1e3a5f' }}>
+                <p className="text-sm font-bold text-white mb-1">{footerText.title || '건설UP — 전국 건설 현장 일자리 정보'}</p>
+                <p className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.7)' }}>{footerText.jobs || '(직종 목록)'}</p>
+                <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.45)' }}>{footerText.notice || '(안내 문구)'}</p>
+              </div>
+
+              <div className="grid gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    ① 타이틀 <span className="text-gray-400 font-normal">(첫 번째 줄)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={footerText.title}
+                    onChange={(e) => setFooterText((p) => ({ ...p, title: e.target.value }))}
+                    placeholder="건설UP — 전국 건설 현장 일자리 정보"
+                    className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    ② 직종 목록 <span className="text-gray-400 font-normal">(두 번째 줄)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={footerText.jobs}
+                    onChange={(e) => setFooterText((p) => ({ ...p, jobs: e.target.value }))}
+                    placeholder="배관 · 용접 · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장"
+                    className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    ③ 안내 문구 <span className="text-gray-400 font-normal">(세 번째 줄)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={footerText.notice}
+                    onChange={(e) => setFooterText((p) => ({ ...p, notice: e.target.value }))}
+                    placeholder="※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다."
+                    className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                </div>
+              </div>
+
+              <button
+                className="mt-5 flex items-center gap-2 bg-[#f97316] text-white border-none py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                onClick={() => {
+                  localStorage.setItem('cj_footer_title', footerText.title);
+                  localStorage.setItem('cj_footer_jobs', footerText.jobs);
+                  localStorage.setItem('cj_footer_notice', footerText.notice);
+                  showToast('✅ 하단 텍스트가 저장됐습니다');
+                }}
+              >
+                💾 하단 텍스트 저장
               </button>
             </div>
 
