@@ -18,9 +18,18 @@ interface Props {
   isDupOld?: boolean;
 }
 
+function maskContact(contact: string): string {
+  const d = contact.replace(/[^0-9]/g, '');
+  if (d.length === 11) return `${d.slice(0, 3)}-****-${d.slice(7)}`;
+  if (d.length === 10) return `${d.slice(0, 3)}-***-${d.slice(6)}`;
+  if (d.length >= 7) return `${d.slice(0, 3)}-****`;
+  return contact ? contact.slice(0, 3) + '****' : '번호없음';
+}
+
 export default function JobCard({ job, isDupOld }: Props) {
   const [, setLocation] = useLocation();
   const [detailOpen, setDetailOpen] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
   const _isHot = isHot(job.date);
@@ -139,11 +148,26 @@ export default function JobCard({ job, isDupOld }: Props) {
               <span className={lodgCls}>{job.lodging || '정보없음'}</span>
             </span>
           </li>
-          <li className="flex items-start gap-1.5 py-[3px] text-xs">
-            <span className="w-[15px] text-center shrink-0 mt-0.5">📞</span>
+          <li
+            className="flex items-center gap-1.5 py-[3px] text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="w-[15px] text-center shrink-0">📞</span>
             <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">연락처</span>
-            <span className="flex-1 font-semibold text-gray-800 break-all">
-              {job.contact || '문의'}
+            <span className="flex-1 flex items-center gap-1.5 min-w-0">
+              {revealed ? (
+                <span className="font-semibold text-gray-800 break-all">{job.contact || '문의'}</span>
+              ) : (
+                <>
+                  <span className="font-semibold text-gray-400 tracking-wide">{maskContact(job.contact || '')}</span>
+                  <button
+                    onClick={() => setRevealed(true)}
+                    className="shrink-0 text-[10px] bg-[#f97316] text-white px-2 py-[3px] rounded-full font-bold cursor-pointer border-none hover:bg-[#ea580c] transition-colors whitespace-nowrap"
+                  >
+                    👁 보기
+                  </button>
+                </>
+              )}
             </span>
           </li>
           {job.detail && (
