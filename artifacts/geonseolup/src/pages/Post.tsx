@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { fbAddPending } from '@/lib/firebase';
+import { fbAddPending, fbAddJob } from '@/lib/firebase';
 import { WELD_SUBS, parseSalaryNum } from '@/lib/utils';
 
 const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '전국'];
@@ -26,6 +26,7 @@ export default function Post() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [autoPublished, setAutoPublished] = useState(false);
   const [error, setError] = useState('');
 
   const showWeld = form.job === '용접';
@@ -44,14 +45,26 @@ export default function Post() {
     if (!form.job) { setError('직종을 선택해주세요.'); return; }
 
     setSubmitting(true);
+    const isReviewMode = localStorage.getItem('cj_review_mode') === 'on';
     try {
-      await fbAddPending({
-        ...form,
-        salaryNum: parseSalaryNum(form.salary),
-        date: new Date().toISOString(),
-        status: 'pending',
-        hidden: false,
-      });
+      if (isReviewMode) {
+        await fbAddPending({
+          ...form,
+          salaryNum: parseSalaryNum(form.salary),
+          date: new Date().toISOString(),
+          status: 'pending',
+          hidden: false,
+        });
+        setAutoPublished(false);
+      } else {
+        await fbAddJob({
+          ...form,
+          salaryNum: parseSalaryNum(form.salary),
+          date: new Date().toISOString(),
+          hidden: false,
+        });
+        setAutoPublished(true);
+      }
       setDone(true);
     } catch (e) {
       setError('등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
@@ -64,10 +77,14 @@ export default function Post() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#f1f5f9' }}>
         <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center border border-gray-200">
-          <div className="text-6xl mb-4">✅</div>
-          <h2 className="text-xl font-extrabold text-[#1e3a5f] mb-2">구인 신청이 완료됐습니다!</h2>
+          <div className="text-6xl mb-4">{autoPublished ? '🎉' : '✅'}</div>
+          <h2 className="text-xl font-extrabold text-[#1e3a5f] mb-2">
+            {autoPublished ? '공고가 등록됐습니다!' : '구인 신청이 완료됐습니다!'}
+          </h2>
           <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-            관리자 검토 후 공고가 등록됩니다. 빠른 시간 내에 처리해드리겠습니다.
+            {autoPublished
+              ? '공고가 즉시 메인 페이지에 노출됩니다.'
+              : '관리자 검토 후 공고가 등록됩니다. 빠른 시간 내에 처리해드리겠습니다.'}
           </p>
           <button
             className="bg-[#f97316] text-white border-none px-8 py-3 rounded-xl text-base font-bold cursor-pointer hover:bg-[#ea580c] transition-colors w-full"

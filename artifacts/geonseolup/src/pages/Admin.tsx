@@ -141,6 +141,9 @@ export default function Admin() {
     secondary: localStorage.getItem('cj_color_secondary') || '#1e3a5f',
     accent: localStorage.getItem('cj_color_accent') || '#fee500',
   });
+  const [reviewMode, setReviewMode] = useState(
+    localStorage.getItem('cj_review_mode') === 'on'
+  );
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -293,6 +296,13 @@ export default function Admin() {
     localStorage.setItem('cj_color_secondary', colorSettings.secondary);
     localStorage.setItem('cj_color_accent', colorSettings.accent);
     showToast('✅ 디자인 설정이 저장됐습니다');
+  }
+
+  function toggleReviewMode() {
+    const next = !reviewMode;
+    setReviewMode(next);
+    localStorage.setItem('cj_review_mode', next ? 'on' : 'off');
+    showToast(next ? '✅ 검토 모드 ON — 승인 후 공개' : '✅ 검토 모드 OFF — 즉시 자동 노출');
   }
 
   if (!authed) {
@@ -590,6 +600,50 @@ export default function Admin() {
         {/* 설정 */}
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">
+            {/* 구인 등록 검토 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-3 flex items-center gap-2">
+                📋 구인 등록 검토 설정
+              </h2>
+              <div className="text-sm text-gray-600 mb-5 space-y-1 leading-relaxed">
+                <p><span className="font-bold text-gray-700">OFF (기본):</span> 사용자가 등록하면 즉시 메인 페이지에 자동 노출</p>
+                <p><span className="font-bold text-gray-700">ON:</span> 사용자 등록 글을 관리자가 직접 검토 후 승인</p>
+              </div>
+
+              {/* 토글 */}
+              <button
+                onClick={toggleReviewMode}
+                className="flex items-center gap-3 cursor-pointer border-none bg-transparent p-0 font-[inherit]"
+                type="button"
+              >
+                <span
+                  className="relative inline-flex w-[52px] h-[28px] rounded-full transition-colors duration-200 shrink-0"
+                  style={{ background: reviewMode ? '#22c55e' : '#d1d5db' }}
+                >
+                  <span
+                    className="absolute top-[3px] left-[3px] w-[22px] h-[22px] bg-white rounded-full shadow transition-transform duration-200"
+                    style={{ transform: reviewMode ? 'translateX(24px)' : 'translateX(0)' }}
+                  />
+                </span>
+                <span className={`text-[15px] font-extrabold ${reviewMode ? 'text-emerald-600' : 'text-gray-500'}`}>
+                  {reviewMode ? 'ON — 검토 후 승인 중' : 'OFF — 즉시 자동 노출 중'}
+                </span>
+              </button>
+
+              {!reviewMode && (
+                <div className="mt-4 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+                  <span className="text-base shrink-0">⚠️</span>
+                  <span>OFF 상태에서는 부적절한 글이 즉시 노출될 수 있습니다. ON으로 설정을 권장합니다.</span>
+                </div>
+              )}
+              {reviewMode && (
+                <div className="mt-4 flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800">
+                  <span className="text-base shrink-0">✅</span>
+                  <span>ON 상태입니다. 사용자가 등록한 공고는 관리자가 승인해야 공개됩니다.</span>
+                </div>
+              )}
+            </div>
+
             {/* 사이트 텍스트 & 디자인 설정 */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">
