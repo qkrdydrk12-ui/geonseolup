@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+
+Sitemap: https://geonseolup.com/sitemap.xml
+
+#DaumWebMasterTool:736afbbe1f7c343f0b485cbd8492eb17f14e800fa6e9e36c10bcfb7c945b15cd:ZFfn1xyG8nfqrwA5LNTlrg==
