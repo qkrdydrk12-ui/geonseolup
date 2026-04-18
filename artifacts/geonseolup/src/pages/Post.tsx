@@ -31,6 +31,21 @@ export default function Post() {
 
   const showWeld = form.job === '용접';
 
+  function getCooldownRemain(contact: string): number {
+    const digits = contact.replace(/[^0-9]/g, '');
+    if (digits.length !== 11) return 0;
+    const COOLDOWN_MS = 30 * 60 * 1000;
+    const raw = localStorage.getItem('cj_post_log');
+    const log: { contact: string; ts: number }[] = raw ? JSON.parse(raw) : [];
+    const now = Date.now();
+    const found = log.find((e) => e.contact === contact.trim() && now - e.ts < COOLDOWN_MS);
+    if (found) return COOLDOWN_MS - (now - found.ts);
+    return 0;
+  }
+
+  const contactCooldownRemain = getCooldownRemain(form.contact);
+  const contactCooldownMins = Math.ceil(contactCooldownRemain / 60000);
+
   function containsPhone(text: string): boolean {
     const digits = text.replace(/[^0-9]/g, '');
     return digits.length >= 9;
@@ -397,9 +412,16 @@ export default function Post() {
             </h2>
             <div className="flex flex-col gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  연락처 <span className="text-[#f97316]">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                  <label className="text-sm font-semibold text-gray-700">
+                    연락처 <span className="text-[#f97316]">*</span>
+                  </label>
+                  {contactCooldownRemain > 0 && (
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 leading-tight">
+                      ⚠️ 동일 연락처로 이미 등록된 공고가 있습니다. {contactCooldownMins}분 후 다시 시도해주세요. (30분 쿨타임)
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={form.contact}
@@ -408,7 +430,8 @@ export default function Post() {
                   className={(() => {
                     const digits = form.contact.replace(/[^0-9]/g, '');
                     const invalid = form.contact.length > 0 && digits.length !== 11;
-                    return `${inputCls} ${invalid ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`;
+                    const cooldown = contactCooldownRemain > 0;
+                    return `${inputCls} ${invalid || cooldown ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`;
                   })()}
                 />
                 {(() => {
