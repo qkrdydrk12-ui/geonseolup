@@ -42,6 +42,28 @@ export default function Post() {
     setForm((prev) => ({ ...prev, lodging: prev.lodging === val ? '' : val }));
   }
 
+  function checkCooldown(contact: string): number {
+    const COOLDOWN_MS = 30 * 60 * 1000;
+    const raw = localStorage.getItem('cj_post_log');
+    const log: { contact: string; ts: number }[] = raw ? JSON.parse(raw) : [];
+    const now = Date.now();
+    const clean = log.filter((e) => now - e.ts < COOLDOWN_MS);
+    localStorage.setItem('cj_post_log', JSON.stringify(clean));
+    const found = clean.find((e) => e.contact === contact.trim());
+    if (found) {
+      const remain = COOLDOWN_MS - (now - found.ts);
+      return remain;
+    }
+    return 0;
+  }
+
+  function recordPost(contact: string) {
+    const raw = localStorage.getItem('cj_post_log');
+    const log: { contact: string; ts: number }[] = raw ? JSON.parse(raw) : [];
+    log.push({ contact: contact.trim(), ts: Date.now() });
+    localStorage.setItem('cj_post_log', JSON.stringify(log));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -50,6 +72,13 @@ export default function Post() {
     if (!form.job) { setError('직종을 선택해주세요.'); return; }
     if (!form.contact.trim()) { setError('연락처를 입력해주세요.'); return; }
     if (!agreed) { setError('이용 규칙에 동의해주세요.'); return; }
+
+    const cooldownRemain = checkCooldown(form.contact);
+    if (cooldownRemain > 0) {
+      const mins = Math.ceil(cooldownRemain / 60000);
+      setError(`동일 연락처로 이미 등록된 공고가 있습니다. ${mins}분 후 다시 시도해주세요. (30분 쿨타임)`);
+      return;
+    }
 
     setSubmitting(true);
     const isReviewMode = localStorage.getItem('cj_review_mode') === 'on';
@@ -72,6 +101,7 @@ export default function Post() {
         });
         setAutoPublished(true);
       }
+      recordPost(form.contact);
       setDone(true);
     } catch {
       setError('등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');

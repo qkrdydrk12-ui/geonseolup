@@ -24,9 +24,10 @@ export default function JobCard({ job, isDupOld }: Props) {
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
   const _isHot = isHot(job.date);
-  const hasPhone = !!(job.contact && /\d{2,4}-\d{3,4}-\d{4}/.test(job.contact));
-  const telHref = hasPhone ? `tel:${job.contact?.replace(/-/g, '')}` : '#';
-  const smsHref = hasPhone ? `sms:${job.contact?.replace(/-/g, '')}` : '#';
+  const rawDigits = job.contact ? job.contact.replace(/[^0-9]/g, '') : '';
+  const hasPhone = rawDigits.length >= 9;
+  const telHref = hasPhone ? `tel:${rawDigits}` : '#';
+  const smsHref = hasPhone ? `sms:${rawDigits}` : '#';
   const jobBg = JOB_ICON_BG[job.job] || '#f3f4f6';
   const jobBadge = JOB_BADGE_COLOR[job.job] || { bg: '#f3f4f6', text: '#374151' };
 
