@@ -496,6 +496,27 @@ export default function Home() {
 
       </div>
 
+      {/* 푸터 */}
+      <footer style={{ background: '#1e3a5f' }} className="mt-4 py-6 text-center text-white">
+        <div className="flex items-center justify-center gap-5 mb-3 text-sm">
+          <a href="/" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
+            🏠 홈
+          </a>
+          <a href="/admin" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
+            ⚙️ 관리자
+          </a>
+        </div>
+        <p className="text-sm font-bold mb-1">
+          <strong>건설UP</strong> — 전국 건설 현장 일자리 정보
+        </p>
+        <p className="text-xs text-white/70 mb-2">
+          배관 · 용접(TIG/아크/CO2/PVC) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장
+        </p>
+        <p className="text-[11px] text-white/45">
+          ※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.
+        </p>
+      </footer>
+
       {/* 스크롤 탑 */}
       <ScrollTopButton />
 
