@@ -904,33 +904,129 @@ export default function Admin() {
               </button>
             </div>
 
-            {/* 기본 설정 */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100">⚙️ 기본 설정</h2>
-              <div className="grid gap-4 max-w-[560px]">
-                {[
-                  { key: 'adminPw', label: '관리자 비밀번호', placeholder: '비밀번호', type: 'password' },
-                  { key: 'contactEmail', label: '문의 이메일', placeholder: 'example@email.com', type: 'email' },
-                  { key: 'contactKakao', label: '카카오톡 ID / 오픈채팅 URL', placeholder: 'kakao ID 또는 https://open.kakao.com/...', type: 'text' },
-                  { key: 'contactLabel', label: '문의 안내 문구', placeholder: '구인/구직 관련 문의는 아래 연락처로 연락주세요.', type: 'text' },
-                  { key: 'shareUrl', label: '공유 URL (SNS 공유 시 사용)', placeholder: 'https://yoursite.com', type: 'text' },
-                ].map((item) => (
-                  <div key={item.key}>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">{item.label}</label>
-                    <input
-                      type={item.type}
-                      value={settings[item.key as keyof typeof settings]}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, [item.key]: e.target.value }))}
-                      placeholder={item.placeholder}
-                      className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
-                    />
-                  </div>
-                ))}
+            {/* 문의하기 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-2 flex items-center gap-2">
+                📥 문의하기 설정
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                메인 페이지 우측 상단 <strong>문의하기</strong> 버튼 클릭 시 표시될 연락 수단을 설정하세요.<br />
+                이메일 또는 카카오톡 ID 중 하나만 입력해도 됩니다.
+              </p>
+              <div className="grid gap-4 max-w-[680px]">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <span>📧</span> 이메일 주소
+                  </label>
+                  <input
+                    type="email"
+                    value={settings.contactEmail}
+                    onChange={(e) => setSettings((p) => ({ ...p, contactEmail: e.target.value }))}
+                    placeholder="예: example@gmail.com"
+                    className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <span>💛</span> 카카오톡 ID
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.contactKakao}
+                    onChange={(e) => setSettings((p) => ({ ...p, contactKakao: e.target.value }))}
+                    placeholder="예: mykakaoid (카카오톡 오픈채팅 or ID)"
+                    className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">
+                    버튼 안내 문구 <span className="text-xs font-normal text-gray-400">(모달 상단 안내 텍스트)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.contactLabel}
+                    onChange={(e) => setSettings((p) => ({ ...p, contactLabel: e.target.value }))}
+                    placeholder="예: 구인/구직 문의는 아래로 연락주세요 😊"
+                    className="w-full py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                </div>
+                <div>
+                  <button
+                    className="flex items-center gap-2 bg-[#f97316] text-white border-none py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                    onClick={() => {
+                      localStorage.setItem('cj_contact_email', settings.contactEmail);
+                      localStorage.setItem('cj_contact_kakao', settings.contactKakao);
+                      localStorage.setItem('cj_contact_label', settings.contactLabel);
+                      showToast('✅ 문의하기 설정이 저장됐습니다');
+                    }}
+                  >
+                    🖫 저장
+                  </button>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 leading-relaxed">
+                  <p><span className="mr-1">📧</span> 이메일: <strong className="text-gray-800">{settings.contactEmail || '설정 없음'}</strong></p>
+                  <p className="mt-1"><span className="mr-1">💛</span> 카톡 ID: <strong className="text-gray-800">{settings.contactKakao || '설정 없음'}</strong></p>
+                  <p className="mt-1"><span className="mr-1">💬</span> 안내 문구: <strong className="text-gray-800">{settings.contactLabel || '설정 없음'}</strong></p>
+                </div>
+              </div>
+            </div>
+
+            {/* 카카오 공유 링크 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-2 flex items-center gap-2">
+                💬 카카오 공유 링크 설정
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                메인 페이지 우측 상단 <strong>공유</strong> 버튼 클릭 시 공유될 URL을 입력하세요.<br />
+                비워두면 현재 페이지 주소가 자동 사용됩니다.
+              </p>
+              <div className="max-w-[680px]">
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">공유 링크 URL</label>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={settings.shareUrl}
+                    onChange={(e) => setSettings((p) => ({ ...p, shareUrl: e.target.value }))}
+                    placeholder="예: https://yoursite.com"
+                    className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                  <button
+                    className="bg-[#f97316] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit] whitespace-nowrap"
+                    onClick={() => {
+                      localStorage.setItem('cj_share_url', settings.shareUrl);
+                      showToast('✅ 공유 링크가 저장됐습니다');
+                    }}
+                  >
+                    저장
+                  </button>
+                </div>
+                <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600">
+                  현재 설정된 링크: <strong className="text-gray-800">{settings.shareUrl || '설정 없음 (현재 페이지 주소 사용)'}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* 관리자 비밀번호 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 flex items-center gap-2">
+                🔑 관리자 비밀번호
+              </h2>
+              <div className="max-w-[400px] flex gap-3">
+                <input
+                  type="password"
+                  value={settings.adminPw}
+                  onChange={(e) => setSettings((p) => ({ ...p, adminPw: e.target.value }))}
+                  placeholder="새 비밀번호 입력"
+                  className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                />
                 <button
-                  className="bg-[#1e3a5f] text-white border-none py-3 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit]"
-                  onClick={saveSettings}
+                  className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit] whitespace-nowrap"
+                  onClick={() => {
+                    localStorage.setItem('cj_admin_pw', settings.adminPw);
+                    showToast('✅ 비밀번호가 변경됐습니다');
+                  }}
                 >
-                  💾 설정 저장
+                  변경
                 </button>
               </div>
             </div>
