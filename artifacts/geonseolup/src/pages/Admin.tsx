@@ -11,12 +11,21 @@ import {
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { formatDate, parseSalaryNum, WELD_SUBS } from '@/lib/utils';
+import {
+  getToken,
+  setToken,
+  clearToken,
+  apiLogin,
+  apiLogout,
+  apiVerify,
+  apiUpdateCreds,
+  startIdleTimer,
+} from '@/lib/adminAuth';
 
 const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '전국'];
 const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '양중', '덕트', '비계', '안전담당자', '품질담당자', '공사담당자', '기타'];
 const MEALS = ['식사제공', '식사없음', '협의'];
 const LODGINGS = ['숙박제공', '숙박없음', '협의'];
-const ADMIN_KEY = 'cj_admin_auth';
 
 function PendingItem({
   item,
@@ -103,10 +112,12 @@ function emptyForm(): Partial<Job> {
 type Tab = 'jobs' | 'add' | 'pending' | 'settings';
 
 export default function Admin() {
-  const [authed, setAuthed] = useState(() => !!localStorage.getItem(ADMIN_KEY));
+  const [authed, setAuthed] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true); // 토큰 검증 중
   const [adminId, setAdminId] = useState('');
   const [password, setPassword] = useState('');
   const [pwError, setPwError] = useState(false);
+  const [pwErrorMsg, setPwErrorMsg] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [showFindModal, setShowFindModal] = useState(false);
   const [findEmail, setFindEmail] = useState('');
@@ -232,22 +243,25 @@ export default function Admin() {
     toastRef.current = setTimeout(() => setToast(''), 2600);
   }
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    const storedPw = localStorage.getItem('cj_admin_pw') || 'wns585426!@';
-    const storedId = localStorage.getItem('cj_admin_id') || 'qkrdydrk12';
-    if (adminId === storedId && password === storedPw) {
-      localStorage.setItem(ADMIN_KEY, '1');
+    setPwError(false);
+    setPwErrorMsg('');
+    const result = await apiLogin(adminId, password);
+    if (result.ok && result.token) {
+      setToken(result.token);
       setAuthed(true);
-      setPwError(false);
+      setPassword('');
       window.dispatchEvent(new Event('admin-login'));
     } else {
       setPwError(true);
+      setPwErrorMsg(result.message || '아이디 또는 비밀번호가 올바르지 않습니다');
     }
   }
 
-  function handleLogout() {
-    localStorage.removeItem(ADMIN_KEY);
+  async function handleLogout() {
+    await apiLogout();
+    clearToken();
     setAuthed(false);
     setPassword('');
   }
@@ -293,6 +307,28 @@ export default function Admin() {
     computeDupStats(jobs, autoHideHours);
     showToast('✅ 자동숨김 설정이 저장됐습니다');
   }
+
+  // 페이지 로드 시 기존 세션 토큰 검증
+  useEffect(() => {
+    async function checkSession() {
+      if (getToken()) {
+        const valid = await apiVerify();
+        setAuthed(valid);
+      }
+      setAuthChecking(false);
+    }
+    checkSession();
+  }, []);
+
+  // 로그인 상태일 때 비활동 자동 로그아웃 타이머 시작
+  useEffect(() => {
+    if (!authed) return;
+    const cleanup = startIdleTimer(() => {
+      handleLogout();
+      alert('20분간 활동이 없어 자동 로그아웃됐습니다.');
+    });
+    return cleanup;
+  }, [authed]);
 
   useEffect(() => {
     if (authed) {
@@ -384,7 +420,6 @@ export default function Admin() {
   }
 
   function saveSettings() {
-    localStorage.setItem('cj_admin_pw', settings.adminPw);
     localStorage.setItem('cj_contact_email', settings.contactEmail);
     localStorage.setItem('cj_contact_kakao', settings.contactKakao);
     localStorage.setItem('cj_contact_label', settings.contactLabel);
@@ -415,6 +450,14 @@ export default function Admin() {
     setReviewMode(next);
     localStorage.setItem('cj_review_mode', next ? 'on' : 'off');
     showToast(next ? '✅ 검토 모드 ON — 승인 후 공개' : '✅ 검토 모드 OFF — 즉시 자동 노출');
+  }
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}>
+        <div className="text-white text-lg font-semibold animate-pulse">인증 확인 중...</div>
+      </div>
+    );
   }
 
   if (!authed) {
@@ -458,7 +501,7 @@ export default function Admin() {
             </div>
             {pwError && (
               <div className="bg-red-100 text-red-700 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold mb-3">
-                아이디 또는 비밀번호가 올바르지 않습니다.
+                {pwErrorMsg || '아이디 또는 비밀번호가 올바르지 않습니다.'}
               </div>
             )}
             <button
@@ -1199,19 +1242,19 @@ export default function Admin() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      defaultValue={localStorage.getItem('cj_admin_id') || 'qkrdydrk12'}
                       id="admin-id-input"
-                      placeholder="관리자 아이디"
+                      placeholder="새 아이디 (4자 이상)"
                       className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
                     />
                     <button
                       className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit] whitespace-nowrap"
-                      onClick={() => {
+                      onClick={async () => {
                         const el = document.getElementById('admin-id-input') as HTMLInputElement;
                         const val = el?.value?.trim();
-                        if (!val) return;
-                        localStorage.setItem('cj_admin_id', val);
-                        showToast('✅ 아이디가 변경됐습니다');
+                        if (!val || val.length < 4) { showToast('⚠️ 아이디는 4자 이상이어야 합니다'); return; }
+                        const res = await apiUpdateCreds(val, '');
+                        if (res.ok) { el.value = ''; showToast('✅ 아이디가 변경됐습니다'); }
+                        else showToast('❌ ' + (res.message || '변경 실패'));
                       }}
                     >
                       변경
@@ -1225,22 +1268,24 @@ export default function Admin() {
                       type="password"
                       value={settings.adminPw}
                       onChange={(e) => setSettings((p) => ({ ...p, adminPw: e.target.value }))}
-                      placeholder="새 비밀번호 입력"
+                      placeholder="새 비밀번호 (6자 이상)"
                       className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
                     />
                     <button
                       className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit] whitespace-nowrap"
-                      onClick={() => {
-                        localStorage.setItem('cj_admin_pw', settings.adminPw);
-                        showToast('✅ 비밀번호가 변경됐습니다');
+                      onClick={async () => {
+                        if (!settings.adminPw || settings.adminPw.length < 6) { showToast('⚠️ 비밀번호는 6자 이상이어야 합니다'); return; }
+                        const res = await apiUpdateCreds('', settings.adminPw);
+                        if (res.ok) showToast('✅ 비밀번호가 변경됐습니다');
+                        else showToast('❌ ' + (res.message || '변경 실패'));
                       }}
                     >
                       변경
                     </button>
                   </div>
                 </div>
-                <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
-                  <span>💡</span> 기본 아이디: <strong>admin</strong> / 기본 비밀번호: <strong>1234</strong>
+                <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
+                  <span>🔒</span> 계정 정보는 서버에 안전하게 저장됩니다. 서버 재시작 시 초기값으로 돌아갑니다.
                 </p>
               </div>
             </div>
