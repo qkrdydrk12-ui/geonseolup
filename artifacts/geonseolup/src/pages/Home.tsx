@@ -194,6 +194,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [loadMoreBusy, setLoadMoreBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+  const [regionOpen, setRegionOpen] = useState(false);
+  const [jobOpen, setJobOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const filterRef = useRef<HTMLDivElement>(null);
   const jobsSectionRef = useRef<HTMLElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -203,6 +206,12 @@ export default function Home() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToast(null), 2800);
   }
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     let resolved = false;
@@ -441,77 +450,138 @@ export default function Home() {
             </div>
           )}
 
-          <div className="text-[10px] font-extrabold text-gray-500 mb-1 flex items-center gap-1 uppercase tracking-wide">
-            📍 지역
-          </div>
-          <div className="flex flex-wrap gap-1 mb-[7px]">
-            {REGIONS.map((r) => (
-              <button
-                key={r}
-                className={`px-2.5 py-1 rounded-2xl border-[1.5px] text-xs font-semibold cursor-pointer transition-all whitespace-nowrap font-[inherit] ${
-                  state.region === r
-                    ? 'bg-[#f97316] border-[#f97316] text-white'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-[#f97316] hover:text-[#f97316]'
-                }`}
-                onClick={() => applyFilter({ region: state.region === r && r !== '전체' ? '전체' : r })}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-
-          <div className="text-[10px] font-extrabold text-gray-500 mb-1 flex items-center gap-1 uppercase tracking-wide">
-            🔧 직종
-          </div>
-          <div className="flex flex-wrap gap-1 mb-[7px]">
-            {JOBS.map((j) => (
-              <button
-                key={j}
-                className={`px-2.5 py-1 rounded-2xl border-[1.5px] text-xs font-semibold cursor-pointer transition-all whitespace-nowrap font-[inherit] ${
-                  state.job === j || (j === '용접' && isWeld(state.job) && state.job !== '전체')
-                    ? 'bg-[#f97316] border-[#f97316] text-white'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-[#f97316] hover:text-[#f97316]'
-                }`}
-                onClick={() => {
-                  if (state.job === j && j !== '전체') {
-                    applyFilter({ job: '전체', weldSub: '전체' });
-                  } else {
-                    applyFilter({ job: j, weldSub: '전체' });
-                  }
-                }}
-              >
-                {JOB_EMOJI[j] || ''} {j}
-                {j === '용접' && ' ▼'}
-              </button>
-            ))}
-          </div>
-
-          {showWeld && (
-            <div>
-              <div className="text-[10px] font-extrabold mb-1 flex items-center gap-1" style={{ color: '#7c3aed' }}>
-                ⚙️ 용접 세부종류
-              </div>
-              <div className="flex flex-wrap gap-1 mb-[7px]">
-                {['전체 용접', 'TIG', '아크', 'CO2', 'PVC'].map((w) => {
-                  const val = w === '전체 용접' ? '전체' : w;
-                  return (
-                    <button
-                      key={w}
-                      className={`px-2.5 py-[3px] rounded-2xl border-[1.5px] text-[11px] font-semibold cursor-pointer transition-all whitespace-nowrap font-[inherit] ${
-                        state.weldSub === val
-                          ? 'text-white border-purple-700'
-                          : 'bg-white border-gray-200 text-gray-500 hover:border-purple-500 hover:text-purple-700'
-                      }`}
-                      style={state.weldSub === val ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}
-                      onClick={() => applyFilter({ weldSub: val, job: val === '전체' ? '용접' : val })}
-                    >
-                      {w === '전체 용접' ? '⚡ 전체 용접' : w === 'TIG' ? '⚡ TIG' : w === '아크' ? '🌟 아크' : w === 'CO2' ? '💨 CO2' : '🟢 PVC'}
-                    </button>
-                  );
-                })}
-              </div>
+          {/* ===== 지역 필터 ===== */}
+          {/* 모바일: 아코디언 헤더 */}
+          {isMobile ? (
+            <button
+              className="w-full flex items-center justify-between py-[7px] px-3 mb-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-700 cursor-pointer font-[inherit] hover:border-[#f97316] transition-colors"
+              onClick={() => { setRegionOpen((o) => !o); setJobOpen(false); }}
+            >
+              <span className="flex items-center gap-1.5">
+                <span>📍 지역 선택</span>
+                {state.region !== '전체' && (
+                  <span className="text-[#f97316] font-extrabold">— {state.region}</span>
+                )}
+              </span>
+              <span
+                className="text-gray-400 text-xs ml-1 inline-block transition-transform duration-300"
+                style={{ transform: regionOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              >▼</span>
+            </button>
+          ) : (
+            <div className="text-[10px] font-extrabold text-gray-500 mb-1 flex items-center gap-1 uppercase tracking-wide">
+              📍 지역
             </div>
           )}
+          {/* 지역 칩 목록 */}
+          <div
+            style={isMobile ? {
+              maxHeight: regionOpen ? '160px' : '0px',
+              overflow: 'hidden',
+              transition: 'max-height 0.3s cubic-bezier(0.4,0,0.2,1)',
+            } : {}}
+          >
+            <div className="flex flex-wrap gap-1 mb-[7px]">
+              {REGIONS.map((r) => (
+                <button
+                  key={r}
+                  className={`px-2.5 py-1 rounded-2xl border-[1.5px] text-xs font-semibold cursor-pointer transition-all whitespace-nowrap font-[inherit] ${
+                    state.region === r
+                      ? 'bg-[#f97316] border-[#f97316] text-white'
+                      : 'bg-white border-gray-200 text-gray-500 hover:border-[#f97316] hover:text-[#f97316]'
+                  }`}
+                  onClick={() => {
+                    applyFilter({ region: state.region === r && r !== '전체' ? '전체' : r });
+                    if (isMobile) setRegionOpen(false);
+                  }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 직종 필터 ===== */}
+          {/* 모바일: 아코디언 헤더 */}
+          {isMobile ? (
+            <button
+              className="w-full flex items-center justify-between py-[7px] px-3 mb-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-700 cursor-pointer font-[inherit] hover:border-[#f97316] transition-colors"
+              onClick={() => { setJobOpen((o) => !o); setRegionOpen(false); }}
+            >
+              <span className="flex items-center gap-1.5">
+                <span>🔧 직종 선택</span>
+                {state.job !== '전체' && (
+                  <span className="text-[#f97316] font-extrabold">— {state.job}</span>
+                )}
+              </span>
+              <span
+                className="text-gray-400 text-xs ml-1 inline-block transition-transform duration-300"
+                style={{ transform: jobOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              >▼</span>
+            </button>
+          ) : (
+            <div className="text-[10px] font-extrabold text-gray-500 mb-1 flex items-center gap-1 uppercase tracking-wide">
+              🔧 직종
+            </div>
+          )}
+          {/* 직종 칩 목록 + 용접 세부 */}
+          <div
+            style={isMobile ? {
+              maxHeight: jobOpen ? '300px' : '0px',
+              overflow: 'hidden',
+              transition: 'max-height 0.35s cubic-bezier(0.4,0,0.2,1)',
+            } : {}}
+          >
+            <div className="flex flex-wrap gap-1 mb-[7px]">
+              {JOBS.map((j) => (
+                <button
+                  key={j}
+                  className={`px-2.5 py-1 rounded-2xl border-[1.5px] text-xs font-semibold cursor-pointer transition-all whitespace-nowrap font-[inherit] ${
+                    state.job === j || (j === '용접' && isWeld(state.job) && state.job !== '전체')
+                      ? 'bg-[#f97316] border-[#f97316] text-white'
+                      : 'bg-white border-gray-200 text-gray-500 hover:border-[#f97316] hover:text-[#f97316]'
+                  }`}
+                  onClick={() => {
+                    if (state.job === j && j !== '전체') {
+                      applyFilter({ job: '전체', weldSub: '전체' });
+                    } else {
+                      applyFilter({ job: j, weldSub: '전체' });
+                    }
+                  }}
+                >
+                  {JOB_EMOJI[j] || ''} {j}
+                  {j === '용접' && ' ▼'}
+                </button>
+              ))}
+            </div>
+
+            {showWeld && (
+              <div>
+                <div className="text-[10px] font-extrabold mb-1 flex items-center gap-1" style={{ color: '#7c3aed' }}>
+                  ⚙️ 용접 세부종류
+                </div>
+                <div className="flex flex-wrap gap-1 mb-[7px]">
+                  {['전체 용접', 'TIG', '아크', 'CO2', 'PVC'].map((w) => {
+                    const val = w === '전체 용접' ? '전체' : w;
+                    return (
+                      <button
+                        key={w}
+                        className={`px-2.5 py-[3px] rounded-2xl border-[1.5px] text-[11px] font-semibold cursor-pointer transition-all whitespace-nowrap font-[inherit] ${
+                          state.weldSub === val
+                            ? 'text-white border-purple-700'
+                            : 'bg-white border-gray-200 text-gray-500 hover:border-purple-500 hover:text-purple-700'
+                        }`}
+                        style={state.weldSub === val ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}
+                        onClick={() => applyFilter({ weldSub: val, job: val === '전체' ? '용접' : val })}
+                      >
+                        {w === '전체 용접' ? '⚡ 전체 용접' : w === 'TIG' ? '⚡ TIG' : w === '아크' ? '🌟 아크' : w === 'CO2' ? '💨 CO2' : '🟢 PVC'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 flex-wrap">
             <span className="text-xs text-gray-500 font-semibold">정렬</span>
