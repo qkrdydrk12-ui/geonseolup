@@ -7,6 +7,22 @@ const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '�
 const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '양중', '덕트', '비계', '안전담당자', '품질담당자', '공사담당자', '기타'];
 const WELD_TEST_OPTIONS = ['가능', '불가능'];
 
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function validatePhone(value: string): { valid: boolean; message: string } {
+  const digits = value.replace(/[^0-9]/g, '');
+  if (digits.length === 0) return { valid: false, message: '' };
+  if (digits.length < 11) return { valid: false, message: `🚫 자리수가 부족합니다 (현재 ${digits.length}자리 / 11자리 필요)` };
+  if (digits.length > 11) return { valid: false, message: '🚫 자리수가 초과됩니다 (11자리만 허용)' };
+  if (!digits.startsWith('010')) return { valid: false, message: '🚫 010으로 시작하는 번호만 입력 가능합니다' };
+  return { valid: true, message: '✔ 올바른 전화번호입니다' };
+}
+
 export default function Post() {
   const [, setLocation] = useLocation();
   const [form, setForm] = useState({
@@ -96,8 +112,8 @@ export default function Post() {
     if (!form.job) { setError('직종을 선택해주세요.'); return; }
     if (detailHasPhone) { setError('비고/추가 정보란에 전화번호를 입력할 수 없습니다. 연락처란을 이용해주세요.'); return; }
     if (!form.contact.trim()) { setError('연락처를 입력해주세요.'); return; }
-    const contactDigits = form.contact.replace(/[^0-9]/g, '');
-    if (contactDigits.length !== 11) { setError('연락처는 11자리 숫자로 입력해주세요. (예: 010-0000-0000)'); return; }
+    const phoneResult = validatePhone(form.contact);
+    if (!phoneResult.valid) { setError('올바른 전화번호를 입력해주세요 (010-1234-5678)'); return; }
     if (!agreed) { setError('이용 규칙에 동의해주세요.'); return; }
 
     const cooldownRemain = checkCooldown(form.contact);
@@ -423,22 +439,28 @@ export default function Post() {
                   )}
                 </div>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   value={form.contact}
-                  onChange={(e) => setField('contact', e.target.value)}
-                  placeholder="예: 010-0000-0000"
+                  onChange={(e) => setField('contact', formatPhone(e.target.value))}
+                  placeholder="예: 010-1234-5678"
+                  maxLength={13}
                   className={(() => {
-                    const digits = form.contact.replace(/[^0-9]/g, '');
-                    const invalid = form.contact.length > 0 && digits.length !== 11;
+                    const phoneResult = validatePhone(form.contact);
+                    const invalid = form.contact.length > 0 && !phoneResult.valid;
                     const cooldown = contactCooldownRemain > 0;
-                    return `${inputCls} ${invalid || cooldown ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`;
+                    return `${inputCls} ${invalid || cooldown ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : phoneResult.valid ? 'border-emerald-400 focus:border-emerald-400' : ''}`;
                   })()}
                 />
                 {(() => {
-                  const digits = form.contact.replace(/[^0-9]/g, '');
-                  if (form.contact.length === 0) return <p className="text-xs text-gray-400 mt-1">숫자 11자리 (예: 010-1234-5678)</p>;
-                  if (digits.length !== 11) return <p className="text-xs text-red-600 font-semibold mt-1">🚫 연락처는 11자리 숫자여야 합니다 (현재 {digits.length}자리)</p>;
-                  return <p className="text-xs text-emerald-600 font-semibold mt-1">✔ 올바른 형식입니다</p>;
+                  const phoneResult = validatePhone(form.contact);
+                  if (form.contact.length === 0) return (
+                    <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 010-1234-5678 형식으로 변환됩니다</p>
+                  );
+                  if (!phoneResult.valid) return (
+                    <p className="text-xs text-red-600 font-semibold mt-1">{phoneResult.message}</p>
+                  );
+                  return <p className="text-xs text-emerald-600 font-semibold mt-1">{phoneResult.message}</p>;
                 })()}
               </div>
               <div>
