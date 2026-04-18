@@ -75,11 +75,6 @@ export default function JobCard({ job, isDupOld }: Props) {
         <div className="flex-1 min-w-0">
           <div className="text-[13px] font-bold leading-snug mb-1 text-gray-900 line-clamp-2">
             {job.title}
-            {viewed && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-400 bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5 ml-1 align-middle">
-                ✔ 읽음
-              </span>
-            )}
           </div>
           <div className="flex flex-wrap gap-[3px]">
             {_isNew && (
@@ -147,7 +142,7 @@ export default function JobCard({ job, isDupOld }: Props) {
             <span className="w-[15px] text-center shrink-0 mt-0.5">📞</span>
             <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">연락처</span>
             <span className="flex-1 font-semibold text-gray-800 break-all">
-              {hasPhone ? job.contact : '문의'}
+              {job.contact || '문의'}
             </span>
           </li>
           {job.detail && (
