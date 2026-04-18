@@ -56,8 +56,30 @@ interface AppState {
   filtered: Job[];
 }
 
-const REGIONS = ['전체', '서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
-const JOBS = ['전체', '조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '양중', '덕트', '비계', '안전담당자', '품질담당자', '공사담당자', '기타'];
+const DEFAULT_REGIONS = ['전체', '서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+const DEFAULT_JOBS = ['전체', '조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '양중', '덕트', '비계', '안전담당자', '품질담당자', '공사담당자', '기타'];
+
+function getRegions(): string[] {
+  try {
+    const stored = localStorage.getItem('cj_custom_regions');
+    if (stored) {
+      const arr = JSON.parse(stored);
+      if (Array.isArray(arr) && arr.length > 0) return ['전체', ...arr];
+    }
+  } catch {}
+  return DEFAULT_REGIONS;
+}
+
+function getJobs(): string[] {
+  try {
+    const stored = localStorage.getItem('cj_custom_jobs');
+    if (stored) {
+      const arr = JSON.parse(stored);
+      if (Array.isArray(arr) && arr.length > 0) return ['전체', ...arr];
+    }
+  } catch {}
+  return DEFAULT_JOBS;
+}
 const JOB_EMOJI: Record<string, string> = {
   조공: '🔨',
   배관: '🔧',
@@ -242,6 +264,8 @@ export default function Home() {
   const homeSettings = getHomeSettings();
   const PAGE_SIZE = homeSettings.pageSize;
   const INFEED_EVERY = homeSettings.infeedEvery;
+  const REGIONS = getRegions();
+  const JOBS = getJobs();
 
   const pageItems = state.filtered.slice(0, state.page * PAGE_SIZE);
   const hasMore = pageItems.length < state.filtered.length;
@@ -292,7 +316,6 @@ export default function Home() {
               { preset: 'salary_top', emoji: '💰', title: '급여 높은 TOP 5', desc: '일당 높은 순' },
               { preset: 'meal_lodging', emoji: '🏠', title: '숙식 제공', desc: '숙박+식사 제공' },
               { preset: 'new_today', emoji: '🆕', title: '오늘 공고', desc: '24시간 이내' },
-              { preset: 'weld', emoji: '🔩', title: '용접 모집', desc: 'TIG·아크·CO2·PVC' },
               { preset: 'fire_guard', emoji: '🧯', title: '화기감시자', desc: '전체 공고' },
             ].map((c) => (
               <button

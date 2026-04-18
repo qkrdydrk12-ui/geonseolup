@@ -172,6 +172,27 @@ export default function Admin() {
     adBottomHeight: localStorage.getItem('cj_ad_bottom_height') || '90',
     adMaxWidth: localStorage.getItem('cj_ad_max_width') || '100%',
   });
+
+  const DEFAULT_REGIONS_ADMIN = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+  const DEFAULT_JOBS_ADMIN = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '양중', '덕트', '비계', '안전담당자', '품질담당자', '공사담당자', '기타'];
+
+  function loadList(key: string, defaults: string[]): string[] {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const arr = JSON.parse(stored);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      }
+    } catch {}
+    return defaults;
+  }
+
+  const [regionListTab, setRegionListTab] = useState<'region' | 'job'>('region');
+  const [customRegions, setCustomRegions] = useState<string[]>(() => loadList('cj_custom_regions', DEFAULT_REGIONS_ADMIN));
+  const [customJobs, setCustomJobs] = useState<string[]>(() => loadList('cj_custom_jobs', DEFAULT_JOBS_ADMIN));
+  const [newRegionInput, setNewRegionInput] = useState('');
+  const [newJobInput, setNewJobInput] = useState('');
+
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -1318,6 +1339,159 @@ export default function Admin() {
               >
                 💾 홈 화면 설정 저장
               </button>
+            </div>
+
+            {/* 지역 / 직종 관리 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">📍 지역 / 직종 관리</h2>
+              <p className="text-sm text-gray-500 mb-4">홈 화면의 지역·직종 필터 버튼을 추가·삭제합니다.</p>
+
+              {/* 탭 */}
+              <div className="flex gap-2 mb-4">
+                {(['region', 'job'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setRegionListTab(t)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold border transition-colors font-[inherit] cursor-pointer ${
+                      regionListTab === t
+                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-[#1e3a5f]'
+                    }`}
+                  >
+                    {t === 'region' ? '📍 지역' : '🔧 직종'}
+                  </button>
+                ))}
+              </div>
+
+              {regionListTab === 'region' ? (
+                <div>
+                  {/* 추가 입력 */}
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="text"
+                      value={newRegionInput}
+                      onChange={(e) => setNewRegionInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = newRegionInput.trim();
+                          if (v && !customRegions.includes(v)) {
+                            setCustomRegions((p) => [...p, v]);
+                            setNewRegionInput('');
+                          }
+                        }
+                      }}
+                      placeholder="지역명 입력 (예: 울산)"
+                      className="flex-1 py-2 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                    />
+                    <button
+                      onClick={() => {
+                        const v = newRegionInput.trim();
+                        if (v && !customRegions.includes(v)) {
+                          setCustomRegions((p) => [...p, v]);
+                          setNewRegionInput('');
+                        }
+                      }}
+                      className="bg-[#f97316] text-white border-none px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                    >
+                      + 추가
+                    </button>
+                  </div>
+                  {/* 현재 목록 */}
+                  <div className="flex flex-wrap gap-2 mb-3 min-h-[40px] p-3 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                    {customRegions.length === 0 && (
+                      <span className="text-xs text-gray-400 self-center">지역이 없습니다</span>
+                    )}
+                    {customRegions.map((r) => (
+                      <span
+                        key={r}
+                        className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2.5 py-1 text-sm font-semibold text-gray-700 shadow-sm"
+                      >
+                        {r}
+                        <button
+                          onClick={() => setCustomRegions((p) => p.filter((x) => x !== r))}
+                          className="ml-0.5 text-gray-400 hover:text-red-500 transition-colors text-base leading-none cursor-pointer bg-transparent border-none font-[inherit]"
+                          title="삭제"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <button
+                    className="flex items-center gap-2 bg-[#f97316] text-white border-none py-2 px-5 rounded-xl text-[14px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                    onClick={() => {
+                      localStorage.setItem('cj_custom_regions', JSON.stringify(customRegions));
+                      showToast('✅ 지역 목록이 저장됐습니다');
+                    }}
+                  >
+                    💾 지역 저장
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  {/* 추가 입력 */}
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="text"
+                      value={newJobInput}
+                      onChange={(e) => setNewJobInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = newJobInput.trim();
+                          if (v && !customJobs.includes(v)) {
+                            setCustomJobs((p) => [...p, v]);
+                            setNewJobInput('');
+                          }
+                        }
+                      }}
+                      placeholder="직종명 입력 (예: 비계)"
+                      className="flex-1 py-2 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                    />
+                    <button
+                      onClick={() => {
+                        const v = newJobInput.trim();
+                        if (v && !customJobs.includes(v)) {
+                          setCustomJobs((p) => [...p, v]);
+                          setNewJobInput('');
+                        }
+                      }}
+                      className="bg-[#f97316] text-white border-none px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                    >
+                      + 추가
+                    </button>
+                  </div>
+                  {/* 현재 목록 */}
+                  <div className="flex flex-wrap gap-2 mb-3 min-h-[40px] p-3 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                    {customJobs.length === 0 && (
+                      <span className="text-xs text-gray-400 self-center">직종이 없습니다</span>
+                    )}
+                    {customJobs.map((j) => (
+                      <span
+                        key={j}
+                        className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2.5 py-1 text-sm font-semibold text-gray-700 shadow-sm"
+                      >
+                        {j}
+                        <button
+                          onClick={() => setCustomJobs((p) => p.filter((x) => x !== j))}
+                          className="ml-0.5 text-gray-400 hover:text-red-500 transition-colors text-base leading-none cursor-pointer bg-transparent border-none font-[inherit]"
+                          title="삭제"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <button
+                    className="flex items-center gap-2 bg-[#f97316] text-white border-none py-2 px-5 rounded-xl text-[14px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                    onClick={() => {
+                      localStorage.setItem('cj_custom_jobs', JSON.stringify(customJobs));
+                      showToast('✅ 직종 목록이 저장됐습니다');
+                    }}
+                  >
+                    💾 직종 저장
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 광고 코드 설정 */}
