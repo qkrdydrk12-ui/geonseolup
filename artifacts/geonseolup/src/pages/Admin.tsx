@@ -104,9 +104,14 @@ type Tab = 'jobs' | 'add' | 'pending' | 'settings';
 
 export default function Admin() {
   const [authed, setAuthed] = useState(() => !!localStorage.getItem(ADMIN_KEY));
+  const [adminId, setAdminId] = useState('');
   const [password, setPassword] = useState('');
   const [pwError, setPwError] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [showFindModal, setShowFindModal] = useState(false);
+  const [findEmail, setFindEmail] = useState('');
+  const [findPhone, setFindPhone] = useState('');
+  const [findSent, setFindSent] = useState(false);
   const [tab, setTab] = useState<Tab>('jobs');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [pending, setPending] = useState<PendingJob[]>([]);
@@ -168,8 +173,9 @@ export default function Admin() {
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    const stored = localStorage.getItem('cj_admin_pw') || '1234';
-    if (password === stored) {
+    const storedPw = localStorage.getItem('cj_admin_pw') || '1234';
+    const storedId = localStorage.getItem('cj_admin_id') || 'admin';
+    if (adminId === storedId && password === storedPw) {
       localStorage.setItem(ADMIN_KEY, '1');
       setAuthed(true);
       setPwError(false);
@@ -355,9 +361,20 @@ export default function Admin() {
       <div className="min-h-screen flex items-center justify-center px-5" style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}>
         <div className="bg-white rounded-2xl p-10 w-full max-w-[400px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] text-center">
           <div className="text-[36px] mb-2">🏗️</div>
-          <h2 className="text-[22px] font-bold text-[#1e3a5f] mb-1.5">관리자 로그인</h2>
-          <p className="text-sm text-gray-500 mb-7">건설UP 관리자 페이지</p>
+          <h2 className="text-[22px] font-bold text-[#1e3a5f] mb-1">건설UP 관리자</h2>
+          <p className="text-sm text-gray-400 mb-7">로그인하여 공고를 관리하세요</p>
           <form onSubmit={handleLogin}>
+            <div className="text-left mb-3">
+              <label className="block text-xs font-bold text-gray-500 mb-1.5">아이디</label>
+              <input
+                type="text"
+                value={adminId}
+                onChange={(e) => setAdminId(e.target.value)}
+                placeholder="아이디"
+                autoComplete="username"
+                className="w-full py-3 pl-3.5 pr-4 border-2 border-gray-200 rounded-[10px] text-[15px] outline-none font-[inherit] focus:border-[#f97316]"
+              />
+            </div>
             <div className="text-left mb-4">
               <label className="block text-xs font-bold text-gray-500 mb-1.5">비밀번호</label>
               <div className="relative">
@@ -365,7 +382,8 @@ export default function Admin() {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="비밀번호를 입력하세요"
+                  placeholder="비밀번호"
+                  autoComplete="current-password"
                   className="w-full py-3 pl-3.5 pr-10 border-2 border-gray-200 rounded-[10px] text-[15px] outline-none font-[inherit] focus:border-[#f97316]"
                 />
                 <button
@@ -379,18 +397,112 @@ export default function Admin() {
             </div>
             {pwError && (
               <div className="bg-red-100 text-red-700 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold mb-3">
-                비밀번호가 올바르지 않습니다.
+                아이디 또는 비밀번호가 올바르지 않습니다.
               </div>
             )}
             <button
               type="submit"
-              className="w-full bg-[#f97316] text-white border-none py-3.5 rounded-[10px] text-base font-bold cursor-pointer hover:bg-[#ea580c] transition-colors mt-2 font-[inherit]"
+              className="w-full bg-[#f97316] text-white border-none py-3.5 rounded-[10px] text-base font-bold cursor-pointer hover:bg-[#ea580c] transition-colors mt-1 font-[inherit]"
             >
-              로그인
+              🔐 로그인
             </button>
           </form>
-          <p className="text-[11px] text-gray-400 mt-4">기본 비밀번호: 1234</p>
+
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <button
+              type="button"
+              onClick={() => { setShowFindModal(true); setFindSent(false); setFindEmail(''); setFindPhone(''); }}
+              className="text-[12px] text-gray-400 hover:text-[#f97316] cursor-pointer bg-transparent border-none font-[inherit] underline-offset-2 hover:underline transition-colors"
+            >
+              아이디/비밀번호 찾기
+            </button>
+            <span className="text-gray-200">|</span>
+            <a
+              href="/"
+              className="text-[12px] text-gray-400 hover:text-[#1e3a5f] no-underline hover:underline underline-offset-2 transition-colors"
+            >
+              🏠 홈으로 이동
+            </a>
+          </div>
+          <p className="text-[10px] text-gray-300 mt-4">관리자 전용 로그인</p>
         </div>
+
+        {/* 아이디/비밀번호 찾기 모달 */}
+        {showFindModal && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center px-5"
+            style={{ background: 'rgba(0,0,0,0.55)' }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowFindModal(false); }}
+          >
+            <div className="bg-white rounded-2xl p-8 w-full max-w-[380px] shadow-2xl">
+              <h3 className="text-[18px] font-bold text-[#1e3a5f] mb-1">🔍 아이디/비밀번호 찾기</h3>
+              <p className="text-xs text-gray-400 mb-5">
+                가입 시 등록한 이메일 또는 휴대폰번호를 입력하세요.
+              </p>
+              {!findSent ? (
+                <>
+                  <div className="mb-3">
+                    <label className="block text-xs font-bold text-gray-600 mb-1.5">이메일 주소</label>
+                    <input
+                      type="email"
+                      value={findEmail}
+                      onChange={(e) => setFindEmail(e.target.value)}
+                      placeholder="example@email.com"
+                      className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                    />
+                  </div>
+                  <div className="mb-5">
+                    <label className="block text-xs font-bold text-gray-600 mb-1.5">휴대폰번호</label>
+                    <input
+                      type="tel"
+                      value={findPhone}
+                      onChange={(e) => setFindPhone(e.target.value)}
+                      placeholder="010-0000-0000"
+                      className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowFindModal(false)}
+                      className="flex-1 bg-gray-100 text-gray-600 border-none py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-gray-200 transition-colors font-[inherit]"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!findEmail && !findPhone) return;
+                        setFindSent(true);
+                      }}
+                      className="flex-1 bg-[#f97316] text-white border-none py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                    >
+                      찾기
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="text-4xl mb-3">📬</div>
+                  <p className="text-sm text-gray-700 font-semibold mb-1">확인이 완료되었습니다</p>
+                  <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+                    관리자에게 아이디/비밀번호 재발급을 요청해 주세요.<br />
+                    {localStorage.getItem('cj_contact_email') && (
+                      <>📧 {localStorage.getItem('cj_contact_email')}</>
+                    )}
+                    {localStorage.getItem('cj_contact_kakao') && (
+                      <><br />💛 카카오 {localStorage.getItem('cj_contact_kakao')}</>
+                    )}
+                  </p>
+                  <button
+                    onClick={() => setShowFindModal(false)}
+                    className="w-full bg-[#1e3a5f] text-white border-none py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit]"
+                  >
+                    확인
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1016,28 +1128,60 @@ export default function Admin() {
               </div>
             </div>
 
-            {/* 관리자 비밀번호 */}
+            {/* 관리자 계정 설정 */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
               <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 flex items-center gap-2">
-                🔑 관리자 비밀번호
+                🔑 관리자 계정 설정
               </h2>
-              <div className="max-w-[400px] flex gap-3">
-                <input
-                  type="password"
-                  value={settings.adminPw}
-                  onChange={(e) => setSettings((p) => ({ ...p, adminPw: e.target.value }))}
-                  placeholder="새 비밀번호 입력"
-                  className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
-                />
-                <button
-                  className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit] whitespace-nowrap"
-                  onClick={() => {
-                    localStorage.setItem('cj_admin_pw', settings.adminPw);
-                    showToast('✅ 비밀번호가 변경됐습니다');
-                  }}
-                >
-                  변경
-                </button>
+              <div className="grid gap-3 max-w-[480px]">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">아이디</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      defaultValue={localStorage.getItem('cj_admin_id') || 'admin'}
+                      id="admin-id-input"
+                      placeholder="관리자 아이디"
+                      className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                    />
+                    <button
+                      className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit] whitespace-nowrap"
+                      onClick={() => {
+                        const el = document.getElementById('admin-id-input') as HTMLInputElement;
+                        const val = el?.value?.trim();
+                        if (!val) return;
+                        localStorage.setItem('cj_admin_id', val);
+                        showToast('✅ 아이디가 변경됐습니다');
+                      }}
+                    >
+                      변경
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">비밀번호</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={settings.adminPw}
+                      onChange={(e) => setSettings((p) => ({ ...p, adminPw: e.target.value }))}
+                      placeholder="새 비밀번호 입력"
+                      className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#1e3a5f]"
+                    />
+                    <button
+                      className="bg-[#1e3a5f] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#2d5282] transition-colors font-[inherit] whitespace-nowrap"
+                      onClick={() => {
+                        localStorage.setItem('cj_admin_pw', settings.adminPw);
+                        showToast('✅ 비밀번호가 변경됐습니다');
+                      }}
+                    >
+                      변경
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
+                  <span>💡</span> 기본 아이디: <strong>admin</strong> / 기본 비밀번호: <strong>1234</strong>
+                </p>
               </div>
             </div>
 
