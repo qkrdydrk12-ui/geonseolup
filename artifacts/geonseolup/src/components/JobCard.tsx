@@ -175,7 +175,7 @@ export default function JobCard({ job, isDupOld }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex gap-[5px] flex-1 min-w-0">
-          {hasPhone ? (
+          {hasPhone && (
             <>
               <a
                 href={telHref}
@@ -190,10 +190,6 @@ export default function JobCard({ job, isDupOld }: Props) {
                 💬 문자
               </a>
             </>
-          ) : (
-            <span className="flex-1 flex items-center justify-center bg-amber-500 text-white rounded-lg py-2 text-xs font-bold whitespace-nowrap">
-              📩 문의
-            </span>
           )}
         </div>
         <button
