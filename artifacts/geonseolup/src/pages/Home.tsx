@@ -5,9 +5,19 @@ import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { isAutoHidden, WELD_SUBS, isWeld } from '@/lib/utils';
 import JobCard from '@/components/JobCard';
 
-const PAGE_SIZE = 12;
 const DEFAULT_AUTO_HIDE = 0;
-const INFEED_EVERY = 6;
+
+function getHomeSettings() {
+  return {
+    pageSize: parseInt(localStorage.getItem('cj_home_page_size') || '12') || 12,
+    infeedEvery: parseInt(localStorage.getItem('cj_home_infeed_every') || '6') || 6,
+    showPopular: localStorage.getItem('cj_home_show_popular') !== 'off',
+    adTopHeight: parseInt(localStorage.getItem('cj_ad_top_height') || '90') || 90,
+    adInfeedHeight: parseInt(localStorage.getItem('cj_ad_infeed_height') || '90') || 90,
+    adBottomHeight: parseInt(localStorage.getItem('cj_ad_bottom_height') || '90') || 90,
+    adMaxWidth: localStorage.getItem('cj_ad_max_width') || '100%',
+  };
+}
 
 function getAutoHideHours(): number {
   try {
@@ -18,17 +28,19 @@ function getAutoHideHours(): number {
   }
 }
 
-function AdSlot({ storageKey }: { storageKey: string }) {
+function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHeight?: number; maxWidth?: string }) {
   const code = localStorage.getItem(storageKey) || '';
   if (!code.trim()) return null;
   return (
-    <div className="w-full my-1">
-      <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
-      <div
-        className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
-        style={{ background: '#fffde7', minHeight: 60 }}
-        dangerouslySetInnerHTML={{ __html: code }}
-      />
+    <div className="w-full my-1 flex justify-center">
+      <div style={{ width: maxWidth || '100%' }}>
+        <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
+        <div
+          className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
+          style={{ background: '#fffde7', minHeight: minHeight ?? 90 }}
+          dangerouslySetInnerHTML={{ __html: code }}
+        />
+      </div>
     </div>
   );
 }
@@ -227,6 +239,10 @@ export default function Home() {
     showToast('🔄 필터가 초기화되었습니다');
   }
 
+  const homeSettings = getHomeSettings();
+  const PAGE_SIZE = homeSettings.pageSize;
+  const INFEED_EVERY = homeSettings.infeedEvery;
+
   const pageItems = state.filtered.slice(0, state.page * PAGE_SIZE);
   const hasMore = pageItems.length < state.filtered.length;
   const showWeld = state.job === '용접' || WELD_SUBS.includes(state.job);
@@ -243,13 +259,15 @@ export default function Home() {
       const isLastItem = idx === pageItems.length - 1;
       if (infeedCode.trim() && !isLastItem && (idx + 1) % INFEED_EVERY === 0) {
         items.push(
-          <div key={`infeed-${idx}`} className="col-span-full">
-            <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
-            <div
-              className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
-              style={{ background: '#fffde7', minHeight: 60 }}
-              dangerouslySetInnerHTML={{ __html: infeedCode }}
-            />
+          <div key={`infeed-${idx}`} className="col-span-full flex justify-center">
+            <div style={{ width: homeSettings.adMaxWidth }}>
+              <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
+              <div
+                className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
+                style={{ background: '#fffde7', minHeight: homeSettings.adInfeedHeight }}
+                dangerouslySetInnerHTML={{ __html: infeedCode }}
+              />
+            </div>
           </div>
         );
       }
@@ -262,10 +280,10 @@ export default function Home() {
       <div className="max-w-[1100px] mx-auto px-3.5 pt-2.5 pb-10">
 
         {/* ① 상단 배너 광고 */}
-        <AdSlot storageKey="cj_ad_main_top" />
+        <AdSlot storageKey="cj_ad_main_top" minHeight={homeSettings.adTopHeight} maxWidth={homeSettings.adMaxWidth} />
 
         {/* 추천 섹션 */}
-        <section className="mb-2.5">
+        {homeSettings.showPopular && (<section className="mb-2.5">
           <div className="text-xs font-extrabold text-gray-500 mb-1.5 flex items-center gap-1 uppercase tracking-wide">
             🔥 지금 인기 있는 일자리
           </div>
@@ -290,7 +308,7 @@ export default function Home() {
               </button>
             ))}
           </div>
-        </section>
+        </section>)}
 
         {/* 검색 + 필터 (sticky) */}
         <section
@@ -496,7 +514,7 @@ export default function Home() {
         </section>
 
         {/* ③ 하단 배너 광고 */}
-        <AdSlot storageKey="cj_ad_main_bottom" />
+        <AdSlot storageKey="cj_ad_main_bottom" minHeight={homeSettings.adBottomHeight} maxWidth={homeSettings.adMaxWidth} />
 
       </div>
 

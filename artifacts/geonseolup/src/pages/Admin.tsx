@@ -163,6 +163,15 @@ export default function Admin() {
     detailInfeed: localStorage.getItem('cj_ad_detail_infeed') || '',
     detailBottom: localStorage.getItem('cj_ad_detail_bottom') || '',
   });
+  const [homeLayout, setHomeLayout] = useState({
+    pageSize: localStorage.getItem('cj_home_page_size') || '12',
+    infeedEvery: localStorage.getItem('cj_home_infeed_every') || '6',
+    showPopular: localStorage.getItem('cj_home_show_popular') !== 'off',
+    adTopHeight: localStorage.getItem('cj_ad_top_height') || '90',
+    adInfeedHeight: localStorage.getItem('cj_ad_infeed_height') || '90',
+    adBottomHeight: localStorage.getItem('cj_ad_bottom_height') || '90',
+    adMaxWidth: localStorage.getItem('cj_ad_max_width') || '100%',
+  });
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
@@ -1182,6 +1191,133 @@ export default function Admin() {
                   <span>💡</span> 기본 아이디: <strong>admin</strong> / 기본 비밀번호: <strong>1234</strong>
                 </p>
               </div>
+            </div>
+
+            {/* 홈 화면 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-1 flex items-center gap-2">🏠 홈 화면 설정</h2>
+              <p className="text-sm text-gray-500 mb-5">공고 목록 표시 방식, 인기 배너, 광고 크기를 조절합니다.</p>
+
+              <div className="grid gap-5">
+                {/* 공고 목록 */}
+                <div>
+                  <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-100">📋 공고 목록 설정</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">페이지당 공고 수</label>
+                      <select
+                        value={homeLayout.pageSize}
+                        onChange={(e) => setHomeLayout((p) => ({ ...p, pageSize: e.target.value }))}
+                        className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none bg-white font-[inherit] focus:border-[#f97316]"
+                      >
+                        {['6','9','10','12','15','20','30'].map((v) => (
+                          <option key={v} value={v}>{v}개씩 보기</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">인피드 광고 삽입 간격</label>
+                      <select
+                        value={homeLayout.infeedEvery}
+                        onChange={(e) => setHomeLayout((p) => ({ ...p, infeedEvery: e.target.value }))}
+                        className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none bg-white font-[inherit] focus:border-[#f97316]"
+                      >
+                        {['3','4','5','6','8','10','12'].map((v) => (
+                          <option key={v} value={v}>{v}개마다 1회 삽입</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 인기 배너 */}
+                <div>
+                  <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-100">🔥 인기 배너 섹션</h3>
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <div
+                      className={`relative w-11 h-6 rounded-full transition-colors ${homeLayout.showPopular ? 'bg-[#f97316]' : 'bg-gray-300'}`}
+                      onClick={() => setHomeLayout((p) => ({ ...p, showPopular: !p.showPopular }))}
+                    >
+                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${homeLayout.showPopular ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {homeLayout.showPopular ? '🔥 인기 배너 표시 중' : '숨김'}
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-400 mt-1.5">상단 "급여 높은 TOP 5 / 숙식 제공 / 오늘 공고 / 용접 모집 / 화기감시자" 배너 행</p>
+                </div>
+
+                {/* 광고 크기 */}
+                <div>
+                  <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-100">📐 광고 크기 설정</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">상단 배너 높이 (px)</label>
+                      <input
+                        type="number"
+                        min={50} max={600}
+                        value={homeLayout.adTopHeight}
+                        onChange={(e) => setHomeLayout((p) => ({ ...p, adTopHeight: e.target.value }))}
+                        placeholder="예: 90"
+                        className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">인피드 광고 높이 (px)</label>
+                      <input
+                        type="number"
+                        min={50} max={600}
+                        value={homeLayout.adInfeedHeight}
+                        onChange={(e) => setHomeLayout((p) => ({ ...p, adInfeedHeight: e.target.value }))}
+                        placeholder="예: 90"
+                        className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">하단 배너 높이 (px)</label>
+                      <input
+                        type="number"
+                        min={50} max={600}
+                        value={homeLayout.adBottomHeight}
+                        onChange={(e) => setHomeLayout((p) => ({ ...p, adBottomHeight: e.target.value }))}
+                        placeholder="예: 90"
+                        className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">광고 최대 너비</label>
+                      <select
+                        value={homeLayout.adMaxWidth}
+                        onChange={(e) => setHomeLayout((p) => ({ ...p, adMaxWidth: e.target.value }))}
+                        className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm outline-none bg-white font-[inherit] focus:border-[#f97316]"
+                      >
+                        <option value="100%">전체 너비 (100%)</option>
+                        <option value="728px">리더보드 (728px)</option>
+                        <option value="640px">중형 (640px)</option>
+                        <option value="468px">소형 (468px)</option>
+                        <option value="336px">대형 사각형 (336px)</option>
+                        <option value="320px">모바일 배너 (320px)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="mt-5 flex items-center gap-2 bg-[#f97316] text-white border-none py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                onClick={() => {
+                  localStorage.setItem('cj_home_page_size', homeLayout.pageSize);
+                  localStorage.setItem('cj_home_infeed_every', homeLayout.infeedEvery);
+                  localStorage.setItem('cj_home_show_popular', homeLayout.showPopular ? 'on' : 'off');
+                  localStorage.setItem('cj_ad_top_height', homeLayout.adTopHeight);
+                  localStorage.setItem('cj_ad_infeed_height', homeLayout.adInfeedHeight);
+                  localStorage.setItem('cj_ad_bottom_height', homeLayout.adBottomHeight);
+                  localStorage.setItem('cj_ad_max_width', homeLayout.adMaxWidth);
+                  showToast('✅ 홈 화면 설정이 저장됐습니다');
+                }}
+              >
+                💾 홈 화면 설정 저장
+              </button>
             </div>
 
             {/* 광고 코드 설정 */}
