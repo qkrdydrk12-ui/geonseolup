@@ -49,7 +49,10 @@ export const JOB_ICONS: Record<string, string> = {
   화기감시자: '🧯',
   양중: '🏗️',
   덕트: '💨',
-  기타: '📋',
+  안전담당자: '🦺',
+  품질담당자: '📋',
+  공사담당자: '🏢',
+  기타: '📌',
 };
 
 export const WELD_SUBS = ['TIG', '아크', 'CO2', 'PVC'];
@@ -80,6 +83,9 @@ export const JOB_ICON_BG: Record<string, string> = {
   화기감시자: '#fee2e2',
   양중: '#e0e7ff',
   덕트: '#f0fdf4',
+  안전담당자: '#ecfdf5',
+  품질담당자: '#eff6ff',
+  공사담당자: '#f5f3ff',
   기타: '#f3f4f6',
 };
 
@@ -101,6 +107,9 @@ export const JOB_BADGE_COLOR: Record<string, { bg: string; text: string }> = {
   화기감시자: { bg: '#fee2e2', text: '#991b1b' },
   양중: { bg: '#e0e7ff', text: '#3730a3' },
   덕트: { bg: '#dcfce7', text: '#166534' },
+  안전담당자: { bg: '#ecfdf5', text: '#065f46' },
+  품질담당자: { bg: '#eff6ff', text: '#1e40af' },
+  공사담당자: { bg: '#f5f3ff', text: '#5b21b6' },
   기타: { bg: '#f3f4f6', text: '#374151' },
 };
 
