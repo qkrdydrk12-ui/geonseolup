@@ -7,29 +7,67 @@ import Post from '@/pages/Post';
 import Admin from '@/pages/Admin';
 import VisitorWidget from '@/components/VisitorWidget';
 
-function useGoogleVerifyMeta() {
+// ── 관리자가 저장한 head 코드를 <head>에 동적으로 주입 ──────────────────────
+function injectHeadCode(raw: string) {
+  // 이전에 주입된 요소 모두 제거
+  document.querySelectorAll('[data-admin-head]').forEach((el) => el.remove());
+
+  const code = raw.trim();
+  if (!code) return;
+
+  // DOMParser로 파싱 후 각 노드 처리
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<html><head>${code}</head></html>`, 'text/html');
+
+  for (const node of Array.from(doc.head.childNodes)) {
+    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    const el = node as Element;
+
+    if (el.tagName === 'SCRIPT') {
+      // innerHTML로 추가된 script는 실행되지 않으므로 createElement로 새로 생성
+      const script = document.createElement('script');
+      Array.from(el.attributes).forEach((a) => script.setAttribute(a.name, a.value));
+      script.textContent = el.textContent || '';
+      script.setAttribute('data-admin-head', '');
+      document.head.appendChild(script);
+    } else {
+      const clone = document.importNode(el, true) as Element;
+      clone.setAttribute('data-admin-head', '');
+      document.head.appendChild(clone);
+    }
+  }
+}
+
+function useHeadInjection() {
   useEffect(() => {
-    function applyMeta() {
-      const code = localStorage.getItem('cj_google_verify');
-      const existing = document.querySelector('meta[name="google-site-verification"]');
-      if (code) {
-        if (existing) {
-          existing.setAttribute('content', code);
-        } else {
-          const meta = document.createElement('meta');
-          meta.name = 'google-site-verification';
-          meta.content = code;
-          document.head.appendChild(meta);
-        }
-      } else if (existing) {
-        existing.remove();
+    function apply() {
+      // 1) 범용 head 삽입 코드
+      const headCode = localStorage.getItem('cj_head_inject') || '';
+      injectHeadCode(headCode);
+
+      // 2) 구글 서치 콘솔 단독 메타 태그 (head 코드에 포함되지 않은 경우 유지)
+      const gVerify = localStorage.getItem('cj_google_verify') || '';
+      const hasGVerify = document.querySelector('meta[name="google-site-verification"]');
+      if (gVerify && !hasGVerify) {
+        const meta = document.createElement('meta');
+        meta.setAttribute('name', 'google-site-verification');
+        meta.setAttribute('content', gVerify);
+        meta.setAttribute('data-admin-head', '');
+        document.head.appendChild(meta);
       }
     }
-    applyMeta();
-    window.addEventListener('google-verify-updated', applyMeta);
-    return () => window.removeEventListener('google-verify-updated', applyMeta);
+
+    apply();
+    window.addEventListener('head-inject-updated', apply);
+    window.addEventListener('google-verify-updated', apply);
+    return () => {
+      window.removeEventListener('head-inject-updated', apply);
+      window.removeEventListener('google-verify-updated', apply);
+    };
   }, []);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function NotFound() {
   return (
@@ -99,7 +137,7 @@ function DetailHeader() {
 }
 
 function App() {
-  useGoogleVerifyMeta();
+  useHeadInjection();
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <Router />

@@ -238,6 +238,9 @@ export default function Admin() {
     localStorage.getItem('cj_google_verify') || ''
   );
   const [googleVerifyMethod, setGoogleVerifyMethod] = useState<'html' | 'dns'>('html');
+  const [headCode, setHeadCode] = useState(
+    localStorage.getItem('cj_head_inject') || ''
+  );
 
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1969,6 +1972,95 @@ export default function Admin() {
               <p className="mt-3 text-xs text-amber-600 flex items-center gap-1">
                 <span>💡</span> 비워두면 해당 광고 영역 자체가 화면에서 숨겨집니다.
               </p>
+            </div>
+
+            {/* head 코드 삽입 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 className="text-lg font-bold text-[#1e3a5f] flex items-center gap-2">
+                  🧩 head 코드 삽입
+                </h2>
+                {headCode.trim() ? (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">✅ 적용 중</span>
+                ) : (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-gray-100 text-gray-500">비어있음</span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mb-5">
+                구글 애드센스, Google Analytics(GA), 기타 메타 태그 등 <code className="bg-gray-100 px-1 rounded text-xs">&lt;head&gt;</code> 영역에 삽입할 HTML 코드를 붙여넣으세요.
+              </p>
+
+              {/* 빠른 예시 버튼 */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {[
+                  { label: 'GA4', code: '<!-- Google Analytics -->\n<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>\n<script>\n  window.dataLayer = window.dataLayer || [];\n  function gtag(){dataLayer.push(arguments);}\n  gtag(\'js\', new Date());\n  gtag(\'config\', \'G-XXXXXXXXXX\');\n</script>' },
+                  { label: '애드센스', code: '<!-- Google AdSense -->\n<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXX" crossorigin="anonymous"></script>' },
+                  { label: '서치 콘솔', code: '<meta name="google-site-verification" content="여기에_인증코드_입력">' },
+                  { label: 'Naver 인증', code: '<meta name="naver-site-verification" content="여기에_인증코드_입력">' },
+                ].map((ex) => (
+                  <button
+                    key={ex.label}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-300 text-gray-600 bg-white hover:border-[#f97316] hover:text-[#f97316] cursor-pointer font-[inherit] transition-colors"
+                    onClick={() => {
+                      setHeadCode((prev) => {
+                        const trimmed = prev.trim();
+                        return trimmed ? trimmed + '\n\n' + ex.code : ex.code;
+                      });
+                      showToast(`📋 ${ex.label} 예시 코드가 추가됐습니다. 수정 후 저장하세요.`);
+                    }}
+                  >
+                    + {ex.label} 예시
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={headCode}
+                onChange={(e) => setHeadCode(e.target.value)}
+                rows={10}
+                spellCheck={false}
+                placeholder={`<!-- 여기에 head 코드를 붙여넣으세요 -->\n\n예시:\n<meta name="google-site-verification" content="...">\n\n<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX"></script>\n<script>\n  // GA 코드\n</script>`}
+                className="w-full py-3 px-4 border-[1.5px] border-gray-200 rounded-xl text-[13px] outline-none font-mono leading-relaxed resize-y focus:border-[#1e3a5f] bg-gray-50"
+                style={{ minHeight: '200px' }}
+              />
+
+              <div className="flex gap-3 mt-3 flex-wrap">
+                <button
+                  className="flex items-center gap-2 bg-[#f97316] text-white border-none py-2.5 px-6 rounded-xl text-[15px] font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                  onClick={() => {
+                    localStorage.setItem('cj_head_inject', headCode);
+                    window.dispatchEvent(new Event('head-inject-updated'));
+                    showToast('✅ head 코드가 저장됐습니다. 새로고침 없이 즉시 적용됩니다.');
+                  }}
+                >
+                  💾 저장 및 적용
+                </button>
+                {headCode.trim() && (
+                  <button
+                    className="flex items-center gap-2 bg-red-50 text-red-500 border-2 border-red-300 py-2.5 px-5 rounded-xl text-[14px] font-bold cursor-pointer hover:bg-red-100 transition-colors font-[inherit]"
+                    onClick={() => {
+                      if (!confirm('저장된 head 코드를 모두 삭제하시겠습니까?')) return;
+                      setHeadCode('');
+                      localStorage.removeItem('cj_head_inject');
+                      window.dispatchEvent(new Event('head-inject-updated'));
+                      showToast('🗑 head 코드가 삭제됐습니다');
+                    }}
+                  >
+                    🗑 전체 삭제
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-4 bg-amber-50 rounded-xl p-4 text-xs text-amber-800 space-y-1">
+                <p className="font-bold">⚠️ 주의사항</p>
+                <ul className="list-disc list-inside space-y-0.5 leading-relaxed">
+                  <li>저장 즉시 모든 페이지에 적용됩니다</li>
+                  <li><code className="bg-amber-100 px-1 rounded">&lt;script&gt;</code> 태그 포함 허용 (애드센스, GA 필요)</li>
+                  <li>잘못된 코드 입력 시 사이트 오류가 발생할 수 있습니다</li>
+                  <li>기존 OG 태그, SEO 태그와 중복되지 않도록 확인하세요</li>
+                  <li>서버 재시작 후에도 localStorage에서 자동 복원됩니다</li>
+                </ul>
+              </div>
             </div>
 
             {/* 구글 서치 콘솔 연동 */}
