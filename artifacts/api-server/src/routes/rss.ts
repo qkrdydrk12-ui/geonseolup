@@ -85,8 +85,19 @@ router.get("/rss", async (_req: Request, res: Response) => {
     const siteUrl = "https://geonseolup.com";
     const now = new Date().toUTCString();
 
-    const items = docs
-      .filter((doc) => !bool(doc, "hidden") && !bool(doc, "_deleted"))
+    const activeDocs = docs.filter(
+      (doc) => !bool(doc, "hidden") && !bool(doc, "_deleted")
+    );
+
+    const DUMMY_ITEM = `    <item>
+      <title>건설UP - 건설 현장 일자리 정보</title>
+      <link>https://geonseolup.com</link>
+      <description>전국 건설 현장 일자리 정보를 실시간으로 제공합니다. 조공·배관·용접·화기감시자 등 다양한 직종의 구인 공고를 확인하세요.</description>
+      <pubDate>${new Date().toUTCString()}</pubDate>
+      <guid isPermaLink="true">https://geonseolup.com</guid>
+    </item>`;
+
+    const items = (activeDocs.length === 0 ? [] : activeDocs)
       .slice(0, 50)
       .map((doc) => {
         const id = doc.name.split("/").pop() ?? "";
@@ -124,6 +135,8 @@ router.get("/rss", async (_req: Request, res: Response) => {
       })
       .join("\n");
 
+    const itemsXml = items.length > 0 ? items.join("\n") : DUMMY_ITEM;
+
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
@@ -138,7 +151,7 @@ router.get("/rss", async (_req: Request, res: Response) => {
       <title>건설UP</title>
       <link>${siteUrl}</link>
     </image>
-${items}
+${itemsXml}
   </channel>
 </rss>`;
 
