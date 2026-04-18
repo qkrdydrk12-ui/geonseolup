@@ -271,6 +271,7 @@ export default function Admin() {
     clearToken();
     setAuthed(false);
     setPassword('');
+    window.dispatchEvent(new Event('admin-logout'));
   }
 
   function computeDupStats(jobList: typeof jobs, hideHours: string) {

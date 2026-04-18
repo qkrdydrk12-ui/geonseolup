@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { createHash } from "crypto";
 import { Pool } from "pg";
+import { requireAdmin } from "../lib/adminStore";
 
 const router = Router();
 
@@ -57,7 +58,7 @@ async function getVisitorStats() {
   };
 }
 
-// POST /api/visit — 방문 기록 (하루 1회 / IP 기준 중복 방지)
+// POST /api/visit — 방문 기록 (인증 불필요: 모든 사용자 방문 집계)
 router.post("/visit", async (req: Request, res: Response) => {
   try {
     const rawIp =
@@ -67,7 +68,6 @@ router.post("/visit", async (req: Request, res: Response) => {
     const ipHash = hashIp(rawIp);
     const today = todayKST();
 
-    // INSERT OR IGNORE (unique constraint on date+ip_hash)
     const insertResult = await pool.query(
       `INSERT INTO visitor_logs (visit_date, ip_hash)
        VALUES ($1, $2)
@@ -76,16 +76,16 @@ router.post("/visit", async (req: Request, res: Response) => {
     );
 
     const counted = (insertResult.rowCount ?? 0) > 0;
-    const stats = await getVisitorStats();
-    res.json({ ...stats, counted });
+    // 방문 기록만 처리, 통계는 반환하지 않음 (인증 필요)
+    res.json({ ok: true, counted });
   } catch (err) {
     console.error("[Visit] Error:", err);
     res.status(500).json({ error: "방문 기록 실패" });
   }
 });
 
-// GET /api/stats/visitors — 통계 조회
-router.get("/stats/visitors", async (_req: Request, res: Response) => {
+// GET /api/stats/visitors — 통계 조회 (관리자 전용)
+router.get("/stats/visitors", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const stats = await getVisitorStats();
     res.json(stats);
@@ -95,8 +95,8 @@ router.get("/stats/visitors", async (_req: Request, res: Response) => {
   }
 });
 
-// POST /api/stats/visitors/reset — 통계 초기화 (관리자용)
-router.post("/stats/visitors/reset", async (_req: Request, res: Response) => {
+// POST /api/stats/visitors/reset — 통계 초기화 (관리자 전용)
+router.post("/stats/visitors/reset", requireAdmin, async (_req: Request, res: Response) => {
   try {
     await pool.query("TRUNCATE visitor_logs");
     res.json({ success: true, total: 0, today: 0, yesterday: 0, week: 0 });

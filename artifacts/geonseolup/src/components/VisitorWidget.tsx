@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-
-const ADMIN_KEY = 'cj_admin_auth';
+import { getToken } from '@/lib/adminAuth';
 
 interface VisitorStats {
   total: number;
@@ -9,19 +8,14 @@ interface VisitorStats {
   week: number;
 }
 
-async function postVisit(): Promise<VisitorStats | null> {
-  try {
-    const res = await fetch('/api/visit', { method: 'POST' });
-    if (!res.ok) return null;
-    return await res.json() as VisitorStats;
-  } catch {
-    return null;
-  }
+function authHeaders(): HeadersInit {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 async function fetchStats(): Promise<VisitorStats | null> {
   try {
-    const res = await fetch('/api/stats/visitors');
+    const res = await fetch('/api/stats/visitors', { headers: authHeaders() });
     if (!res.ok) return null;
     return await res.json() as VisitorStats;
   } catch {
@@ -31,7 +25,10 @@ async function fetchStats(): Promise<VisitorStats | null> {
 
 async function resetStats(): Promise<boolean> {
   try {
-    const res = await fetch('/api/stats/visitors/reset', { method: 'POST' });
+    const res = await fetch('/api/stats/visitors/reset', {
+      method: 'POST',
+      headers: authHeaders(),
+    });
     return res.ok;
   } catch {
     return false;
@@ -39,70 +36,64 @@ async function resetStats(): Promise<boolean> {
 }
 
 export default function VisitorWidget() {
-  const [authed, setAuthed] = useState(() => !!localStorage.getItem(ADMIN_KEY));
+  // sessionStorage 토큰 기준으로 관리자 여부 판단
+  const [isAdmin, setIsAdmin] = useState(() => !!getToken());
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState<VisitorStats>({ total: 0, today: 0, yesterday: 0, week: 0 });
   const [loading, setLoading] = useState(false);
 
   const refreshStats = useCallback(async () => {
+    if (!getToken()) return;
     setLoading(true);
     const s = await fetchStats();
     if (s) setStats(s);
     setLoading(false);
   }, []);
 
-  // 방문 기록 (페이지 최초 로드 시 1회)
+  // 방문 기록 (인증 불필요 — 모든 사용자 집계)
   useEffect(() => {
-    postVisit().then((s) => {
-      if (s) setStats(s);
-    });
+    fetch('/api/visit', { method: 'POST' }).catch(() => {});
   }, []);
 
-  // 어드민 로그인 감지
+  // 관리자 로그인/로그아웃 이벤트 감지
   useEffect(() => {
-    function onStorage(e: StorageEvent) {
-      if (e.key === ADMIN_KEY) {
-        const loggedIn = !!e.newValue;
-        setAuthed(loggedIn);
-        if (loggedIn) {
-          setOpen(true);
-          refreshStats();
-        } else {
-          setOpen(false);
-        }
-      }
-    }
     function onAdminLogin() {
-      setAuthed(true);
+      setIsAdmin(true);
       setOpen(true);
       refreshStats();
     }
-    window.addEventListener('storage', onStorage);
+    function onAdminLogout() {
+      setIsAdmin(false);
+      setOpen(false);
+      setStats({ total: 0, today: 0, yesterday: 0, week: 0 });
+    }
+
+    // sessionStorage는 storage 이벤트가 발생하지 않으므로 커스텀 이벤트 사용
     window.addEventListener('admin-login', onAdminLogin);
+    window.addEventListener('admin-logout', onAdminLogout);
     return () => {
-      window.removeEventListener('storage', onStorage);
       window.removeEventListener('admin-login', onAdminLogin);
+      window.removeEventListener('admin-logout', onAdminLogout);
     };
   }, [refreshStats]);
 
+  // 관리자 상태가 true로 바뀔 때 통계 불러오기
   useEffect(() => {
-    if (authed) {
-      setOpen(true);
-      refreshStats();
-    }
-  }, [authed, refreshStats]);
+    if (isAdmin) refreshStats();
+  }, [isAdmin, refreshStats]);
 
   async function handleReset() {
-    if (!confirm('방문자 통계를 초기화하시겠습니까?\n(오늘 및 누적 통계가 0으로 초기화됩니다)')) return;
+    if (!confirm('방문자 통계를 초기화하시겠습니까?\n(모든 방문 기록이 삭제됩니다)')) return;
     const ok = await resetStats();
     if (ok) {
       setStats({ total: 0, today: 0, yesterday: 0, week: 0 });
     } else {
-      alert('초기화에 실패했습니다.');
+      alert('초기화 실패 — 관리자 세션을 확인하세요.');
     }
   }
 
-  if (!authed) return null;
+  // 관리자가 아니면 완전히 숨김
+  if (!isAdmin) return null;
 
   return (
     <div className="fixed bottom-5 right-5 z-[9000] font-[inherit]">
