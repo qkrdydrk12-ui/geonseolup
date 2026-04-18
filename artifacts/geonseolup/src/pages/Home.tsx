@@ -7,6 +7,7 @@ import JobCard from '@/components/JobCard';
 
 const PAGE_SIZE = 12;
 const DEFAULT_AUTO_HIDE = 0;
+const INFEED_EVERY = 6;
 
 function getAutoHideHours(): number {
   try {
@@ -15,6 +16,21 @@ function getAutoHideHours(): number {
   } catch {
     return DEFAULT_AUTO_HIDE;
   }
+}
+
+function AdSlot({ storageKey }: { storageKey: string }) {
+  const code = localStorage.getItem(storageKey) || '';
+  if (!code.trim()) return null;
+  return (
+    <div className="w-full my-1">
+      <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
+      <div
+        className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
+        style={{ background: '#fffde7', minHeight: 60 }}
+        dangerouslySetInnerHTML={{ __html: code }}
+      />
+    </div>
+  );
 }
 
 interface AppState {
@@ -214,9 +230,35 @@ export default function Home() {
   const hasActiveFilter =
     state.keyword || state.region !== '전체' || state.job !== '전체' || state.weldSub !== '전체';
 
+  const infeedCode = localStorage.getItem('cj_ad_main_infeed') || '';
+
+  function buildGridItems() {
+    const items: React.ReactNode[] = [];
+    pageItems.forEach((job, idx) => {
+      items.push(<JobCard key={job.id} job={job} />);
+      const isLastItem = idx === pageItems.length - 1;
+      if (infeedCode.trim() && !isLastItem && (idx + 1) % INFEED_EVERY === 0) {
+        items.push(
+          <div key={`infeed-${idx}`} className="col-span-full">
+            <div className="text-center text-[10px] text-gray-400 mb-0.5 tracking-widest">광고</div>
+            <div
+              className="w-full rounded-lg border border-dashed border-gray-300 overflow-hidden"
+              style={{ background: '#fffde7', minHeight: 60 }}
+              dangerouslySetInnerHTML={{ __html: infeedCode }}
+            />
+          </div>
+        );
+      }
+    });
+    return items;
+  }
+
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
       <div className="max-w-[1100px] mx-auto px-3.5 pt-2.5 pb-10">
+
+        {/* ① 상단 배너 광고 */}
+        <AdSlot storageKey="cj_ad_main_top" />
 
         {/* 추천 섹션 */}
         <section className="mb-2.5">
@@ -408,7 +450,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 일자리 그리드 */}
+        {/* 일자리 그리드 (② 인피드 광고 포함) */}
         <section ref={jobsSectionRef} className="relative z-[1] mt-2">
           {loading ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5 mt-0">
@@ -424,9 +466,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5 mt-0">
-              {pageItems.map((job) => (
-                <JobCard key={job.id} job={job} />
-              ))}
+              {buildGridItems()}
             </div>
           )}
 
@@ -450,6 +490,10 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {/* ③ 하단 배너 광고 */}
+        <AdSlot storageKey="cj_ad_main_bottom" />
+
       </div>
 
       {/* 스크롤 탑 */}
