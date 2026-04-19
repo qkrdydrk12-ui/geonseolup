@@ -81,26 +81,34 @@ export default function Post() {
     setForm((prev) => ({ ...prev, lodging: prev.lodging === val ? '' : val }));
   }
 
-  function checkCooldown(contact: string): number {
+  function checkCooldownLocal(contact: string): number {
     const COOLDOWN_MS = 30 * 60 * 1000;
     const raw = localStorage.getItem('cj_post_log');
     const log: { contact: string; ts: number }[] = raw ? JSON.parse(raw) : [];
     const now = Date.now();
-    const clean = log.filter((e) => now - e.ts < COOLDOWN_MS);
-    localStorage.setItem('cj_post_log', JSON.stringify(clean));
-    const found = clean.find((e) => e.contact === contact.trim());
-    if (found) {
-      const remain = COOLDOWN_MS - (now - found.ts);
-      return remain;
-    }
+    const found = log.find((e) => e.contact === contact.trim() && now - e.ts < COOLDOWN_MS);
+    if (found) return COOLDOWN_MS - (now - found.ts);
     return 0;
   }
 
-  function recordPost(contact: string) {
+  function recordPostLocal(contact: string) {
     const raw = localStorage.getItem('cj_post_log');
     const log: { contact: string; ts: number }[] = raw ? JSON.parse(raw) : [];
     log.push({ contact: contact.trim(), ts: Date.now() });
     localStorage.setItem('cj_post_log', JSON.stringify(log));
+  }
+
+  async function checkCooldownServer(contact: string): Promise<{ allowed: boolean; remainingMins?: number }> {
+    try {
+      const res = await fetch('/api/post-cooldown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: contact }),
+      });
+      return await res.json() as { allowed: boolean; remainingMins?: number };
+    } catch {
+      return { allowed: true }; // 서버 오류 시 허용
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -116,16 +124,18 @@ export default function Post() {
     if (!phoneResult.valid) { setError('올바른 전화번호를 입력해주세요 (010-1234-5678)'); return; }
     if (!agreed) { setError('이용 규칙에 동의해주세요.'); return; }
 
-    const cooldownRemain = checkCooldown(form.contact);
-    if (cooldownRemain > 0) {
-      const mins = Math.ceil(cooldownRemain / 60000);
-      setError(`동일 연락처로 이미 등록된 공고가 있습니다. ${mins}분 후 다시 시도해주세요. (30분 쿨타임)`);
-      return;
-    }
-
     setSubmitting(true);
-    const isReviewMode = localStorage.getItem('cj_review_mode') === 'on';
     try {
+      // 서버 쿨타임 확인 + 기록 (브라우저 우회 방지)
+      const cooldownResult = await checkCooldownServer(form.contact);
+      if (!cooldownResult.allowed) {
+        const mins = cooldownResult.remainingMins ?? 30;
+        setError(`동일 연락처로 이미 등록된 공고가 있습니다. ${mins}분 후 다시 시도해주세요. (30분 쿨타임)`);
+        setSubmitting(false);
+        return;
+      }
+
+      const isReviewMode = localStorage.getItem('cj_review_mode') === 'on';
       if (isReviewMode) {
         await fbAddPending({
           ...form,
@@ -144,7 +154,7 @@ export default function Post() {
         });
         setAutoPublished(true);
       }
-      recordPost(form.contact);
+      recordPostLocal(form.contact); // UI 즉시 반영용 (로컬 보조)
       setDone(true);
     } catch {
       setError('등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
