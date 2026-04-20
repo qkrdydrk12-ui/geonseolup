@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 
 export default function Contact() {
   const [copied, setCopied] = useState(false);
-  const email = 'geonseolup@gmail.com';
+  const email = 'qkrdydrk@naver.com';
 
   function handleCopy() {
     navigator.clipboard.writeText(email).then(() => {
@@ -27,7 +26,12 @@ export default function Contact() {
 
           <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
             <span className="text-xl">✉️</span>
-            <span className="font-mono font-semibold text-[#1e3a5f] flex-1">{email}</span>
+            <a
+              href={`mailto:${email}`}
+              className="font-mono font-semibold text-[#1e3a5f] flex-1 hover:text-[#f97316] transition-colors no-underline"
+            >
+              {email}
+            </a>
             <button
               onClick={handleCopy}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
@@ -52,7 +56,6 @@ export default function Contact() {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { Switch, Route, Router as WouterRouter } from 'wouter';
 import { useEffect } from 'react';
 import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import Home from '@/pages/Home';
 import Detail from '@/pages/Detail';
 import Post from '@/pages/Post';
@@ -91,21 +90,18 @@ function Router() {
       <Route path="/">
         <Header />
         <Home />
-        <Footer />
       </Route>
       <Route path="/detail/:id">
         {(params) => (
           <>
             <DetailHeader />
             <Detail id={params.id} />
-            <Footer />
           </>
         )}
       </Route>
       <Route path="/post">
         <Header />
         <Post />
-        <Footer />
       </Route>
       <Route path="/admin">
         <Admin />

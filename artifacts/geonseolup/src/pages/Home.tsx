@@ -671,12 +671,25 @@ export default function Home() {
 
       {/* 푸터 */}
       <footer style={{ background: '#1e3a5f' }} className="mt-4 py-6 text-center text-white">
-        <div className="flex items-center justify-center gap-5 mb-3 text-sm">
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-3 text-sm">
           <a href="/" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
             🏠 홈
           </a>
+          <span className="text-white/30">|</span>
           <a href="/admin" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
             ⚙️ 관리자
+          </a>
+          <span className="text-white/30">|</span>
+          <a href="/terms" className="text-white/80 hover:text-white no-underline transition-colors">
+            이용약관
+          </a>
+          <span className="text-white/30">|</span>
+          <a href="/privacy" className="text-white/80 hover:text-white no-underline transition-colors">
+            개인정보처리방침
+          </a>
+          <span className="text-white/30">|</span>
+          <a href="/contact" className="text-white/80 hover:text-white no-underline transition-colors">
+            문의하기
           </a>
         </div>
         <p className="text-sm font-bold mb-1">

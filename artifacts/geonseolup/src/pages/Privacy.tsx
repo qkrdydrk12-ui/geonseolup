@@ -1,5 +1,4 @@
 import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 
 export default function Privacy() {
   return (
@@ -49,7 +48,6 @@ export default function Privacy() {
           <p className="text-xs text-gray-400 pt-4 border-t border-gray-100">시행일: 2026년 1월 1일</p>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }
