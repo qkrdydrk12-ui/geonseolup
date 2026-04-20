@@ -125,6 +125,12 @@ export default function Header() {
 
           <div className="flex items-center gap-2">
             <Link
+              href="/info"
+              className="px-[11px] py-[5px] rounded-[7px] text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 hidden sm:block"
+            >
+              📚 정보/꿀팁
+            </Link>
+            <Link
               href="/post"
               className="flex items-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-extrabold text-white no-underline transition-all hover:-translate-y-px"
               style={{

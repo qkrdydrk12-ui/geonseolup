@@ -680,6 +680,10 @@ export default function Home() {
             ⚙️ 관리자
           </a>
           <span className="text-white/30">|</span>
+          <a href="/info" className="text-white/80 hover:text-white no-underline transition-colors">
+            정보/꿀팁
+          </a>
+          <span className="text-white/30">|</span>
           <a href="/terms" className="text-white/80 hover:text-white no-underline transition-colors">
             이용약관
           </a>

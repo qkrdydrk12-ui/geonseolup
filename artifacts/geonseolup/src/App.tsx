@@ -8,6 +8,8 @@ import Admin from '@/pages/Admin';
 import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
 import Contact from '@/pages/Contact';
+import Info from '@/pages/Info';
+import InfoDetail from '@/pages/InfoDetail';
 import VisitorWidget from '@/components/VisitorWidget';
 
 // ── 관리자가 저장한 head 코드를 <head>에 동적으로 주입 ──────────────────────
@@ -105,6 +107,12 @@ function Router() {
       </Route>
       <Route path="/admin">
         <Admin />
+      </Route>
+      <Route path="/info">
+        <Info />
+      </Route>
+      <Route path="/info/:slug">
+        {(params) => <InfoDetail slug={params.slug} />}
       </Route>
       <Route path="/terms">
         <Terms />
