@@ -1,10 +1,14 @@
 import { Switch, Route, Router as WouterRouter } from 'wouter';
 import { useEffect } from 'react';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import Home from '@/pages/Home';
 import Detail from '@/pages/Detail';
 import Post from '@/pages/Post';
 import Admin from '@/pages/Admin';
+import Terms from '@/pages/Terms';
+import Privacy from '@/pages/Privacy';
+import Contact from '@/pages/Contact';
 import VisitorWidget from '@/components/VisitorWidget';
 
 // ── 관리자가 저장한 head 코드를 <head>에 동적으로 주입 ──────────────────────
@@ -87,21 +91,33 @@ function Router() {
       <Route path="/">
         <Header />
         <Home />
+        <Footer />
       </Route>
       <Route path="/detail/:id">
         {(params) => (
           <>
             <DetailHeader />
             <Detail id={params.id} />
+            <Footer />
           </>
         )}
       </Route>
       <Route path="/post">
         <Header />
         <Post />
+        <Footer />
       </Route>
       <Route path="/admin">
         <Admin />
+      </Route>
+      <Route path="/terms">
+        <Terms />
+      </Route>
+      <Route path="/privacy">
+        <Privacy />
+      </Route>
+      <Route path="/contact">
+        <Contact />
       </Route>
       <Route component={NotFound} />
     </Switch>
