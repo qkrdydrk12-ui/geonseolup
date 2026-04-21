@@ -24,7 +24,7 @@ import {
 
 const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '전국'];
 const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '안전담당자', '품질담당자', '공사담당자', '기타'];
-const MEALS = ['식사제공', '식사없음', '협의'];
+const MEALS = ['식사제공', '식사없음', '협의', '출퇴근'];
 const LODGINGS = ['숙박제공', '숙박없음', '협의'];
 
 function PendingItem({
@@ -203,17 +203,16 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
     if (hcAuto) r.headcount = hcAuto[0].trim();
   }
 
-  // ── 근무형태 (직발 > 출퇴근 > 숙식) ──
-  if (/직발/.test(text)) r.workType = '직발';
-  else if (/출퇴근/.test(text)) r.workType = '출퇴근';
-  else if (/숙식/.test(text) || /숙소\s*[Oo]/.test(text)) r.workType = '숙식';
-
   // ── 식사 / 숙박 ──
-  if (/숙식\s*제공/.test(text)) { r.meal = '식사제공'; r.lodging = '숙박제공'; }
-  else {
+  if (/출퇴근/.test(text)) {
+    r.meal = '출퇴근';
+  } else if (/숙식\s*제공/.test(text)) {
+    r.meal = '식사제공';
+    r.lodging = '숙박제공';
+  } else {
     if (/식사\s*제공|식 제공|식대\s*제공/.test(text)) r.meal = '식사제공';
-    if (/숙[소박]\s*[Oo제]|숙박제공|숙소O/.test(text)) r.lodging = '숙박제공';
   }
+  if (/숙[소박]\s*[Oo제]|숙박제공|숙소O/.test(text)) r.lodging = '숙박제공';
 
   // ── 나이 제한 ──
   const ageRangeM = text.match(/(\d+)\s*세?\s*[~\-~]\s*(\d+)\s*세/);
@@ -244,7 +243,7 @@ function emptyForm(): Partial<Job> {
   return {
     title: '', region: '', job: '', weldSub: '', weldTest: '',
     salary: '', meal: '', lodging: '', contact: '', detail: '', originalText: '',
-    company: '', headcount: '', workType: '', ageLimit: '', startDate: '', manager: '',
+    company: '', headcount: '', ageLimit: '', startDate: '', manager: '',
   };
 }
 
@@ -892,7 +891,7 @@ export default function Admin() {
                   title: '📝 제목', region: '📍 지역', job: '🔧 직종',
                   salary: '💰 급여', salaryNum: '💰 급여(숫자)', contact: '📞 연락처',
                   meal: '🍱 식사', lodging: '🏠 숙박', weldSub: '🔩 용접종류', weldTest: '📋 시험',
-                  company: '🏢 회사명', headcount: '👥 모집인원', workType: '🚗 근무형태',
+                  company: '🏢 회사명', headcount: '👥 모집인원',
                   ageLimit: '🎂 나이제한', startDate: '📅 투입시기', manager: '👤 담당자',
                 };
                 const SKIP = new Set(['originalText', '_salaryCalc', 'salaryNum']);
@@ -981,16 +980,6 @@ export default function Admin() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">👥 모집인원</label>
                   <input type="text" value={form.headcount || ''} onChange={(e) => setField('headcount', e.target.value)} placeholder="예: 남자조공 4명" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5">🚗 근무형태</label>
-                  <div className="flex flex-wrap gap-2">
-                    {['직발', '출퇴근', '숙식', '기타'].map((w) => (
-                      <button key={w} type="button"
-                        className={`px-3 py-1.5 border-2 rounded-lg text-xs font-bold cursor-pointer font-[inherit] ${form.workType === w ? 'bg-[#1e3a5f] border-[#1e3a5f] text-white' : 'bg-white border-gray-200 text-gray-600'}`}
-                        onClick={() => setField('workType', form.workType === w ? '' : w)}>{w}</button>
-                    ))}
-                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">🎂 나이 제한</label>
