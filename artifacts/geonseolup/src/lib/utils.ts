@@ -23,10 +23,18 @@ export function timeClass(iso: string): string {
 
 export function parseSalaryNum(text: string): number {
   if (!text) return 0;
-  const m = text.match(/(\d[\d,]*)\s*만/);
-  if (m) return parseInt(m[1].replace(/,/g, '')) * 10000;
-  const m2 = text.match(/(\d[\d,]+)\s*원/);
-  if (m2) return parseInt(m2[1].replace(/,/g, ''));
+  // N만M천 (예: 18만5천, 18만 5천)
+  const mMC = text.match(/(\d+)\s*만\s*(\d+)\s*천/);
+  if (mMC) return parseInt(mMC[1]) * 10000 + parseInt(mMC[2]) * 1000;
+  // N.M만 소수점 (예: 16.5만)
+  const mDec = text.match(/([\d.]+)\s*만/);
+  if (mDec) return Math.round(parseFloat(mDec[1]) * 10000);
+  // 원 단위 숫자 (예: 185,000원)
+  const mWon = text.match(/(\d[\d,]+)\s*원/);
+  if (mWon) return parseInt(mWon[1].replace(/,/g, ''));
+  // 순수 숫자 (예: 185000)
+  const mRaw = text.match(/^(\d{5,7})$/);
+  if (mRaw) return parseInt(mRaw[1]);
   return 0;
 }
 

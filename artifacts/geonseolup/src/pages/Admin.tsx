@@ -83,25 +83,105 @@ function PendingItem({
   );
 }
 
+// 도시명 → 광역시/도 매핑
+const CITY_TO_PROVINCE: Record<string, string> = {
+  // 경기도
+  평택: '경기', 용인: '경기', 이천: '경기', 수원: '경기', 성남: '경기', 안양: '경기',
+  부천: '경기', 광명: '경기', 시흥: '경기', 안산: '경기', 고양: '경기', 파주: '경기',
+  의정부: '경기', 하남: '경기', 남양주: '경기', 김포: '경기', 화성: '경기', 오산: '경기',
+  안성: '경기', 포천: '경기', 양주: '경기', 여주: '경기', 군포: '경기', 과천: '경기',
+  구리: '경기', 의왕: '경기', 동두천: '경기', 가평: '경기', 양평: '경기', 연천: '경기',
+  // 경남
+  창원: '경남', 진주: '경남', 거제: '경남', 통영: '경남', 사천: '경남', 밀양: '경남', 양산: '경남',
+  // 경북
+  포항: '경북', 경주: '경북', 구미: '경북', 안동: '경북', 영주: '경북', 김천: '경북', 상주: '경북',
+  // 충북
+  청주: '충북', 충주: '충북', 제천: '충북', 음성: '충북', 진천: '충북',
+  // 충남
+  천안: '충남', 아산: '충남', 당진: '충남', 서산: '충남', 논산: '충남', 공주: '충남', 보령: '충남',
+  // 전북
+  전주: '전북', 군산: '전북', 익산: '전북', 정읍: '전북', 남원: '전북',
+  // 전남
+  광양: '전남', 여수: '전남', 순천: '전남', 목포: '전남', 나주: '전남',
+  // 강원
+  강릉: '강원', 원주: '강원', 춘천: '강원', 속초: '강원', 태백: '강원',
+  // 광역시 (도시명이 광역시 이름과 다를 때)
+  해운대: '부산', 기장: '부산', 수영: '부산',
+};
+
+function formatSalary(man: number, chun: number): string {
+  if (chun > 0) return `${man}만${chun}천원`;
+  return `${man}만원`;
+}
+
 function parseJobText(text: string): Partial<Job> {
   const r: Partial<Job> = { originalText: text };
-  const titleM = text.match(/^(.+)/);
-  if (titleM) r.title = titleM[1].trim();
-  for (const reg of REGIONS) {
-    if (text.includes(reg)) { r.region = reg; break; }
+
+  // ── 제목: 첫 줄에서 이모지·특수문자 제거 ──
+  const firstLine = text.split('\n')[0] ?? '';
+  const cleanTitle = firstLine
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '') // 서로게이트 쌍 (이모지)
+    .replace(/[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\w\s(),.·\-]/g, '')
+    .trim();
+  if (cleanTitle) r.title = cleanTitle;
+
+  // ── 지역: 도시명 우선 → 광역시/도 직접 매핑 순 ──
+  for (const [city, province] of Object.entries(CITY_TO_PROVINCE)) {
+    if (text.includes(city)) { r.region = province; break; }
   }
+  if (!r.region) {
+    for (const reg of REGIONS) {
+      if (text.includes(reg)) { r.region = reg; break; }
+    }
+  }
+
+  // ── 직종 ──
   for (const job of [...JOBS, ...WELD_SUBS]) {
     if (text.includes(job)) { r.job = job; break; }
   }
-  const salM = text.match(/(\d+)\s*만/);
-  if (salM) { r.salary = salM[1] + '만원'; r.salaryNum = parseSalaryNum(r.salary); }
-  const phoneM = text.match(/(\d{2,4}[-\s]?\d{3,4}[-\s]?\d{4})/);
-  if (phoneM) r.contact = phoneM[1].replace(/\s/g, '');
-  if (text.includes('식사제공') || text.includes('식 제공')) r.meal = '식사제공';
-  if (text.includes('숙박제공') || text.includes('숙 제공') || text.includes('숙식제공')) r.lodging = '숙박제공';
-  if (text.includes('숙식제공') || text.includes('숙식 제공')) { r.meal = '식사제공'; r.lodging = '숙박제공'; }
-  if (text.includes('시험가능') || text.includes('시험 가능')) r.weldTest = '가능';
-  if (text.includes('시험없음') || text.includes('시험 없음') || text.includes('시험불가')) r.weldTest = '불가능';
+
+  // ── 급여 파싱 (우선순위: N만M천 > N.M만 > N만) ──
+  const salMC = text.match(/(\d+)\s*만\s*(\d+)\s*천/);
+  if (salMC) {
+    const man = parseInt(salMC[1]);
+    const chun = parseInt(salMC[2]);
+    r.salary = formatSalary(man, chun);
+    r.salaryNum = man * 10000 + chun * 1000;
+  } else {
+    const salDec = text.match(/([\d]+\.[\d]+)\s*만/);
+    if (salDec) {
+      const val = parseFloat(salDec[1]);
+      const man = Math.floor(val);
+      const chun = Math.round((val - man) * 10);
+      r.salary = formatSalary(man, chun);
+      r.salaryNum = man * 10000 + chun * 1000;
+    } else {
+      const salInt = text.match(/(\d{2,3})\s*만/);
+      if (salInt) {
+        const man = parseInt(salInt[1]);
+        r.salary = formatSalary(man, 0);
+        r.salaryNum = man * 10000;
+      }
+    }
+  }
+
+  // ── 전화번호 (-·. 구분자 모두 지원) ──
+  const phoneM = text.match(/(\d{2,4})[.\-\s](\d{3,4})[.\-\s](\d{4})/);
+  if (phoneM) {
+    r.contact = `${phoneM[1]}-${phoneM[2]}-${phoneM[3]}`;
+  }
+
+  // ── 식사 / 숙박 ──
+  const hasMeal = /식사\s*제공|식 제공|식대\s*제공|식사O/.test(text);
+  const hasLodging = /숙[소박]\s*[Oo제]|숙식\s*제공|숙소O|숙박제공/.test(text);
+  const hasBoth = /숙식\s*제공/.test(text);
+  if (hasMeal || hasBoth) r.meal = '식사제공';
+  if (hasLodging || hasBoth) r.lodging = '숙박제공';
+
+  // ── 용접 시험 ──
+  if (/시험\s*가능/.test(text)) r.weldTest = '가능';
+  if (/시험\s*없음|시험\s*불가/.test(text)) r.weldTest = '불가능';
+
   return r;
 }
 
@@ -746,20 +826,29 @@ export default function Admin() {
               >
                 🔍 자동 파싱
               </button>
-              {parseResult && (
-                <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-[10px] p-4">
-                  <h4 className="text-sm font-bold text-blue-800 mb-3">✅ 파싱 결과 — 아래 폼에 반영됐습니다</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(parseResult)
-                      .filter(([k, v]) => k !== 'originalText' && v)
-                      .map(([k, v]) => (
-                        <span key={k} className="bg-white border border-blue-200 text-blue-800 text-xs px-2 py-1 rounded-lg">
-                          <strong>{k}:</strong> {String(v)}
+              {parseResult && (() => {
+                const LABEL: Record<string, string> = {
+                  title: '📝 제목', region: '📍 지역', job: '🔧 직종',
+                  salary: '💰 급여', salaryNum: '💰 급여(숫자)', contact: '📞 연락처',
+                  meal: '🍱 식사', lodging: '🏠 숙박', weldSub: '🔩 용접종류', weldTest: '📋 시험',
+                };
+                const entries = Object.entries(parseResult).filter(([k, v]) => k !== 'originalText' && v && String(v) !== '0');
+                return (
+                  <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-[10px] p-4">
+                    <h4 className="text-sm font-bold text-blue-800 mb-3">✅ 파싱 결과 — 아래 폼에 자동 반영됐습니다</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {entries.map(([k, v]) => (
+                        <span key={k} className="bg-white border border-blue-200 text-blue-800 text-xs px-2.5 py-1 rounded-lg font-medium">
+                          {LABEL[k] ?? k}: <span className="font-bold">{String(v)}</span>
                         </span>
                       ))}
+                    </div>
+                    {entries.length === 0 && (
+                      <p className="text-xs text-blue-600">파싱된 항목이 없습니다. 원문을 확인해주세요.</p>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             <form onSubmit={handleAddJob}>
