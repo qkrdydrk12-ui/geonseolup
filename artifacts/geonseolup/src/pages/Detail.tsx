@@ -191,6 +191,12 @@ export default function Detail({ id }: Props) {
           <div className="px-[22px] py-5 border-b border-gray-200">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
               {[
+                job.company    ? { ico: '🏢', key: '회사명',   val: job.company } : null,
+                job.headcount  ? { ico: '👥', key: '모집인원', val: job.headcount } : null,
+                job.workType   ? { ico: '🚗', key: '근무형태', val: job.workType } : null,
+                job.ageLimit   ? { ico: '🎂', key: '나이제한', val: job.ageLimit } : null,
+                job.startDate  ? { ico: '📅', key: '투입시기', val: job.startDate } : null,
+                job.manager    ? { ico: '👤', key: '담당자',   val: job.manager } : null,
                 { ico: '🍚', key: '식사', val: <span className={mealCls}>{job.meal || '정보없음'}</span> },
                 { ico: '🏠', key: '숙박', val: <span className={lodgCls}>{job.lodging || '정보없음'}</span> },
                 job.weldSub ? { ico: '⚙️', key: '용접종류', val: job.weldSub } : null,

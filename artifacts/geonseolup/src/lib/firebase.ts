@@ -51,6 +51,13 @@ export interface Job {
   hidden?: boolean;
   _deleted?: boolean;
   _createdAt?: unknown;
+  // 확장 필드
+  company?: string;
+  headcount?: string;
+  workType?: string;
+  ageLimit?: string;
+  startDate?: string;
+  manager?: string;
 }
 
 export interface PendingJob extends Omit<Job, 'id'> {

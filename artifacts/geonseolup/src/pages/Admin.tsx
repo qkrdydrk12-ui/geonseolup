@@ -109,23 +109,50 @@ const CITY_TO_PROVINCE: Record<string, string> = {
   해운대: '부산', 기장: '부산', 수영: '부산',
 };
 
+function stripEmoji(s: string): string {
+  return s
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+    .replace(/[\u2600-\u27BF]/g, '')
+    .replace(/[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\w\s(),.·%\-+]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function formatSalary(man: number, chun: number): string {
   if (chun > 0) return `${man}만${chun}천원`;
   return `${man}만원`;
 }
 
-function parseJobText(text: string): Partial<Job> {
-  const r: Partial<Job> = { originalText: text };
+/** 텍스트에서 첫 번째 만원 단위 급여를 파싱해 { text, num } 반환 */
+function extractSalary(text: string): { text: string; num: number } | null {
+  const mMC = text.match(/(\d+)\s*만\s*(\d+)\s*천/);
+  if (mMC) {
+    const man = parseInt(mMC[1]), chun = parseInt(mMC[2]);
+    return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
+  }
+  const mDec = text.match(/([\d]+\.[\d]+)\s*만/);
+  if (mDec) {
+    const val = parseFloat(mDec[1]);
+    const man = Math.floor(val), chun = Math.round((val - man) * 10);
+    return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
+  }
+  const mInt = text.match(/(\d{2,3})\s*만/);
+  if (mInt) {
+    const man = parseInt(mInt[1]);
+    return { text: formatSalary(man, 0), num: man * 10000 };
+  }
+  return null;
+}
 
-  // ── 제목: 첫 줄에서 이모지·특수문자 제거 ──
-  const firstLine = text.split('\n')[0] ?? '';
-  const cleanTitle = firstLine
-    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '') // 서로게이트 쌍 (이모지)
-    .replace(/[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\w\s(),.·\-]/g, '')
-    .trim();
+function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
+  const r: Partial<Job> & { _salaryCalc?: string } = { originalText: text };
+
+  // ── 제목: 첫 줄 이모지·특수문자 제거 ──
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const cleanTitle = stripEmoji(lines[0] ?? '');
   if (cleanTitle) r.title = cleanTitle;
 
-  // ── 지역: 도시명 우선 → 광역시/도 직접 매핑 순 ──
+  // ── 지역: 도시명 우선 → 광역시/도 직접 ──
   for (const [city, province] of Object.entries(CITY_TO_PROVINCE)) {
     if (text.includes(city)) { r.region = province; break; }
   }
@@ -140,43 +167,71 @@ function parseJobText(text: string): Partial<Job> {
     if (text.includes(job)) { r.job = job; break; }
   }
 
-  // ── 급여 파싱 (우선순위: N만M천 > N.M만 > N만) ──
-  const salMC = text.match(/(\d+)\s*만\s*(\d+)\s*천/);
-  if (salMC) {
-    const man = parseInt(salMC[1]);
-    const chun = parseInt(salMC[2]);
-    r.salary = formatSalary(man, chun);
-    r.salaryNum = man * 10000 + chun * 1000;
-  } else {
-    const salDec = text.match(/([\d]+\.[\d]+)\s*만/);
-    if (salDec) {
-      const val = parseFloat(salDec[1]);
-      const man = Math.floor(val);
-      const chun = Math.round((val - man) * 10);
-      r.salary = formatSalary(man, chun);
-      r.salaryNum = man * 10000 + chun * 1000;
-    } else {
-      const salInt = text.match(/(\d{2,3})\s*만/);
-      if (salInt) {
-        const man = parseInt(salInt[1]);
-        r.salary = formatSalary(man, 0);
-        r.salaryNum = man * 10000;
-      }
-    }
+  // ── 급여 ──
+  const sal = extractSalary(text);
+  if (sal) { r.salary = sal.text; r.salaryNum = sal.num; }
+
+  // ── 급여 합산 계산 (X만 + 식대 Y만) ──
+  const calcM = text.match(/([\d.]+)\s*(?:\+\s*식대\s*([\d.]+)|만원?\s*\+\s*식대\s*([\d.]+)만?)/);
+  if (calcM) {
+    const base = parseFloat(calcM[1]);
+    const add = parseFloat(calcM[2] ?? calcM[3] ?? '0');
+    const total = base + add;
+    const totalMan = Math.floor(total), totalChun = Math.round((total - totalMan) * 10);
+    r._salaryCalc = `기본 ${base}만 + 식대 ${add}만 = 총 ${formatSalary(totalMan, totalChun)}`;
   }
 
   // ── 전화번호 (-·. 구분자 모두 지원) ──
   const phoneM = text.match(/(\d{2,4})[.\-\s](\d{3,4})[.\-\s](\d{4})/);
-  if (phoneM) {
-    r.contact = `${phoneM[1]}-${phoneM[2]}-${phoneM[3]}`;
+  if (phoneM) r.contact = `${phoneM[1]}-${phoneM[2]}-${phoneM[3]}`;
+
+  // ── 담당자 ──
+  const mgrM = text.match(/담당자\s*[:：]\s*(.+)/);
+  if (mgrM) r.manager = stripEmoji(mgrM[1]);
+
+  // ── 회사명 ──
+  for (const pat of [/(?:회사|업체명|업체|회사명)\s*[:：]\s*(.+)/, /회사[:：](.+)/]) {
+    const m = text.match(pat);
+    if (m) { r.company = m[1].trim(); break; }
   }
 
+  // ── 모집인원 ──
+  const hcM = text.match(/(?:모집인원|인원)\s*[:：]?\s*(.+)/);
+  if (hcM) r.headcount = hcM[1].replace(/\(.*?\)/g, '').trim();
+  else {
+    const hcAuto = text.match(/(?:남녀?|여성?|남성?)?(?:조공|기공|기사|용접사|배관공)?\s*\d+\s*명/);
+    if (hcAuto) r.headcount = hcAuto[0].trim();
+  }
+
+  // ── 근무형태 (직발 > 출퇴근 > 숙식) ──
+  if (/직발/.test(text)) r.workType = '직발';
+  else if (/출퇴근/.test(text)) r.workType = '출퇴근';
+  else if (/숙식/.test(text) || /숙소\s*[Oo]/.test(text)) r.workType = '숙식';
+
   // ── 식사 / 숙박 ──
-  const hasMeal = /식사\s*제공|식 제공|식대\s*제공|식사O/.test(text);
-  const hasLodging = /숙[소박]\s*[Oo제]|숙식\s*제공|숙소O|숙박제공/.test(text);
-  const hasBoth = /숙식\s*제공/.test(text);
-  if (hasMeal || hasBoth) r.meal = '식사제공';
-  if (hasLodging || hasBoth) r.lodging = '숙박제공';
+  if (/숙식\s*제공/.test(text)) { r.meal = '식사제공'; r.lodging = '숙박제공'; }
+  else {
+    if (/식사\s*제공|식 제공|식대\s*제공/.test(text)) r.meal = '식사제공';
+    if (/숙[소박]\s*[Oo제]|숙박제공|숙소O/.test(text)) r.lodging = '숙박제공';
+  }
+
+  // ── 나이 제한 ──
+  const ageRangeM = text.match(/(\d+)\s*세?\s*[~\-~]\s*(\d+)\s*세/);
+  if (ageRangeM) r.ageLimit = `${ageRangeM[1]}~${ageRangeM[2]}세`;
+  else {
+    const ageTilM = text.match(/(\d+)\s*세\s*(?:까지|이하|미만)/);
+    if (ageTilM) r.ageLimit = `~${ageTilM[1]}세`;
+    else {
+      const ageFromM = text.match(/지원\s*나이\s*[:：]\s*(.+)/);
+      if (ageFromM) r.ageLimit = stripEmoji(ageFromM[1]);
+    }
+  }
+
+  // ── 투입시기 / 입사일 ──
+  const sdLabel = text.match(/(?:투입시기|입사일|투입일|입사)\s*[:：]?\s*(.+)/);
+  if (sdLabel) r.startDate = sdLabel[1].replace(/\(.*?\)/g, '').trim();
+  else if (/다음\s*주/.test(text)) r.startDate = '다음주';
+  else if (/즉시/.test(text)) r.startDate = '즉시 입사';
 
   // ── 용접 시험 ──
   if (/시험\s*가능/.test(text)) r.weldTest = '가능';
@@ -186,7 +241,11 @@ function parseJobText(text: string): Partial<Job> {
 }
 
 function emptyForm(): Partial<Job> {
-  return { title: '', region: '', job: '', weldSub: '', weldTest: '', salary: '', meal: '', lodging: '', contact: '', detail: '', originalText: '' };
+  return {
+    title: '', region: '', job: '', weldSub: '', weldTest: '',
+    salary: '', meal: '', lodging: '', contact: '', detail: '', originalText: '',
+    company: '', headcount: '', workType: '', ageLimit: '', startDate: '', manager: '',
+  };
 }
 
 type Tab = 'jobs' | 'add' | 'pending' | 'settings';
@@ -209,7 +268,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Partial<Job>>(emptyForm());
   const [parseText, setParseText] = useState('');
-  const [parseResult, setParseResult] = useState<Partial<Job> | null>(null);
+  const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState('');
   const [settings, setSettings] = useState({
@@ -504,7 +563,9 @@ export default function Admin() {
     if (!parseText.trim()) return;
     const parsed = parseJobText(parseText);
     setParseResult(parsed);
-    setForm((prev) => ({ ...prev, ...parsed }));
+    // _salaryCalc는 표시용이므로 form에는 제외
+    const { _salaryCalc: _sc, ...formData } = parsed;
+    setForm((prev) => ({ ...prev, ...formData }));
   }
 
   function saveSettings() {
@@ -831,11 +892,19 @@ export default function Admin() {
                   title: '📝 제목', region: '📍 지역', job: '🔧 직종',
                   salary: '💰 급여', salaryNum: '💰 급여(숫자)', contact: '📞 연락처',
                   meal: '🍱 식사', lodging: '🏠 숙박', weldSub: '🔩 용접종류', weldTest: '📋 시험',
+                  company: '🏢 회사명', headcount: '👥 모집인원', workType: '🚗 근무형태',
+                  ageLimit: '🎂 나이제한', startDate: '📅 투입시기', manager: '👤 담당자',
                 };
-                const entries = Object.entries(parseResult).filter(([k, v]) => k !== 'originalText' && v && String(v) !== '0');
+                const SKIP = new Set(['originalText', '_salaryCalc', 'salaryNum']);
+                const entries = Object.entries(parseResult).filter(([k, v]) => !SKIP.has(k) && v && String(v) !== '0');
                 return (
-                  <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-[10px] p-4">
-                    <h4 className="text-sm font-bold text-blue-800 mb-3">✅ 파싱 결과 — 아래 폼에 자동 반영됐습니다</h4>
+                  <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-[10px] p-4 space-y-3">
+                    <h4 className="text-sm font-bold text-blue-800">✅ 파싱 결과 — 아래 폼에 자동 반영됐습니다</h4>
+                    {parseResult._salaryCalc && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs font-bold text-orange-700">
+                        💡 급여 계산: {parseResult._salaryCalc}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       {entries.map(([k, v]) => (
                         <span key={k} className="bg-white border border-blue-200 text-blue-800 text-xs px-2.5 py-1 rounded-lg font-medium">
@@ -895,11 +964,45 @@ export default function Admin() {
                 )}
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">급여</label>
-                  <input type="text" value={form.salary || ''} onChange={(e) => setField('salary', e.target.value)} placeholder="예: 28만원" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  <input type="text" value={form.salary || ''} onChange={(e) => setField('salary', e.target.value)} placeholder="예: 18만5천원" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  {parseResult?._salaryCalc && (
+                    <p className="mt-1 text-xs font-semibold text-orange-500">💡 {parseResult._salaryCalc}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">연락처</label>
                   <input type="text" value={form.contact || ''} onChange={(e) => setField('contact', e.target.value)} placeholder="예: 010-1234-5678" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                {/* ── 추가 필드 ── */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">🏢 회사명</label>
+                  <input type="text" value={form.company || ''} onChange={(e) => setField('company', e.target.value)} placeholder="예: 두원전기" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">👥 모집인원</label>
+                  <input type="text" value={form.headcount || ''} onChange={(e) => setField('headcount', e.target.value)} placeholder="예: 남자조공 4명" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">🚗 근무형태</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['직발', '출퇴근', '숙식', '기타'].map((w) => (
+                      <button key={w} type="button"
+                        className={`px-3 py-1.5 border-2 rounded-lg text-xs font-bold cursor-pointer font-[inherit] ${form.workType === w ? 'bg-[#1e3a5f] border-[#1e3a5f] text-white' : 'bg-white border-gray-200 text-gray-600'}`}
+                        onClick={() => setField('workType', form.workType === w ? '' : w)}>{w}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">🎂 나이 제한</label>
+                  <input type="text" value={form.ageLimit || ''} onChange={(e) => setField('ageLimit', e.target.value)} placeholder="예: 22~50세" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">📅 투입시기</label>
+                  <input type="text" value={form.startDate || ''} onChange={(e) => setField('startDate', e.target.value)} placeholder="예: 다음주 / 즉시 / 4월 30일" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">👤 담당자</label>
+                  <input type="text" value={form.manager || ''} onChange={(e) => setField('manager', e.target.value)} placeholder="예: 홍길동 반장" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">🍚 식사</label>
