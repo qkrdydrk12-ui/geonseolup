@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
 import type { Job, PendingJob } from '@/lib/firebase';
 import {
   fbLoadJobs,
@@ -280,7 +281,10 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'settings';
+type Tab = 'jobs' | 'add' | 'pending' | 'settings' | 'stats';
+
+interface HourlyRow { hour: number; count: number; }
+interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
 
 export default function Admin() {
   const [authed, setAuthed] = useState(false);
@@ -303,6 +307,11 @@ export default function Admin() {
   const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState('');
+  // 방문 통계
+  const [hourlyData, setHourlyData] = useState<HourlyRow[]>([]);
+  const [visitorTotals, setVisitorTotals] = useState<VisitorTotals | null>(null);
+  const [statsDate, setStatsDate] = useState(() => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
+  const [statsLoading, setStatsLoading] = useState(false);
   const [settings, setSettings] = useState({
     adminPw: localStorage.getItem('cj_admin_pw') || 'wns585426!@',
     contactEmail: localStorage.getItem('cj_contact_email') || 'qkrdydrk@naver.com',
@@ -421,6 +430,23 @@ export default function Admin() {
     toastRef.current = setTimeout(() => setToast(''), 2600);
   }
 
+  const loadHourlyStats = useCallback(async (date: string) => {
+    setStatsLoading(true);
+    try {
+      const token = getToken();
+      const [hourly, totals] = await Promise.all([
+        fetch(`/api/stats/hourly?date=${date}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch('/api/stats/visitors', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+      ]);
+      setHourlyData(hourly.rows ?? []);
+      setVisitorTotals(totals);
+    } catch {
+      showToast('통계 조회 실패');
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setPwError(false);
@@ -516,6 +542,12 @@ export default function Admin() {
     }
   }, [authed]);
 
+  useEffect(() => {
+    if (authed && tab === 'stats') {
+      loadHourlyStats(statsDate);
+    }
+  }, [authed, tab, loadHourlyStats]);
+
   function setField(key: string, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
   }
@@ -599,6 +631,7 @@ export default function Admin() {
     const { _salaryCalc: _sc, ...formData } = parsed;
     setForm((prev) => ({ ...prev, ...formData }));
   }
+
 
   function saveSettings() {
     localStorage.setItem('cj_contact_email', settings.contactEmail);
@@ -824,6 +857,7 @@ export default function Admin() {
               { key: 'jobs', label: `📋 공고 관리 (${visibleJobs.length})` },
               { key: 'add', label: '➕ 공고 등록' },
               { key: 'pending', label: `📥 신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
+              { key: 'stats', label: '📊 방문 통계' },
               { key: 'settings', label: '⚙️ 설정' },
             ] as { key: Tab; label: string }[]
           ).map((t) => (
@@ -1089,6 +1123,109 @@ export default function Admin() {
         )}
 
         {/* 설정 */}
+        {/* ── 방문 통계 탭 ── */}
+        {tab === 'stats' && (() => {
+          const todayKST = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+          const yesterdayKST = new Date(Date.now() + 9 * 3600000 - 86400000).toISOString().slice(0, 10);
+          const peak = hourlyData.length ? hourlyData.reduce((a, b) => a.count >= b.count ? a : b) : null;
+          const totalHourly = hourlyData.reduce((s, r) => s + r.count, 0);
+          return (
+            <div className="flex flex-col gap-5">
+              {/* 요약 카드 */}
+              {visitorTotals && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: '오늘', value: visitorTotals.today, color: 'text-[#f97316]' },
+                    { label: '어제', value: visitorTotals.yesterday, color: 'text-blue-600' },
+                    { label: '이번주', value: visitorTotals.week, color: 'text-green-600' },
+                    { label: '전체', value: visitorTotals.total, color: 'text-gray-700' },
+                  ].map((c) => (
+                    <div key={c.label} className="bg-white rounded-xl p-4 shadow-sm text-center">
+                      <p className="text-xs text-gray-400 mb-1">{c.label}</p>
+                      <p className={`text-2xl font-black ${c.color}`}>{c.value.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">명</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 시간대별 차트 */}
+              <div className="bg-white rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <h2 className="text-base font-bold text-[#1e3a5f]">🕐 시간대별 방문자 (KST)</h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={() => { setStatsDate(todayKST); loadHourlyStats(todayKST); }}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-semibold border cursor-pointer font-[inherit] ${statsDate === todayKST ? 'bg-[#f97316] text-white border-[#f97316]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#f97316]'}`}>
+                      오늘
+                    </button>
+                    <button onClick={() => { setStatsDate(yesterdayKST); loadHourlyStats(yesterdayKST); }}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-semibold border cursor-pointer font-[inherit] ${statsDate === yesterdayKST ? 'bg-[#f97316] text-white border-[#f97316]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#f97316]'}`}>
+                      어제
+                    </button>
+                    <input type="date" value={statsDate} max={todayKST}
+                      onChange={(e) => { setStatsDate(e.target.value); loadHourlyStats(e.target.value); }}
+                      className="text-xs px-2 py-1.5 rounded-lg border-2 border-gray-200 outline-none font-[inherit] focus:border-[#f97316]" />
+                    <button onClick={() => loadHourlyStats(statsDate)}
+                      className="text-xs px-3 py-1.5 rounded-lg font-semibold border border-gray-200 bg-white text-gray-600 hover:border-[#f97316] cursor-pointer font-[inherit]">
+                      {statsLoading ? '⏳' : '🔄'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 피크/합계 뱃지 */}
+                {!statsLoading && totalHourly > 0 && (
+                  <div className="flex gap-2 mb-4 flex-wrap">
+                    <span className="bg-orange-50 border border-orange-200 text-orange-700 text-xs px-2.5 py-1 rounded-lg font-semibold">
+                      📈 피크: {peak?.hour}시 ({peak?.count}명)
+                    </span>
+                    <span className="bg-blue-50 border border-blue-200 text-blue-700 text-xs px-2.5 py-1 rounded-lg font-semibold">
+                      👥 시간별 합계: {totalHourly}명
+                    </span>
+                    <span className="text-xs text-gray-400 self-center">* 같은 IP라도 시간대 달라지면 카운트</span>
+                  </div>
+                )}
+
+                {statsLoading ? (
+                  <div className="flex items-center justify-center h-52 text-gray-400 text-sm">불러오는 중...</div>
+                ) : hourlyData.length === 0 ? (
+                  <div className="flex items-center justify-center h-52 text-gray-400 text-sm">
+                    데이터 없음 — 조회 버튼을 눌러주세요
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 4, left: -20 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis dataKey="hour" tickFormatter={(h: number) => `${h}시`} tick={{ fontSize: 10 }} interval={1} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: number) => [`${v}명`, '방문자']} labelFormatter={(h: number) => `${h}시~${h + 1}시`} />
+                      <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                        {hourlyData.map((row) => (
+                          <Cell key={row.hour} fill={row === peak && peak.count > 0 ? '#f97316' : '#1e3a5f'} fillOpacity={row.count === 0 ? 0.15 : 0.85} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              {/* 시간대별 숫자 리스트 */}
+              {!statsLoading && totalHourly > 0 && (
+                <div className="bg-white rounded-xl p-5 shadow-sm">
+                  <h3 className="text-sm font-bold text-[#1e3a5f] mb-3">📋 시간대별 상세</h3>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {hourlyData.map((row) => (
+                      <div key={row.hour} className={`rounded-lg px-2 py-2 text-center border ${row === peak && peak.count > 0 ? 'bg-orange-50 border-orange-300' : 'bg-gray-50 border-gray-100'}`}>
+                        <p className="text-[11px] text-gray-400 font-medium">{String(row.hour).padStart(2, '0')}시</p>
+                        <p className={`text-base font-black ${row === peak && peak.count > 0 ? 'text-[#f97316]' : row.count > 0 ? 'text-[#1e3a5f]' : 'text-gray-300'}`}>{row.count}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">
             {/* 구인 등록 검토 설정 */}
