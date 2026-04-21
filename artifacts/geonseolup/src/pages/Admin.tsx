@@ -123,24 +123,45 @@ function formatSalary(man: number, chun: number): string {
   return `${man}만원`;
 }
 
-/** 텍스트에서 첫 번째 만원 단위 급여를 파싱해 { text, num } 반환 */
+/** 텍스트에서 만원 단위 급여를 파싱해 { text, num } 반환 */
 function extractSalary(text: string): { text: string; num: number } | null {
-  const mMC = text.match(/(\d+)\s*만\s*(\d+)\s*천/);
+  const t = text.replace(/,/g, '');
+
+  // 1순위: N만M천 (예: 18만5천)
+  const mMC = t.match(/(\d+)\s*만\s*(\d+)\s*천/);
   if (mMC) {
     const man = parseInt(mMC[1]), chun = parseInt(mMC[2]);
     return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
   }
-  const mDec = text.match(/([\d]+\.[\d]+)\s*만/);
+
+  // 2순위: N.M만 (예: 18.5만, 16.5)
+  const mDec = t.match(/([\d]+\.[\d]+)\s*만?/);
   if (mDec) {
     const val = parseFloat(mDec[1]);
-    const man = Math.floor(val), chun = Math.round((val - man) * 10);
-    return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
+    if (val >= 10 && val <= 50) {
+      const man = Math.floor(val), chun = Math.round((val - man) * 10);
+      return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
+    }
   }
-  const mInt = text.match(/(\d{2,3})\s*만/);
+
+  // 3순위: N만 (예: 20만, 180만 제외)
+  const mInt = t.match(/(\d{2,3})\s*만/);
   if (mInt) {
     const man = parseInt(mInt[1]);
     return { text: formatSalary(man, 0), num: man * 10000 };
   }
+
+  // 4순위: 단가 N / 일당 N (10~50 사이 정수, 전화번호 제외)
+  // 전화번호(010·011·016·019 등)는 무시
+  const noPhone = t.replace(/0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g, '');
+  const mShort = noPhone.match(/(?:단가|일당|일급|공임)?\s*(?<![0-9])([1-4][0-9])(?![0-9])/);
+  if (mShort) {
+    const num = parseInt(mShort[1]);
+    if (num >= 10 && num <= 49) {
+      return { text: formatSalary(num, 0), num: num * 10000 };
+    }
+  }
+
   return null;
 }
 
