@@ -152,13 +152,14 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
   const cleanTitle = stripEmoji(lines[0] ?? '');
   if (cleanTitle) r.title = cleanTitle;
 
-  // ── 삼성 반도체 P라인 감지 (지역보다 먼저) ──
-  const stripped = text.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').replace(/\s+/g, ' ');
-  const plineM = stripped.match(/\bP(\d)\b/i);
-  if (plineM) {
-    r.site = '삼성 평택 반도체';
-    r.line = `P${plineM[1].toUpperCase()}`;
+  // ── 삼성 평택 반도체 / 고덕 / P라인 통합 감지 (지역보다 먼저) ──
+  const cleanText = text.replace(/[^\uAC00-\uD7A30-9A-Za-z]/g, '');
+  const plineM = cleanText.match(/P([1-6])/i);
+  const line = plineM ? `P${plineM[1]}` : '';
+  if (cleanText.includes('평택') || cleanText.includes('고덕') || line) {
     r.region = '경기';
+    r.site = '삼성 반도체';
+    if (line) r.line = line;
   }
 
   // ── 지역: 도시명 우선 → 광역시/도 직접 ──
