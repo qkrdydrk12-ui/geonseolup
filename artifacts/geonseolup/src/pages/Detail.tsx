@@ -191,6 +191,7 @@ export default function Detail({ id }: Props) {
           <div className="px-[22px] py-5 border-b border-gray-200">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
               {[
+                job.site       ? { ico: '🏭', key: '현장명',   val: job.site + (job.line ? ` ${job.line}` : '') } : null,
                 job.company    ? { ico: '🏢', key: '회사명',   val: job.company } : null,
                 job.headcount  ? { ico: '👥', key: '모집인원', val: job.headcount } : null,
                 job.workType   ? { ico: '🚗', key: '근무형태', val: job.workType } : null,

@@ -58,6 +58,8 @@ export interface Job {
   ageLimit?: string;
   startDate?: string;
   manager?: string;
+  site?: string;
+  line?: string;
 }
 
 export interface PendingJob extends Omit<Job, 'id'> {

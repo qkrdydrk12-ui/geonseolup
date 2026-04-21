@@ -152,9 +152,20 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
   const cleanTitle = stripEmoji(lines[0] ?? '');
   if (cleanTitle) r.title = cleanTitle;
 
+  // ── 삼성 반도체 P라인 감지 (지역보다 먼저) ──
+  const stripped = text.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').replace(/\s+/g, ' ');
+  const plineM = stripped.match(/\bP(\d)\b/i);
+  if (plineM) {
+    r.site = '삼성 평택 반도체';
+    r.line = `P${plineM[1].toUpperCase()}`;
+    r.region = '경기';
+  }
+
   // ── 지역: 도시명 우선 → 광역시/도 직접 ──
-  for (const [city, province] of Object.entries(CITY_TO_PROVINCE)) {
-    if (text.includes(city)) { r.region = province; break; }
+  if (!r.region) {
+    for (const [city, province] of Object.entries(CITY_TO_PROVINCE)) {
+      if (text.includes(city)) { r.region = province; break; }
+    }
   }
   if (!r.region) {
     for (const reg of REGIONS) {
@@ -243,7 +254,7 @@ function emptyForm(): Partial<Job> {
   return {
     title: '', region: '', job: '', weldSub: '', weldTest: '',
     salary: '', meal: '', lodging: '', contact: '', detail: '', originalText: '',
-    company: '', headcount: '', ageLimit: '', startDate: '', manager: '',
+    company: '', headcount: '', ageLimit: '', startDate: '', manager: '', site: '', line: '',
   };
 }
 
@@ -893,6 +904,7 @@ export default function Admin() {
                   meal: '🍱 식사', lodging: '🏠 숙박', weldSub: '🔩 용접종류', weldTest: '📋 시험',
                   company: '🏢 회사명', headcount: '👥 모집인원',
                   ageLimit: '🎂 나이제한', startDate: '📅 투입시기', manager: '👤 담당자',
+                  site: '🏭 현장', line: '🔢 라인',
                 };
                 const SKIP = new Set(['originalText', '_salaryCalc', 'salaryNum']);
                 const entries = Object.entries(parseResult).filter(([k, v]) => !SKIP.has(k) && v && String(v) !== '0');
@@ -980,6 +992,14 @@ export default function Admin() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">👥 모집인원</label>
                   <input type="text" value={form.headcount || ''} onChange={(e) => setField('headcount', e.target.value)} placeholder="예: 남자조공 4명" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">🏭 현장명</label>
+                  <input type="text" value={form.site || ''} onChange={(e) => setField('site', e.target.value)} placeholder="예: 삼성 평택 반도체" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">🔢 라인</label>
+                  <input type="text" value={form.line || ''} onChange={(e) => setField('line', e.target.value)} placeholder="예: P2" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">🎂 나이 제한</label>
