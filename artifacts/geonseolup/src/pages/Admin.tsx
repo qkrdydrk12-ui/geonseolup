@@ -169,35 +169,30 @@ function extractSalary(text: string): { text: string; num: number } | null {
 }
 
 function makeNote(text: string): string {
-  const parts: string[] = [];
+  const sentences: string[] = [];
 
-  // 근무일
+  // 근무일 + 연장 → 한 문장으로
   const wdM = text.match(/주\s*([5-7])\s*일/);
-  if (wdM) parts.push(`주${wdM[1]}일 근무`);
-
-  // 연장
-  if (/연장/.test(text)) {
-    const extM = text.match(/연장\s*주?\s*(\d+[~\-]\d+|\d+)\s*회?/);
-    parts.push(extM ? `연장 ${extM[1]}회` : '연장 있음');
+  const hasExt = /연장/.test(text);
+  const extM = text.match(/연장\s*주?\s*(\d+[~\-]\d+|\d+)\s*회/);
+  if (wdM && hasExt) {
+    const extStr = extM ? ` 연장 ${extM[1]}회` : ' 연장 있음';
+    sentences.push(`주${wdM[1]}일 근무,${extStr}입니다.`);
+  } else if (wdM) {
+    sentences.push(`주${wdM[1]}일 근무입니다.`);
+  } else if (hasExt) {
+    sentences.push(extM ? `연장 ${extM[1]}회 있습니다.` : '연장 있습니다.');
   }
 
-  // 초보
-  if (/초보\s*(?:가능|환영|ok|OK)/.test(text)) parts.push('초보 가능');
+  // 우대/조건 → 두 번째 문장으로
+  const conds: string[] = [];
+  if (/초보\s*(?:가능|환영|ok|OK)/i.test(text)) conds.push('초보도 가능');
+  if (/장기\s*(?:근무|가능|우대)/.test(text)) conds.push('장기 근무 가능하신 분 환영');
+  if (/성실/.test(text)) conds.push('성실하신 분 우대');
+  if (/근태/.test(text)) conds.push('근태 중요');
+  if (conds.length > 0) sentences.push(conds.join(', ') + '합니다.');
 
-  // 장기
-  if (/장기\s*(?:근무|가능|우대)/.test(text)) parts.push('장기근무 우대');
-
-  // 성실
-  if (/성실/.test(text)) parts.push('성실자 우대');
-
-  // 근태
-  if (/근태/.test(text)) parts.push('근태 중요');
-
-  // 나이제한 (별도 필드 있지만 비고에도 포함)
-  const ageM = text.match(/(\d{2})년생\s*(?:까지|이하|~|~)/);
-  if (ageM) parts.push(`${ageM[1]}년생까지`);
-
-  return parts.join(' / ');
+  return sentences.join(' ').slice(0, 60);
 }
 
 function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
