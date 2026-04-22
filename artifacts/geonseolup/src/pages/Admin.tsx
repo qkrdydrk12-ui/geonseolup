@@ -166,6 +166,41 @@ function extractSalary(text: string): { text: string; num: number } | null {
   return null;
 }
 
+function makeShortSummary(data: Partial<Job>, rawText: string): string {
+  const parts: string[] = [];
+
+  // 지역: 평택/고덕이면 "평택", 아니면 지역명 그대로
+  if (data.region) {
+    const isPyeongtaek = rawText.includes('평택') || rawText.includes('고덕');
+    parts.push(data.region === '경기' && isPyeongtaek ? '평택' : data.region);
+  }
+
+  // 현장: 삼성이면 "삼성P4" 형태
+  if (data.site?.includes('삼성')) {
+    parts.push(data.line ? `삼성${data.line}` : '삼성');
+  } else if (data.site) {
+    parts.push(data.site);
+  }
+
+  // 직종: 직급 있으면 합쳐서 "배관조공"
+  if (data.job) {
+    parts.push(data.weldSub ? `${data.job}${data.weldSub}` : data.job);
+  }
+
+  // 급여
+  if (data.salary) parts.push(data.salary);
+
+  // 근무형태: 주N일 또는 출퇴근
+  const weekdayM = rawText.match(/주\s*([5-7])\s*일/);
+  if (weekdayM) {
+    parts.push(`주${weekdayM[1]}일`);
+  } else if (data.meal === '출퇴근') {
+    parts.push('출퇴근');
+  }
+
+  return parts.join(' ').slice(0, 35);
+}
+
 function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
   const r: Partial<Job> & { _salaryCalc?: string } = { originalText: text };
 
@@ -270,19 +305,9 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
   if (/시험\s*가능/.test(text)) r.weldTest = '가능';
   if (/시험\s*없음|시험\s*불가/.test(text)) r.weldTest = '불가능';
 
-  // ── 요약 (30자 내외) ──
-  const summParts: string[] = [];
-  const isP = text.includes('평택') || text.includes('고덕') || !!line;
-  const locLabel = r.region === '경기' && isP ? '평택' : (r.region || '');
-  if (locLabel) summParts.push(locLabel);
-  if (r.site?.includes('삼성')) summParts.push(`삼성${r.line || ''}`);
-  if (r.job) summParts.push(r.weldSub ? `${r.job}${r.weldSub}` : r.job);
-  if (r.salary) summParts.push(r.salary);
-  const wdM = text.match(/주\s*([5-7])\s*일/);
-  if (wdM) summParts.push(`주${wdM[1]}일`);
-  else if (r.meal === '출퇴근') summParts.push('출퇴근');
-  const summary = summParts.join(' ');
-  if (summary) r.short_summary = summary.length > 35 ? summary.slice(0, 35) : summary;
+  // ── 요약 ──
+  const summary = makeShortSummary(r, text);
+  if (summary) r.short_summary = summary;
 
   return r;
 }
