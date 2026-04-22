@@ -49,6 +49,7 @@ export interface Job {
   originalText?: string;
   date: string;
   hidden?: boolean;
+  hiddenAt?: number;
   _deleted?: boolean;
   _createdAt?: unknown;
   // 확장 필드
@@ -159,7 +160,10 @@ export async function fbSetJob(id: string, job: Partial<Job>): Promise<void> {
 
 export async function fbToggleHide(id: string, hidden: boolean): Promise<void> {
   try {
-    await updateDoc(doc(_db, 'jobs', id), { hidden });
+    const update: Record<string, unknown> = { hidden };
+    if (hidden) update.hiddenAt = Date.now();
+    else update.hiddenAt = null;
+    await updateDoc(doc(_db, 'jobs', id), update);
   } catch (e) {
     console.warn('[Firebase] fbToggleHide failed:', e);
   }
@@ -171,6 +175,24 @@ export async function fbDeleteJob(id: string): Promise<void> {
   } catch (e) {
     console.warn('[Firebase] fbDeleteJob failed:', e);
   }
+}
+
+// 자동숨김 + DB 기록: date 기준으로 autoHideHours 초과 공고 hidden:true + hiddenAt 기록
+export async function fbAutoHideOldJobs(jobs: Job[], autoHideHours: number): Promise<void> {
+  if (!autoHideHours) return;
+  const cutoff = Date.now() - autoHideHours * 3600000;
+  const toHide = jobs.filter((j) => !j.hidden && new Date(j.date).getTime() < cutoff);
+  await Promise.all(toHide.map((j) => fbToggleHide(j.id, true)));
+}
+
+// 24시간 이상 숨김 상태인 공고 하드 삭제
+export async function fbPurgeOldHiddenJobs(jobs: Job[]): Promise<number> {
+  const cutoff = Date.now() - 24 * 3600000;
+  const toPurge = jobs.filter(
+    (j) => j.hidden && j.hiddenAt != null && (j.hiddenAt as number) < cutoff
+  );
+  await Promise.all(toPurge.map((j) => deleteDoc(doc(_db, 'jobs', j.id))));
+  return toPurge.length;
 }
 
 export async function fbLoadPending(): Promise<PendingJob[]> {

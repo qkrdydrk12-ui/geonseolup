@@ -9,6 +9,8 @@ import {
   fbLoadPending,
   fbUpdatePending,
   fbDeletePending,
+  fbAutoHideOldJobs,
+  fbPurgeOldHiddenJobs,
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { formatDate, parseSalaryNum, WELD_SUBS } from '@/lib/utils';
@@ -576,6 +578,26 @@ export default function Admin() {
       loadJobs();
       loadPending();
     }
+  }, [authed]);
+
+  // 자동숨김 DB 기록 + 24시간 지난 숨김 공고 하드삭제 (30분마다 실행)
+  useEffect(() => {
+    if (!authed) return;
+
+    async function runCleanup() {
+      const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
+      const autoHideHours: number = stored.autoHideHours ?? 48;
+      const all = await fbLoadJobs();
+      await fbAutoHideOldJobs(all, autoHideHours);
+      const purged = await fbPurgeOldHiddenJobs(all);
+      if (purged > 0) {
+        loadJobs();
+      }
+    }
+
+    runCleanup();
+    const timer = setInterval(runCleanup, 30 * 60 * 1000);
+    return () => clearInterval(timer);
   }, [authed]);
 
   useEffect(() => {
