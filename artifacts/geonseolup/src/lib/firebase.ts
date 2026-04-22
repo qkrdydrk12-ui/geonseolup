@@ -60,7 +60,6 @@ export interface Job {
   manager?: string;
   site?: string;
   line?: string;
-  short_summary?: string;
 }
 
 export interface PendingJob extends Omit<Job, 'id'> {
