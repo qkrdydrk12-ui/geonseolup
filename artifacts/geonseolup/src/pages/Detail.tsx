@@ -189,7 +189,7 @@ export default function Detail({ id }: Props) {
 
           {/* 정보 그리드 */}
           <div className="px-[22px] py-5 border-b border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
               {[
                 job.site       ? { ico: '🏭', key: '현장명',   val: job.site + (job.line ? ` ${job.line}` : '') } : null,
                 job.company    ? { ico: '🏢', key: '회사명',   val: job.company } : null,
@@ -213,8 +213,8 @@ export default function Detail({ id }: Props) {
                     className={`flex items-start gap-2.5 py-[11px] border-b border-gray-100 text-sm last:border-b-0 ${row!.full ? 'col-span-2' : ''}`}
                   >
                     <span className="text-base shrink-0 mt-0.5">{row!.ico}</span>
-                    <span className="text-gray-500 text-[13px] min-w-[70px] shrink-0">{row!.key}</span>
-                    <span className="flex-1 font-semibold text-gray-800">{row!.val}</span>
+                    <span className="text-gray-500 text-[13px] min-w-[56px] shrink-0">{row!.key}</span>
+                    <span className="flex-1 font-semibold text-gray-800 break-keep">{row!.val}</span>
                   </div>
                 ))}
             </div>
