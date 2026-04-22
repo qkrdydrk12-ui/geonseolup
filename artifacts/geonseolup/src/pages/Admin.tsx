@@ -322,8 +322,9 @@ interface VisitorTotals { today: number; yesterday: number; week: number; total:
 export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authChecking, setAuthChecking] = useState(true); // 토큰 검증 중
-  const [adminId, setAdminId] = useState('');
+  const [adminId, setAdminId] = useState(() => localStorage.getItem('cj_saved_id') || '');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('cj_saved_id'));
   const [pwError, setPwError] = useState(false);
   const [pwErrorMsg, setPwErrorMsg] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -486,6 +487,8 @@ export default function Admin() {
     setPwErrorMsg('');
     const result = await apiLogin(adminId, password);
     if (result.ok && result.token) {
+      if (rememberMe) localStorage.setItem('cj_saved_id', adminId);
+      else localStorage.removeItem('cj_saved_id');
       setToken(result.token);
       setAuthed(true);
       setPassword('');
@@ -765,6 +768,16 @@ export default function Admin() {
                   {showPw ? '🙈' : '👁'}
                 </button>
               </div>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                id="rememberMe"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 accent-[#f97316] cursor-pointer"
+              />
+              <label htmlFor="rememberMe" className="text-sm text-gray-500 cursor-pointer select-none">아이디 기억하기</label>
             </div>
             {pwError && (
               <div className="bg-red-100 text-red-700 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold mb-3">
