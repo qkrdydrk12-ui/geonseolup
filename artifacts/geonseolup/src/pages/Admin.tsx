@@ -270,6 +270,20 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
   if (/시험\s*가능/.test(text)) r.weldTest = '가능';
   if (/시험\s*없음|시험\s*불가/.test(text)) r.weldTest = '불가능';
 
+  // ── 요약 (30자 내외) ──
+  const summParts: string[] = [];
+  const isP = text.includes('평택') || text.includes('고덕') || !!line;
+  const locLabel = r.region === '경기' && isP ? '평택' : (r.region || '');
+  if (locLabel) summParts.push(locLabel);
+  if (r.site?.includes('삼성')) summParts.push(`삼성${r.line || ''}`);
+  if (r.job) summParts.push(r.weldSub ? `${r.job}${r.weldSub}` : r.job);
+  if (r.salary) summParts.push(r.salary);
+  const wdM = text.match(/주\s*([5-7])\s*일/);
+  if (wdM) summParts.push(`주${wdM[1]}일`);
+  else if (r.meal === '출퇴근') summParts.push('출퇴근');
+  const summary = summParts.join(' ');
+  if (summary) r.short_summary = summary.length > 35 ? summary.slice(0, 35) : summary;
+
   return r;
 }
 
@@ -277,7 +291,7 @@ function emptyForm(): Partial<Job> {
   return {
     title: '', region: '', job: '', weldSub: '', weldTest: '',
     salary: '', meal: '', lodging: '', contact: '', detail: '', originalText: '',
-    company: '', headcount: '', ageLimit: '', startDate: '', manager: '', site: '', line: '',
+    company: '', headcount: '', ageLimit: '', startDate: '', manager: '', site: '', line: '', short_summary: '',
   };
 }
 
@@ -962,11 +976,16 @@ export default function Admin() {
                   ageLimit: '🎂 나이제한', startDate: '📅 투입시기', manager: '👤 담당자',
                   site: '🏭 현장', line: '🔢 라인',
                 };
-                const SKIP = new Set(['originalText', '_salaryCalc', 'salaryNum']);
+                const SKIP = new Set(['originalText', '_salaryCalc', 'salaryNum', 'short_summary']);
                 const entries = Object.entries(parseResult).filter(([k, v]) => !SKIP.has(k) && v && String(v) !== '0');
                 return (
                   <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-[10px] p-4 space-y-3">
                     <h4 className="text-sm font-bold text-blue-800">✅ 파싱 결과 — 아래 폼에 자동 반영됐습니다</h4>
+                    {parseResult.short_summary && (
+                      <div className="bg-indigo-50 border border-indigo-300 rounded-lg px-3 py-2 text-xs font-bold text-indigo-800">
+                        📌 요약: {parseResult.short_summary}
+                      </div>
+                    )}
                     {parseResult._salaryCalc && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs font-bold text-orange-700">
                         💡 급여 계산: {parseResult._salaryCalc}
@@ -1068,6 +1087,10 @@ export default function Admin() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">👤 담당자</label>
                   <input type="text" value={form.manager || ''} onChange={(e) => setField('manager', e.target.value)} placeholder="예: 홍길동 반장" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                </div>
+                <div className="col-span-full">
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">📌 요약 <span className="text-gray-400 font-normal">(30자 내외 — 자동생성)</span></label>
+                  <input type="text" value={form.short_summary || ''} onChange={(e) => setField('short_summary', e.target.value)} maxLength={35} placeholder="예: 평택 삼성P4 배관조공 15만~16만5천 주6일" className="w-full py-2.5 px-3.5 border-2 border-indigo-200 rounded-lg text-sm outline-none font-[inherit] focus:border-indigo-500 bg-indigo-50" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">🍚 식사</label>
