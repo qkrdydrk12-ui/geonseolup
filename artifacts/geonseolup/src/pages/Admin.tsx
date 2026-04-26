@@ -154,10 +154,10 @@ function extractSalary(text: string): { text: string; num: number } | null {
     return { text: formatSalary(man, 0), num: man * 10000 };
   }
 
-  // 4순위: 단가 N / 일당 N (10~50 사이 정수, 전화번호 제외)
+  // 4순위: 단가 N / 일당 N (10~49 사이 정수, 전화번호·날짜 제외, 키워드 필수)
   // 전화번호(010·011·016·019 등)는 무시
   const noPhone = t.replace(/0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g, '');
-  const mShort = noPhone.match(/(?:단가|일당|일급|공임)?\s*(?<![0-9])([1-4][0-9])(?![0-9])/);
+  const mShort = noPhone.match(/(?:단가|일당|일급|공임)\s*([1-4][0-9])(?![0-9])/);
   if (mShort) {
     const num = parseInt(mShort[1]);
     if (num >= 10 && num <= 49) {
