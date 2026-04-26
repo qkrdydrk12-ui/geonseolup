@@ -130,11 +130,11 @@ function formatSalary(man: number, chun: number): string {
 function extractSalary(text: string): { text: string; num: number } | null {
   const t = text.replace(/,/g, '');
 
-  // 1순위: N만M천 (예: 18만5천)
+  // 1순위: N만M천 (예: 18만5천) — 일비·수당 등 소액(5만 미만)은 제외
   const mMC = t.match(/(\d+)\s*만\s*(\d+)\s*천/);
   if (mMC) {
     const man = parseInt(mMC[1]), chun = parseInt(mMC[2]);
-    return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
+    if (man >= 5) return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
   }
 
   // 2순위: N.M만 (예: 18.5만, 16.5)
@@ -236,14 +236,17 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
   const sal = extractSalary(text);
   if (sal) { r.salary = sal.text; r.salaryNum = sal.num; }
 
-  // ── 급여 합산 계산 (X만 + 식대 Y만) ──
-  const calcM = text.match(/([\d.]+)\s*(?:\+\s*식대\s*([\d.]+)|만원?\s*\+\s*식대\s*([\d.]+)만?)/);
+  // ── 급여 합산 계산 (기본 N만 + 식대/일비 M만[K천]) ──
+  const calcM = text.match(/([\d.]+)\s*만원?\s*\+\s*(식대|일비)\s*([\d.]+)\s*만(?:\s*(\d)\s*천)?/);
   if (calcM) {
     const base = parseFloat(calcM[1]);
-    const add = parseFloat(calcM[2] ?? calcM[3] ?? '0');
-    const total = base + add;
+    const label = calcM[2];
+    const addonMan = parseFloat(calcM[3]);
+    const addonChun = parseInt(calcM[4] || '0');
+    const total = base + addonMan + addonChun * 0.1;
     const totalMan = Math.floor(total), totalChun = Math.round((total - totalMan) * 10);
-    r._salaryCalc = `기본 ${base}만 + 식대 ${add}만 = 총 ${formatSalary(totalMan, totalChun)}`;
+    const addonStr = addonChun ? `${addonMan}만${addonChun}천` : `${addonMan}만`;
+    r._salaryCalc = `기본 ${base}만 + ${label} ${addonStr} = 총 ${formatSalary(totalMan, totalChun)}`;
   }
 
   // ── 전화번호 (-·. 구분자 모두 지원) ──
