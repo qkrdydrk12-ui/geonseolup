@@ -229,6 +229,8 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
   for (const job of [...JOBS, ...WELD_SUBS]) {
     if (text.includes(job)) { r.job = job; break; }
   }
+  // 화재/화기/감시 키워드가 있으면 화기감시자로 통합
+  if (/화재|화기|감시/.test(text)) r.job = '화기감시자';
 
   // ── 급여 ──
   const sal = extractSalary(text);
