@@ -278,6 +278,9 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
     if (/식사\s*제공|식 제공|식대\s*제공/.test(text)) r.meal = '식사제공';
   }
   if (/숙[소박]\s*[Oo제]|숙박제공|숙소O/.test(text)) r.lodging = '숙박제공';
+  // 키워드 없으면 협의로 기본값 설정
+  if (!r.meal) r.meal = '협의';
+  if (!r.lodging) r.lodging = '협의';
 
   // ── 나이 제한 ──
   const ageRangeM = text.match(/(\d+)\s*세?\s*[~\-~]\s*(\d+)\s*세/);
