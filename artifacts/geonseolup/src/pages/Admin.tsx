@@ -14,6 +14,10 @@ import {
   fbAddReservedJob,
   fbCancelReservation,
   fbCheckAndPublishReserved,
+  fbRetryReservation,
+  fbSaveReservationLog,
+  fbLoadReservationLogs,
+  type ReservationLog,
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { formatDate, parseSalaryNum, WELD_SUBS } from '@/lib/utils';
@@ -434,8 +438,14 @@ export default function Admin() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState('');
   const [showReserveModal, setShowReserveModal] = useState(false);
+  const [reserveModalTab, setReserveModalTab] = useState<'delay' | 'custom'>('delay');
+  const [delayHours, setDelayHours] = useState<number>(3);
   const [reserveDate, setReserveDate] = useState('');
   const [reserveTime, setReserveTime] = useState('');
+  const [repeatDays, setRepeatDays] = useState<number>(0);
+  const [useRandomSpread, setUseRandomSpread] = useState(false);
+  const [reservationLogs, setReservationLogs] = useState<ReservationLog[]>([]);
+  const [showLogsModal, setShowLogsModal] = useState(false);
   // 방문 통계
   const [hourlyData, setHourlyData] = useState<HourlyRow[]>([]);
   const [visitorTotals, setVisitorTotals] = useState<VisitorTotals | null>(null);
@@ -712,23 +722,58 @@ export default function Admin() {
       showToast('⚠️ 필수 항목을 입력해주세요 (제목, 지역, 직종)');
       return;
     }
-    if (!reserveDate || !reserveTime) {
-      showToast('⚠️ 예약 날짜와 시간을 선택해주세요');
-      return;
+    let reservedAt: string;
+    if (reserveModalTab === 'delay') {
+      reservedAt = new Date(Date.now() + delayHours * 3600000).toISOString();
+    } else {
+      if (!reserveDate || !reserveTime) {
+        showToast('⚠️ 날짜와 시간을 선택해주세요');
+        return;
+      }
+      reservedAt = toKSTIso(reserveDate, reserveTime);
+      if (new Date(reservedAt).getTime() <= Date.now()) {
+        showToast('⚠️ 과거 시간은 예약할 수 없습니다');
+        return;
+      }
     }
-    const reservedAt = toKSTIso(reserveDate, reserveTime);
-    if (new Date(reservedAt).getTime() <= Date.now()) {
-      showToast('⚠️ 과거 시간은 예약할 수 없습니다');
-      return;
+    // 랜덤 분산 ±5~15분
+    if (useRandomSpread) {
+      const spread = Math.floor(Math.random() * 11) + 5;
+      reservedAt = new Date(new Date(reservedAt).getTime() + spread * 60000).toISOString();
+    }
+    // 자동 간격 분산: 10분 내 충돌 예약 → 뒤로 밀기
+    const reserved = jobs.filter((j) => j.status === 'reserved' && j.reservedAt);
+    const targetMs = new Date(reservedAt).getTime();
+    const conflicting = reserved.filter(
+      (j) => Math.abs(new Date(j.reservedAt!).getTime() - targetMs) < 10 * 60000
+    );
+    if (conflicting.length > 0) {
+      const latestMs = Math.max(...conflicting.map((j) => new Date(j.reservedAt!).getTime()));
+      const gap = Math.floor(Math.random() * 8) + 3;
+      reservedAt = new Date(latestMs + gap * 60000).toISOString();
+      showToast(`⚡ 동시간대 분산: ${formatKST(reservedAt)}으로 조정됩니다`);
     }
     setSubmitting(true);
-    await fbAddReservedJob({
+    const jobData: Omit<Job, 'id'> = {
       ...(form as Omit<Job, 'id'>),
       salaryNum: parseSalaryNum(form.salary || ''),
       date: new Date().toISOString(),
       hidden: false,
-    }, reservedAt);
-    showToast(`✅ ${formatKST(reservedAt)}에 게시 예약됐습니다`);
+      repeatDays,
+      retryCount: 0,
+    };
+    await fbAddReservedJob(jobData, reservedAt);
+    await fbSaveReservationLog({
+      jobId: '',
+      jobTitle: form.title || '',
+      scheduledAt: reservedAt,
+      status: 'published',
+      repeatDays: repeatDays || undefined,
+      isRepeat: false,
+      createdAt: new Date().toISOString(),
+    });
+    const repeatLabel = repeatDays > 0 ? ` (${repeatDays}일 반복 설정)` : '';
+    showToast(`✅ ${formatKST(reservedAt)} 예약됐습니다${repeatLabel}`);
     setForm(emptyForm());
     setParseResult(null);
     setParseText('');
@@ -746,14 +791,31 @@ export default function Admin() {
     await loadJobs();
   }
 
+  // 발행 실패 공고 수동 재시도
+  async function handleRetryReservation(id: string) {
+    await fbRetryReservation(id);
+    showToast('🔄 재시도 예약됐습니다 (1분 이내 발행)');
+    await loadJobs();
+  }
+
+  // 예약 로그 열기
+  async function handleShowLogs() {
+    const logs = await fbLoadReservationLogs(30);
+    setReservationLogs(logs);
+    setShowLogsModal(true);
+  }
+
   // 예약 자동 게시 스케줄러 (1분마다 체크)
   useEffect(() => {
     if (!authed) return;
     const check = async () => {
       const all = await fbLoadJobs();
-      const published = await fbCheckAndPublishReserved(all);
-      if (published > 0) {
-        showToast(`📢 예약 공고 ${published}건이 자동 게시됐습니다`);
+      const { published, retried } = await fbCheckAndPublishReserved(all);
+      if (published > 0 || retried > 0) {
+        const parts: string[] = [];
+        if (published > 0) parts.push(`${published}건 게시`);
+        if (retried > 0) parts.push(`${retried}건 재시도`);
+        showToast(`📢 예약 공고 ${parts.join(' · ')}됐습니다`);
         await loadJobs();
       }
     };
@@ -1103,14 +1165,22 @@ export default function Admin() {
         {/* 공고 관리 */}
         {tab === 'jobs' && (
           <div className="bg-white rounded-xl p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100 flex items-center justify-between flex-wrap gap-2">
               📋 공고 목록
-              <button
-                className="text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 py-1.5 px-3 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors font-[inherit]"
-                onClick={loadJobs}
-              >
-                🔄 새로고침
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-200 py-1.5 px-3 rounded-lg cursor-pointer hover:bg-violet-100 transition-colors font-[inherit]"
+                  onClick={handleShowLogs}
+                >
+                  📋 예약 로그
+                </button>
+                <button
+                  className="text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 py-1.5 px-3 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors font-[inherit]"
+                  onClick={loadJobs}
+                >
+                  🔄 새로고침
+                </button>
+              </div>
             </h2>
             {loading ? (
               <div className="flex justify-center py-10">
@@ -1139,7 +1209,16 @@ export default function Admin() {
                         <span>💰 {job.salary || '협의'}</span>
                         <span>🕐 {formatDate(job.date)}</span>
                         {job.status === 'reserved' && job.reservedAt && (
-                          <span className="text-violet-600 font-bold">📅 예약중 · {formatKST(job.reservedAt)} 게시</span>
+                          <span className="text-violet-600 font-bold">
+                            📅 예약중 · {formatKST(job.reservedAt)} 게시
+                            {job.repeatDays && job.repeatDays > 0 ? ` 🔁${job.repeatDays}일` : ''}
+                          </span>
+                        )}
+                        {job.status === 'failed' && (
+                          <span className="text-red-500 font-bold">
+                            ❌ 발행실패{(job.retryCount || 0) > 0 ? ` (${job.retryCount}회 시도)` : ''}
+                            {job.failReason ? ` · ${job.failReason.slice(0, 40)}` : ''}
+                          </span>
                         )}
                         {job.hidden && <span className="text-amber-600 font-bold">🙈 숨김</span>}
                       </div>
@@ -1151,6 +1230,13 @@ export default function Admin() {
                           onClick={() => handleCancelReservation(job.id)}
                         >
                           📅 예약취소
+                        </button>
+                      ) : job.status === 'failed' ? (
+                        <button
+                          className="bg-white border-2 border-red-400 text-red-500 py-[7px] px-3.5 rounded-lg text-[13px] font-bold cursor-pointer hover:bg-red-50 transition-colors font-[inherit] whitespace-nowrap"
+                          onClick={() => handleRetryReservation(job.id)}
+                        >
+                          🔄 재시도
                         </button>
                       ) : (
                         <button
@@ -2660,54 +2746,204 @@ export default function Admin() {
       )}
 
       {/* 예약 등록 모달 */}
-      {showReserveModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="text-lg font-bold text-[#1e3a5f] mb-1">📅 예약 등록</h3>
-            <p className="text-xs text-gray-500 mb-4">설정한 날짜·시간에 자동으로 공개됩니다 (한국 시간 기준)</p>
-            <div className="text-sm font-semibold text-gray-700 mb-3 truncate">📝 {form.title}</div>
-            <div className="grid gap-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1.5">게시 날짜</label>
-                <input
-                  type="date"
-                  value={reserveDate}
-                  min={nowKSTDate()}
-                  onChange={(e) => setReserveDate(e.target.value)}
-                  className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-violet-500"
-                />
+      {showReserveModal && (() => {
+        const nowKST = Date.now();
+        const previewMs =
+          reserveModalTab === 'delay'
+            ? nowKST + delayHours * 3600000 + (useRandomSpread ? 10 * 60000 : 0)
+            : reserveDate && reserveTime
+            ? new Date(toKSTIso(reserveDate, reserveTime)).getTime() + (useRandomSpread ? 10 * 60000 : 0)
+            : 0;
+        const previewLabel = previewMs > nowKST ? formatKST(new Date(previewMs).toISOString()) : '';
+        const OPTIMAL = [
+          { label: '🌅 새벽 05:30', h: 5, m: 30 },
+          { label: '☀️ 정오 12:00', h: 12, m: 0 },
+          { label: '🌙 저녁 20:00', h: 20, m: 0 },
+        ];
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl max-h-[92vh] overflow-y-auto">
+              {/* 헤더 */}
+              <div className="sticky top-0 bg-white rounded-t-2xl border-b border-gray-100 px-5 py-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-[#1e3a5f]">📅 예약 발행 설정</h3>
+                  <p className="text-xs text-gray-400 truncate mt-0.5 max-w-[240px]">📝 {form.title}</p>
+                </div>
+                <button
+                  onClick={() => setShowReserveModal(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 border-none cursor-pointer hover:bg-gray-200 text-lg font-bold font-[inherit]"
+                >×</button>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1.5">게시 시간 (KST)</label>
-                <input
-                  type="time"
-                  value={reserveTime}
-                  onChange={(e) => setReserveTime(e.target.value)}
-                  className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-violet-500"
-                />
+
+              <div className="px-5 py-4 space-y-5">
+                {/* ── 탭 ── */}
+                <div className="bg-gray-100 rounded-xl p-1 flex gap-1">
+                  {([['delay', '⏱ 지연 등록'], ['custom', '📅 시간 직접 선택']] as const).map(([k, lbl]) => (
+                    <button key={k} type="button"
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold border-none cursor-pointer transition-all font-[inherit] ${reserveModalTab === k ? 'bg-white text-violet-700 shadow-sm' : 'bg-transparent text-gray-500 hover:text-gray-700'}`}
+                      onClick={() => setReserveModalTab(k)}
+                    >{lbl}</button>
+                  ))}
+                </div>
+
+                {/* ── 지연 등록 탭 ── */}
+                {reserveModalTab === 'delay' && (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 mb-2">⚡ 빠른 선택</p>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {[1, 3, 6, 12, 24].map((h) => (
+                          <button key={h} type="button"
+                            className={`py-2.5 rounded-lg text-xs font-bold border-2 cursor-pointer transition-all font-[inherit] ${delayHours === h ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-200 hover:border-violet-400 hover:text-violet-600'}`}
+                            onClick={() => setDelayHours(h)}
+                          >{h < 24 ? `${h}시간` : '24시간'}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 mb-2">🌟 최적 시간 추천 <span className="font-normal text-gray-400">(건설 현장 트래픽 기준)</span></p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {OPTIMAL.map(({ label, h, m }) => {
+                          const kstNow = new Date(Date.now() + 9 * 3600000);
+                          let target = new Date(kstNow);
+                          target.setUTCHours(h - 9, m, 0, 0);
+                          if (target.getTime() <= Date.now()) target = new Date(target.getTime() + 86400000);
+                          const diffH = Math.round((target.getTime() - Date.now()) / 3600000 * 10) / 10;
+                          return (
+                            <button key={label} type="button"
+                              className="bg-gradient-to-b from-violet-50 to-white border-2 border-violet-200 rounded-lg py-2 px-2 text-center cursor-pointer hover:border-violet-500 hover:from-violet-100 transition-all font-[inherit] group"
+                              onClick={() => {
+                                setDelayHours(Math.round(diffH));
+                              }}
+                            >
+                              <div className="text-xs font-bold text-violet-700">{label}</div>
+                              <div className="text-[10px] text-gray-400 mt-0.5">약 {diffH}시간 후</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 직접 선택 탭 ── */}
+                {reserveModalTab === 'custom' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5">게시 날짜</label>
+                      <input type="date" value={reserveDate} min={nowKSTDate()}
+                        onChange={(e) => setReserveDate(e.target.value)}
+                        className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-violet-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5">게시 시간 (한국 시간)</label>
+                      <input type="time" value={reserveTime}
+                        onChange={(e) => setReserveTime(e.target.value)}
+                        className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-violet-500"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 구분선 ── */}
+                <div className="border-t border-dashed border-gray-200" />
+
+                {/* ── 반복 예약 ── */}
+                <div>
+                  <p className="text-xs font-bold text-gray-600 mb-2">🔁 반복 예약 <span className="font-normal text-gray-400">(발행 후 새 공고 자동 생성)</span></p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {([0, 1, 3, 7] as const).map((d) => (
+                      <button key={d} type="button"
+                        className={`py-2.5 rounded-lg text-xs font-bold border-2 cursor-pointer transition-all font-[inherit] ${repeatDays === d ? 'bg-[#f97316] text-white border-[#f97316]' : 'bg-white text-gray-600 border-gray-200 hover:border-orange-400 hover:text-orange-600'}`}
+                        onClick={() => setRepeatDays(d)}
+                      >{d === 0 ? '없음' : `${d}일 반복`}</button>
+                    ))}
+                  </div>
+                  {repeatDays > 0 && (
+                    <p className="text-[11px] text-orange-600 mt-1.5 bg-orange-50 rounded-lg px-3 py-1.5">
+                      ✅ 발행 후 {repeatDays}일 뒤 동일 공고가 새 예약으로 자동 등록됩니다
+                    </p>
+                  )}
+                </div>
+
+                {/* ── 랜덤 분산 ── */}
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                  <div className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 relative ${useRandomSpread ? 'bg-violet-600' : 'bg-gray-300'}`}
+                    onClick={() => setUseRandomSpread(!useRandomSpread)}>
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${useRandomSpread ? 'left-[22px]' : 'left-[2px]'}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-700">랜덤 분산 ±5~15분</p>
+                    <p className="text-xs text-gray-400">동일 시간대 도배 방지 · 자동 간격 조절</p>
+                  </div>
+                </label>
+
+                {/* ── 예정 시간 미리보기 ── */}
+                {previewLabel && (
+                  <div className="bg-violet-50 border-2 border-violet-200 rounded-xl px-4 py-3 text-center">
+                    <p className="text-xs text-violet-500 font-semibold mb-0.5">예정 발행 시간</p>
+                    <p className="text-lg font-bold text-violet-700">{previewLabel}</p>
+                    {useRandomSpread && <p className="text-[11px] text-violet-400 mt-0.5">(실제는 ±5~15분 랜덤 조정됩니다)</p>}
+                    {repeatDays > 0 && <p className="text-[11px] text-orange-500 mt-0.5">🔁 발행 후 {repeatDays}일 뒤 자동 재등록</p>}
+                  </div>
+                )}
+
+                {/* ── 액션 버튼 ── */}
+                <div className="flex gap-2.5">
+                  <button type="button" disabled={submitting}
+                    className="flex-1 bg-violet-600 text-white border-none py-3.5 rounded-xl text-sm font-bold cursor-pointer hover:bg-violet-700 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleReserve}
+                  >
+                    {submitting ? '예약 중...' : '📅 예약 확정'}
+                  </button>
+                  <button type="button"
+                    className="px-5 bg-gray-100 text-gray-600 border-none py-3.5 rounded-xl text-sm font-bold cursor-pointer hover:bg-gray-200 transition-colors font-[inherit]"
+                    onClick={() => setShowReserveModal(false)}
+                  >취소</button>
+                </div>
               </div>
-              {reserveDate && reserveTime && (
-                <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 text-xs text-violet-700 font-semibold">
-                  📅 {reserveDate.replace(/-/g, '.')} {reserveTime} (KST)에 자동 게시됩니다
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 예약 로그 모달 */}
+      {showLogsModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="sticky top-0 bg-white rounded-t-2xl border-b border-gray-100 px-5 py-4 flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#1e3a5f]">📋 예약 발행 로그</h3>
+              <button onClick={() => setShowLogsModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 border-none cursor-pointer hover:bg-gray-200 text-lg font-bold font-[inherit]"
+              >×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              {reservationLogs.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 text-sm">로그가 없습니다</div>
+              ) : (
+                <div className="space-y-2">
+                  {reservationLogs.map((log) => (
+                    <div key={log.id} className={`rounded-xl px-4 py-3 border text-xs ${log.status === 'published' ? 'bg-green-50 border-green-200' : log.status === 'failed' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm truncate max-w-[200px]">{log.jobTitle || '(제목 없음)'}</span>
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] ${log.status === 'published' ? 'bg-green-500 text-white' : log.status === 'failed' ? 'bg-red-500 text-white' : 'bg-yellow-500 text-white'}`}>
+                          {log.status === 'published' ? '✅ 발행' : log.status === 'failed' ? '❌ 실패' : '🔄 재시도'}
+                        </span>
+                      </div>
+                      <div className="text-gray-500 space-y-0.5">
+                        <div>예약: {log.scheduledAt ? formatKST(log.scheduledAt) : '-'}</div>
+                        {log.publishedAt && <div>발행: {formatKST(log.publishedAt)}</div>}
+                        {log.repeatDays && log.repeatDays > 0 && <div>🔁 {log.repeatDays}일 반복 설정</div>}
+                        {log.isRepeat && <div className="text-orange-600">♻️ 반복 재등록</div>}
+                        {log.retryCount && log.retryCount > 0 && <div>재시도 {log.retryCount}회</div>}
+                        {log.failReason && <div className="text-red-500">사유: {log.failReason}</div>}
+                        <div className="text-gray-400">{log.createdAt ? formatKST(log.createdAt) : ''} 생성</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button
-                type="button"
-                disabled={submitting}
-                className="flex-1 bg-violet-600 text-white border-none py-3 rounded-xl text-sm font-bold cursor-pointer hover:bg-violet-700 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleReserve}
-              >
-                {submitting ? '예약 중...' : '📅 예약 확정'}
-              </button>
-              <button
-                type="button"
-                className="px-5 bg-gray-100 text-gray-600 border-none py-3 rounded-xl text-sm font-bold cursor-pointer hover:bg-gray-200 transition-colors font-[inherit]"
-                onClick={() => setShowReserveModal(false)}
-              >
-                취소
-              </button>
             </div>
           </div>
         </div>

@@ -32,6 +32,21 @@ const _db = getFirestore(_app);
 const JOBS_COL = collection(_db, 'jobs');
 const PENDING_COL = collection(_db, 'pending');
 const SETTINGS_COL = collection(_db, 'settings');
+const LOGS_COL = collection(_db, 'reservationLogs');
+
+export interface ReservationLog {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  scheduledAt: string;
+  publishedAt?: string;
+  status: 'published' | 'failed' | 'retrying';
+  retryCount?: number;
+  failReason?: string;
+  isRepeat?: boolean;
+  repeatDays?: number;
+  createdAt: string;
+}
 
 export interface Job {
   id: string;
@@ -62,8 +77,13 @@ export interface Job {
   site?: string;
   line?: string;
   // 예약 등록
-  status?: 'active' | 'reserved';
-  reservedAt?: string; // ISO datetime (Asia/Seoul 기준 입력)
+  status?: 'active' | 'reserved' | 'failed';
+  reservedAt?: string;
+  repeatDays?: number;    // 0=없음, 1/3/7=발행 후 N일 뒤 재등록
+  retryCount?: number;
+  lastRetryAt?: string;
+  publishedAt?: string;
+  failReason?: string;
 }
 
 export interface PendingJob extends Omit<Job, 'id' | 'status'> {
@@ -206,26 +226,59 @@ export async function fbAddReservedJob(job: Omit<Job, 'id'>, reservedAt: string)
       status: 'reserved',
       reservedAt,
       hidden: false,
+      retryCount: 0,
       _createdAt: serverTimestamp(),
     });
     return ref.id;
   } catch (e) {
     console.warn('[Firebase] fbAddReservedJob failed:', e);
     const id = Date.now().toString();
-    localSaveJob({ id, ...job, status: 'reserved', reservedAt });
+    localSaveJob({ id, ...job, status: 'reserved', reservedAt, retryCount: 0 });
     return id;
   }
 }
 
-export async function fbPublishReservedJob(id: string): Promise<void> {
+export async function fbPublishReservedJob(job: Job): Promise<void> {
+  const now = new Date().toISOString();
+  await updateDoc(doc(_db, 'jobs', job.id), {
+    status: 'active',
+    date: now,
+    publishedAt: now,
+    reservedAt: null,
+    retryCount: 0,
+    lastRetryAt: null,
+    failReason: null,
+  });
+  // 반복 예약: 발행 후 N일 뒤 새 공고 자동 생성
+  if (job.repeatDays && job.repeatDays > 0) {
+    const { id: _id, publishedAt: _p, failReason: _f, lastRetryAt: _lr, ...rest } = job;
+    const repeatAt = new Date(Date.now() + job.repeatDays * 24 * 3600000).toISOString();
+    await fbAddReservedJob({ ...rest, status: 'reserved', retryCount: 0, date: now } as Omit<Job, 'id'>, repeatAt);
+  }
+}
+
+export async function fbMarkReservationFailed(id: string, reason: string, currentRetry: number): Promise<void> {
   try {
     await updateDoc(doc(_db, 'jobs', id), {
-      status: 'active',
-      date: new Date().toISOString(),
-      reservedAt: null,
+      status: 'failed',
+      retryCount: currentRetry + 1,
+      lastRetryAt: new Date().toISOString(),
+      failReason: reason.slice(0, 200),
     });
   } catch (e) {
-    console.warn('[Firebase] fbPublishReservedJob failed:', e);
+    console.warn('[Firebase] fbMarkReservationFailed:', e);
+  }
+}
+
+export async function fbRetryReservation(id: string): Promise<void> {
+  try {
+    await updateDoc(doc(_db, 'jobs', id), {
+      status: 'reserved',
+      failReason: null,
+      lastRetryAt: null,
+    });
+  } catch (e) {
+    console.warn('[Firebase] fbRetryReservation:', e);
   }
 }
 
@@ -237,14 +290,80 @@ export async function fbCancelReservation(id: string): Promise<void> {
   }
 }
 
-// 예약 시간이 지난 공고를 자동 게시 — 게시된 건수 반환
-export async function fbCheckAndPublishReserved(jobs: Job[]): Promise<number> {
+export async function fbSaveReservationLog(log: Omit<ReservationLog, 'id'>): Promise<void> {
+  try {
+    await addDoc(LOGS_COL, { ...log, _createdAt: serverTimestamp() });
+  } catch (e) {
+    console.warn('[Firebase] fbSaveReservationLog failed:', e);
+  }
+}
+
+export async function fbLoadReservationLogs(limitCount = 30): Promise<ReservationLog[]> {
+  try {
+    const snap = await getDocs(query(LOGS_COL, orderBy('_createdAt', 'desc')));
+    return snap.docs.slice(0, limitCount).map((d) => ({ id: d.id, ...d.data() } as ReservationLog));
+  } catch (e) {
+    console.warn('[Firebase] fbLoadReservationLogs failed:', e);
+    return [];
+  }
+}
+
+// 예약 시간이 지난 공고 자동 게시 + 실패 재시도
+export async function fbCheckAndPublishReserved(jobs: Job[]): Promise<{ published: number; retried: number }> {
   const now = Date.now();
-  const due = jobs.filter(
-    (j) => j.status === 'reserved' && j.reservedAt && new Date(j.reservedAt).getTime() <= now
+  let published = 0, retried = 0;
+
+  // 1. 예약 시간 도달 → 게시
+  const due = jobs
+    .filter((j) => j.status === 'reserved' && j.reservedAt && new Date(j.reservedAt).getTime() <= now)
+    .sort((a, b) => new Date(a.reservedAt!).getTime() - new Date(b.reservedAt!).getTime());
+
+  for (const job of due) {
+    try {
+      await fbPublishReservedJob(job);
+      published++;
+      await fbSaveReservationLog({
+        jobId: job.id,
+        jobTitle: job.title || '',
+        scheduledAt: job.reservedAt!,
+        publishedAt: new Date().toISOString(),
+        status: 'published',
+        isRepeat: (job.retryCount || 0) > 0,
+        repeatDays: job.repeatDays,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      await fbMarkReservationFailed(job.id, String(e), job.retryCount || 0);
+      await fbSaveReservationLog({
+        jobId: job.id,
+        jobTitle: job.title || '',
+        scheduledAt: job.reservedAt!,
+        status: 'failed',
+        failReason: String(e).slice(0, 200),
+        retryCount: (job.retryCount || 0) + 1,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  // 2. 실패 공고 자동 재시도 (5분 경과, 최대 3회)
+  const toRetry = jobs.filter(
+    (j) =>
+      j.status === 'failed' &&
+      (j.retryCount || 0) < 3 &&
+      j.lastRetryAt &&
+      now - new Date(j.lastRetryAt).getTime() >= 5 * 60000
   );
-  await Promise.all(due.map((j) => fbPublishReservedJob(j.id)));
-  return due.length;
+  for (const job of toRetry) {
+    try {
+      await updateDoc(doc(_db, 'jobs', job.id), { status: 'reserved', reservedAt: new Date(now + 30000).toISOString() });
+      retried++;
+    } catch (e) {
+      await fbMarkReservationFailed(job.id, String(e), job.retryCount || 0);
+    }
+  }
+
+  return { published, retried };
 }
 
 export async function fbLoadPending(): Promise<PendingJob[]> {
