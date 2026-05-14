@@ -61,9 +61,12 @@ export interface Job {
   manager?: string;
   site?: string;
   line?: string;
+  // 예약 등록
+  status?: 'active' | 'reserved';
+  reservedAt?: string; // ISO datetime (Asia/Seoul 기준 입력)
 }
 
-export interface PendingJob extends Omit<Job, 'id'> {
+export interface PendingJob extends Omit<Job, 'id' | 'status'> {
   id: string;
   submittedAt?: string;
   status?: 'pending' | 'approved' | 'rejected';
@@ -193,6 +196,55 @@ export async function fbPurgeOldHiddenJobs(jobs: Job[]): Promise<number> {
   );
   await Promise.all(toPurge.map((j) => deleteDoc(doc(_db, 'jobs', j.id))));
   return toPurge.length;
+}
+
+// ── 예약 등록 ───────────────────────────────────────────────────────────────
+export async function fbAddReservedJob(job: Omit<Job, 'id'>, reservedAt: string): Promise<string> {
+  try {
+    const ref = await addDoc(JOBS_COL, {
+      ...job,
+      status: 'reserved',
+      reservedAt,
+      hidden: false,
+      _createdAt: serverTimestamp(),
+    });
+    return ref.id;
+  } catch (e) {
+    console.warn('[Firebase] fbAddReservedJob failed:', e);
+    const id = Date.now().toString();
+    localSaveJob({ id, ...job, status: 'reserved', reservedAt });
+    return id;
+  }
+}
+
+export async function fbPublishReservedJob(id: string): Promise<void> {
+  try {
+    await updateDoc(doc(_db, 'jobs', id), {
+      status: 'active',
+      date: new Date().toISOString(),
+      reservedAt: null,
+    });
+  } catch (e) {
+    console.warn('[Firebase] fbPublishReservedJob failed:', e);
+  }
+}
+
+export async function fbCancelReservation(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(_db, 'jobs', id));
+  } catch (e) {
+    console.warn('[Firebase] fbCancelReservation failed:', e);
+  }
+}
+
+// 예약 시간이 지난 공고를 자동 게시 — 게시된 건수 반환
+export async function fbCheckAndPublishReserved(jobs: Job[]): Promise<number> {
+  const now = Date.now();
+  const due = jobs.filter(
+    (j) => j.status === 'reserved' && j.reservedAt && new Date(j.reservedAt).getTime() <= now
+  );
+  await Promise.all(due.map((j) => fbPublishReservedJob(j.id)));
+  return due.length;
 }
 
 export async function fbLoadPending(): Promise<PendingJob[]> {

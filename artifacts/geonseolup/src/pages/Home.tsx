@@ -144,7 +144,7 @@ const JOB_EMOJI: Record<string, string> = {
 
 function filterAndSort(jobs: Job[], state: AppState): Job[] {
   const autoHideHours = getAutoHideHours();
-  let list = jobs.filter((j) => !j.hidden && !isAutoHidden(j.date, autoHideHours));
+  let list = jobs.filter((j) => !j.hidden && !isAutoHidden(j.date, autoHideHours) && j.status !== 'reserved');
 
   if (state.keyword) {
     const kw = state.keyword.toLowerCase();
@@ -198,7 +198,7 @@ export default function Home() {
       sort: 'newest',
       page: 1,
       allJobs: SAMPLE_JOBS,
-      filtered: [],
+      filtered: [] as Job[],
     };
     initial.filtered = filterAndSort(SAMPLE_JOBS, initial);
     return initial;
