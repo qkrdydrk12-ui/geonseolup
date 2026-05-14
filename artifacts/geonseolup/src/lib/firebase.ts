@@ -76,6 +76,12 @@ export interface Job {
   manager?: string;
   site?: string;
   line?: string;
+  // 급여 상세 (복합 단가 파싱)
+  dailyWage?: number;
+  extraPay?: number;
+  totalExpectedPay?: number;
+  wageBreakdowns?: Array<{ role: string; wage: number; extraPay: number; extraLabel: string; total: number }>;
+  needsReview?: boolean;
   // 예약 등록
   status?: 'active' | 'reserved' | 'failed';
   reservedAt?: string;

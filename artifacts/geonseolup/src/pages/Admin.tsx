@@ -135,6 +135,75 @@ export interface SalaryCandidate {
   reason: string;
 }
 
+export interface WageBreakdown {
+  role: string;
+  wage: number;
+  extraPay: number;
+  extraLabel: string;
+  total: number;
+}
+
+export interface ComplexSalaryResult {
+  text: string;
+  num: number;
+  score: number;
+  dailyWage: number;
+  extraPay: number;
+  extraLabel: string;
+  totalPay: number;
+  wageBreakdowns: WageBreakdown[];
+  needsReview: boolean;
+  candidates: SalaryCandidate[];
+}
+
+const EXTRA_KW_PAT = '일비|숙식비?|숙박비|식대|유류비|식비';
+const ROLE_KW_PAT = '조공|기공|안전담당자|안담|화기감시자|화감|팀장|팀원|반장|초보|경력자?|기사|용접사|배관공';
+
+/** 암묵적 만원 단위 포함 숫자 파싱: 14.5→145000, 15→150000, 170000→170000 */
+function parseManValue(raw: string): number {
+  const s = raw.replace(/[, ]/g, '');
+  const n = parseFloat(s);
+  if (isNaN(n) || n <= 0) return 0;
+  if (n < 50) return Math.round(n * 10000);
+  if (n >= 50000 && n <= 800000) return Math.round(n);
+  return 0;
+}
+
+/** 일비/숙식비 금액 파싱: 2.5→25000, 2.5만→25000, 3→30000, 25000→25000 */
+function parseExtraManValue(raw: string): number {
+  const s = raw.replace(/[, ]/g, '');
+  const hasMan = /만원?$/.test(s);
+  const n = parseFloat(s.replace(/만원?$/, ''));
+  if (isNaN(n) || n <= 0) return 0;
+  if (hasMan || n < 50) return Math.round(n * 10000);
+  if (n >= 1000 && n <= 200000) return Math.round(n);
+  return 0;
+}
+
+function normalizeRoleName(r: string): string {
+  const MAP: Record<string, string> = { 안담: '안전담당자', 화감: '화기감시자' };
+  return MAP[r] ?? r;
+}
+
+function toManStr(n: number): string {
+  const m = Math.round((n / 10000) * 10) / 10;
+  return m % 1 === 0 ? `${m}만` : `${m}만`;
+}
+
+function buildWageDisplayText(breakdowns: WageBreakdown[]): string {
+  const parts = breakdowns.map(bd => {
+    const wStr = toManStr(bd.wage);
+    if (bd.extraPay > 0) {
+      const eStr = toManStr(bd.extraPay);
+      const tStr = toManStr(bd.total);
+      const base = bd.role ? `${bd.role} ${wStr}` : wStr;
+      return `${base} + ${bd.extraLabel} ${eStr} (총 ${tStr})`;
+    }
+    return bd.role ? `${bd.role} ${wStr}` : formatSalary(bd.wage);
+  });
+  return parts.join(' / ');
+}
+
 /** 숫자형 표시: 170,000원 */
 function formatSalary(num: number): string {
   return num.toLocaleString('ko-KR') + '원';
@@ -249,6 +318,123 @@ function extractSalary(text: string): { text: string; num: number; score: number
   return { text: formatSalary(best.num), num: best.num, score: best.score, candidates };
 }
 
+/** 건설 구인글 복합 단가 추출 (기본단가 + 일비/숙식비 분리, 역할별 단가) */
+function extractComplexSalary(text: string): ComplexSalaryResult | null {
+  let cleaned = text;
+  for (const pat of NOISE_PATS) cleaned = cleaned.replace(new RegExp(pat.source, pat.flags), ' ');
+
+  const wageBreakdowns: WageBreakdown[] = [];
+  const candidates: SalaryCandidate[] = [];
+  const seenNums = new Set<number>();
+  let bestScore = 0;
+
+  function addCand(raw: string, num: number, score: number, reason: string) {
+    if (num < 50000 || num > 800000) return;
+    if (seenNums.has(num)) {
+      const i = candidates.findIndex((c) => c.num === num);
+      if (i >= 0 && candidates[i].score < score) candidates[i] = { raw, num, score, reason };
+      return;
+    }
+    seenNums.add(num);
+    candidates.push({ raw, num, score, reason });
+  }
+
+  let m: RegExpExecArray | null;
+
+  // ── A: 역할 + 기본단가 + '+' + 일비/숙식비 ─────────────────────────────────
+  // 예: "조공 15+일비2.5", "안담단가 : 14.5+숙식3", "조공 15 + 숙식 2.5"
+  const roleExtraPat = new RegExp(
+    `(${ROLE_KW_PAT})\\s*단가?\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?\\s*\\+\\s*(${EXTRA_KW_PAT})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?`,
+    'gi'
+  );
+  while ((m = roleExtraPat.exec(cleaned)) !== null) {
+    const role = normalizeRoleName(m[1]);
+    const wage = parseManValue(m[2]);
+    const extraLabel = m[3];
+    const extra = parseExtraManValue(m[4]);
+    if (wage <= 0) continue;
+    const total = wage + extra;
+    if (!wageBreakdowns.find((b) => b.role === role)) {
+      wageBreakdowns.push({ role, wage, extraPay: extra, extraLabel: extra > 0 ? extraLabel : '', total });
+    }
+    addCand(m[0], total || wage, 95, `역할 "${role}" + ${extraLabel}`);
+    if (bestScore < 95) bestScore = 95;
+  }
+
+  // ── B: 역할 + 기본단가 (extra 없음) ──────────────────────────────────────
+  // 예: "조공 15만", "팀원단가:16.5"
+  if (wageBreakdowns.length === 0) {
+    const roleSimplePat = new RegExp(
+      `(${ROLE_KW_PAT})\\s*단가?\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*만원?)?(?![\\s]*[+\\d])`,
+      'gi'
+    );
+    while ((m = roleSimplePat.exec(cleaned)) !== null) {
+      const role = normalizeRoleName(m[1]);
+      const wage = parseManValue(m[2]);
+      if (wage <= 0) continue;
+      if (!wageBreakdowns.find((b) => b.role === role)) {
+        wageBreakdowns.push({ role, wage, extraPay: 0, extraLabel: '', total: wage });
+        addCand(m[0], wage, 85, `역할 "${role}"`);
+        if (bestScore < 85) bestScore = 85;
+      }
+    }
+  }
+
+  // ── C: 단순 기본단가 + '+' + 일비/숙식비 (역할 없음) ─────────────────────
+  // 예: "15+일비2.5", "16 + 숙식비 3", "17만 + 일비 2만"
+  const simpleExtraPat = new RegExp(
+    `(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?\\s*\\+\\s*(${EXTRA_KW_PAT})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?`,
+    'gi'
+  );
+  while ((m = simpleExtraPat.exec(cleaned)) !== null) {
+    const wage = parseManValue(m[1]);
+    const extraLabel = m[2];
+    const extra = parseExtraManValue(m[3]);
+    if (wage <= 0) continue;
+    const total = wage + extra;
+    if (wageBreakdowns.length === 0) {
+      wageBreakdowns.push({ role: '', wage, extraPay: extra, extraLabel, total });
+    }
+    addCand(m[0], total || wage, 88, `기본단가 + ${extraLabel}`);
+    if (bestScore < 88) bestScore = 88;
+  }
+
+  // ── Fallback: 기존 extractSalary 로직 사용 ───────────────────────────────
+  if (candidates.length === 0) {
+    const existing = extractSalary(text);
+    if (!existing) return null;
+    return {
+      text: existing.text,
+      num: existing.num,
+      score: existing.score,
+      dailyWage: existing.num,
+      extraPay: 0,
+      extraLabel: '',
+      totalPay: existing.num,
+      wageBreakdowns: [{ role: '', wage: existing.num, extraPay: 0, extraLabel: '', total: existing.num }],
+      needsReview: existing.score < 70,
+      candidates: existing.candidates,
+    };
+  }
+
+  candidates.sort((a, b) => b.score - a.score || b.num - a.num);
+  const primary = wageBreakdowns[0];
+  const displayText = buildWageDisplayText(wageBreakdowns);
+
+  return {
+    text: displayText,
+    num: candidates[0].num,
+    score: bestScore,
+    dailyWage: primary.wage,
+    extraPay: primary.extraPay,
+    extraLabel: primary.extraLabel,
+    totalPay: primary.total,
+    wageBreakdowns,
+    needsReview: bestScore < 70,
+    candidates,
+  };
+}
+
 function makeNote(text: string): string {
   const sentences: string[] = [];
 
@@ -276,8 +462,8 @@ function makeNote(text: string): string {
   return sentences.join(' ').slice(0, 60);
 }
 
-function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[] } {
-  const r: Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[] } = { originalText: text };
+function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult } {
+  const r: Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult } = { originalText: text };
 
   // ── 제목: 첫 줄 이모지·특수문자 제거 ──
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -313,28 +499,25 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   // 화재/화기/감시 키워드가 있으면 화기감시자로 통합
   if (/화재|화기|감시/.test(text)) r.job = '화기감시자';
 
-  // ── 급여 ──
-  const sal = extractSalary(text);
+  // ── 급여 (복합 단가 추출) ──
+  const sal = extractComplexSalary(text);
   if (sal) {
     r.salary = sal.text;
     r.salaryNum = sal.num;
+    r.dailyWage = sal.dailyWage || undefined;
+    r.extraPay = sal.extraPay || undefined;
+    r.totalExpectedPay = sal.totalPay || undefined;
+    r.needsReview = sal.needsReview || undefined;
+    if (sal.wageBreakdowns.some((b) => b.role)) {
+      r.wageBreakdowns = sal.wageBreakdowns;
+    }
     r._salaryCandidates = sal.candidates;
-    if (sal.candidates.length > 1) {
+    r._complexSalary = sal;
+    if (sal.extraPay > 0) {
+      r._salaryCalc = `기본 ${toManStr(sal.dailyWage)} + ${sal.extraLabel} ${toManStr(sal.extraPay)} = 총 ${formatSalary(sal.totalPay)}`;
+    } else if (sal.candidates.length > 1) {
       r._salaryCalc = `신뢰도 ${sal.score}점 · 후보 ${sal.candidates.length}개 감지`;
     }
-  }
-
-  // ── 급여 합산 계산 (기본 N만 + 식대/일비 M만[K천]) ──
-  const calcM = text.match(/([\d.]+)\s*만원?\s*\+\s*(식대|일비)\s*([\d.]+)\s*만(?:\s*(\d)\s*천)?/);
-  if (calcM) {
-    const base = parseFloat(calcM[1]);
-    const label = calcM[2];
-    const addonMan = parseFloat(calcM[3]);
-    const addonChun = parseInt(calcM[4] || '0');
-    const total = base + addonMan + addonChun * 0.1;
-    const totalNum = Math.round(total * 10000);
-    const addonStr = addonChun ? `${addonMan}만${addonChun}천` : `${addonMan}만`;
-    r._salaryCalc = `기본 ${base}만 + ${label} ${addonStr} = 총 ${formatSalary(totalNum)}`;
   }
 
   // ── 전화번호 (-·. 구분자 모두 지원) ──
@@ -407,6 +590,8 @@ function emptyForm(): Partial<Job> {
     title: '', region: '', job: '', weldSub: '', weldTest: '',
     salary: '', meal: '', lodging: '', contact: '', detail: '', originalText: '',
     company: '', headcount: '', ageLimit: '', startDate: '', manager: '', site: '', line: '',
+    dailyWage: undefined, extraPay: undefined, totalExpectedPay: undefined,
+    wageBreakdowns: undefined, needsReview: undefined,
   };
 }
 
@@ -434,7 +619,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Partial<Job>>(emptyForm());
   const [parseText, setParseText] = useState('');
-  const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[] }) | null>(null);
+  const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState('');
   const [showReserveModal, setShowReserveModal] = useState(false);
@@ -904,8 +1089,8 @@ export default function Admin() {
     if (!parseText.trim()) return;
     const parsed = parseJobText(parseText);
     setParseResult(parsed);
-    // _salaryCalc, _salaryCandidates는 표시용이므로 form에는 제외
-    const { _salaryCalc: _sc, _salaryCandidates: _cands, ...formData } = parsed;
+    // 표시 전용 필드 제외
+    const { _salaryCalc: _sc, _salaryCandidates: _cands, _complexSalary: _cs, ...formData } = parsed;
     setForm((prev) => ({ ...prev, ...formData }));
   }
 
@@ -1304,52 +1489,109 @@ export default function Admin() {
               {parseResult && (() => {
                 const LABEL: Record<string, string> = {
                   title: '📝 제목', region: '📍 지역', job: '🔧 직종',
-                  salary: '💰 급여', salaryNum: '💰 급여(숫자)', contact: '📞 연락처',
+                  salary: '💰 급여', contact: '📞 연락처',
                   meal: '🍱 식사', lodging: '🏠 숙박', weldSub: '🔩 용접종류', weldTest: '📋 시험',
                   company: '🏢 회사명', headcount: '👥 모집인원',
                   ageLimit: '🎂 나이제한', startDate: '📅 투입시기', manager: '👤 담당자',
                   site: '🏭 현장', line: '🔢 라인',
                 };
-                const SKIP = new Set(['originalText', '_salaryCalc', '_salaryCandidates', 'salaryNum']);
+                const SKIP = new Set([
+                  'originalText', '_salaryCalc', '_salaryCandidates', '_complexSalary',
+                  'salaryNum', 'dailyWage', 'extraPay', 'totalExpectedPay', 'wageBreakdowns', 'needsReview',
+                ]);
                 const entries = Object.entries(parseResult).filter(([k, v]) => !SKIP.has(k) && v && String(v) !== '0');
+                const cs = parseResult._complexSalary;
                 return (
                   <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-[10px] p-4 space-y-3">
                     <h4 className="text-sm font-bold text-blue-800">✅ 파싱 결과 — 아래 폼에 자동 반영됐습니다</h4>
-                    {/* 단가 후보 카드 */}
-                    {parseResult._salaryCandidates && parseResult._salaryCandidates.length > 0 && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                        <div className="text-xs font-bold text-amber-800 mb-2">
-                          💰 단가 후보 ({parseResult._salaryCandidates.length}개) — 최선 신뢰도 {parseResult._salaryCandidates[0]?.score}점
+
+                    {/* ── 급여 분석 카드 ── */}
+                    {cs && (
+                      <div className={`rounded-lg border px-3 py-2.5 ${cs.needsReview ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-amber-800">
+                            💰 급여 분석 — 신뢰도 {cs.score}점
+                          </span>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${cs.needsReview ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
+                            {cs.needsReview ? '⚠️ 검수 필요' : '✅ 자동 완성'}
+                          </span>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {parseResult._salaryCandidates.map((c, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              title={`출처: "${c.raw}" / ${c.reason}`}
-                              className={`text-xs px-2.5 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer font-[inherit] ${
-                                i === 0
-                                  ? 'bg-amber-400 border-amber-500 text-amber-900'
-                                  : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'
-                              }`}
-                              onClick={() => {
-                                setField('salary', c.num.toLocaleString('ko-KR') + '원');
-                                setForm((prev) => ({ ...prev, salaryNum: c.num }));
-                                showToast(`✅ ${c.num.toLocaleString('ko-KR')}원으로 변경됐습니다`);
-                              }}
-                            >
-                              {c.num.toLocaleString('ko-KR')}원{i === 0 ? ' ★' : ''} <span className="opacity-60">({c.score}점)</span>
-                            </button>
-                          ))}
-                        </div>
+
+                        {/* 역할별 단가 분리 표시 */}
+                        {cs.wageBreakdowns.length > 0 && (
+                          <div className="space-y-1.5 mb-2">
+                            {cs.wageBreakdowns.map((bd, i) => (
+                              <div key={i} className="bg-white rounded-lg px-3 py-2 border border-amber-200 text-xs">
+                                <div className="flex items-center justify-between flex-wrap gap-1">
+                                  <span className="font-bold text-amber-900">{bd.role || '기본단가'}</span>
+                                  <span className="text-amber-700 font-semibold">
+                                    {toManStr(bd.wage)}원
+                                    {bd.extraPay > 0 && (
+                                      <>
+                                        <span className="text-gray-400 mx-1">+</span>
+                                        <span>{bd.extraLabel} {toManStr(bd.extraPay)}원</span>
+                                        <span className="ml-1 font-bold text-orange-600">= 총 {toManStr(bd.total)}원</span>
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                                {bd.extraPay > 0 && (
+                                  <div className="text-gray-400 mt-0.5 text-[10px]">
+                                    기본 {bd.wage.toLocaleString()}원 + {bd.extraLabel} {bd.extraPay.toLocaleString()}원 = 총 {bd.total.toLocaleString()}원
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* 단가 후보 클릭 버튼 */}
+                        {cs.candidates.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {cs.candidates.map((c, i) => (
+                              <button key={i} type="button"
+                                title={`출처: "${c.raw}" · ${c.reason}`}
+                                className={`text-xs px-2.5 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer font-[inherit] ${
+                                  i === 0 ? 'bg-amber-400 border-amber-500 text-amber-900' : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'
+                                }`}
+                                onClick={() => {
+                                  const bd = cs.wageBreakdowns[i] ?? cs.wageBreakdowns[0];
+                                  const displayText = bd ? buildWageDisplayText([bd]) : c.num.toLocaleString('ko-KR') + '원';
+                                  setField('salary', displayText);
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    salaryNum: c.num,
+                                    dailyWage: bd?.wage,
+                                    extraPay: bd?.extraPay || undefined,
+                                    totalExpectedPay: bd?.total,
+                                  }));
+                                  showToast(`✅ ${toManStr(c.num)}원으로 변경됐습니다`);
+                                }}
+                              >
+                                {toManStr(c.num)}원{i === 0 ? ' ★' : ''} <span className="opacity-60">({c.score}점)</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <p className="text-[11px] text-amber-600 mt-1.5">★ 후보를 클릭하면 급여 값이 변경됩니다</p>
+
+                        {/* 검수 필요 경고 */}
+                        {cs.needsReview && (
+                          <div className="mt-2 bg-red-100 border border-red-200 rounded-lg px-3 py-2 text-[11px] text-red-700 font-semibold">
+                            ⚠️ 신뢰도 낮음 — 원문 확인 후 급여 값을 직접 수정해주세요
+                          </div>
+                        )}
                       </div>
                     )}
+
+                    {/* 계산 요약 */}
                     {parseResult._salaryCalc && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs font-bold text-orange-700">
-                        💡 급여 계산: {parseResult._salaryCalc}
+                        💡 {parseResult._salaryCalc}
                       </div>
                     )}
+
+                    {/* 나머지 파싱 필드 */}
                     <div className="flex flex-wrap gap-2">
                       {entries.map(([k, v]) => (
                         <span key={k} className="bg-white border border-blue-200 text-blue-800 text-xs px-2.5 py-1 rounded-lg font-medium">
@@ -1357,7 +1599,7 @@ export default function Admin() {
                         </span>
                       ))}
                     </div>
-                    {entries.length === 0 && (
+                    {entries.length === 0 && !cs && (
                       <p className="text-xs text-blue-600">파싱된 항목이 없습니다. 원문을 확인해주세요.</p>
                     )}
                   </div>
