@@ -124,51 +124,125 @@ function stripEmoji(s: string): string {
     .trim();
 }
 
-function formatSalary(man: number, chun: number): string {
-  if (chun > 0) return `${man}만${chun}천원`;
-  return `${man}만원`;
+export interface SalaryCandidate {
+  raw: string;
+  num: number;
+  score: number;
+  reason: string;
 }
 
-/** 텍스트에서 만원 단위 급여를 파싱해 { text, num } 반환 */
-function extractSalary(text: string): { text: string; num: number } | null {
-  const t = text.replace(/,/g, '');
+/** 숫자형 표시: 170,000원 */
+function formatSalary(num: number): string {
+  return num.toLocaleString('ko-KR') + '원';
+}
 
-  // 1순위: N만M천 (예: 18만5천) — 일비·수당 등 소액(5만 미만)은 제외
-  const mMC = t.match(/(\d+)\s*만\s*(\d+)\s*천/);
-  if (mMC) {
-    const man = parseInt(mMC[1]), chun = parseInt(mMC[2]);
-    if (man >= 5) return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
+const SALARY_KW = '일당|단가|급여|임금|공임|일급|조공|기공|안전담당자|화기감시자|초보|팀원|팀장';
+
+const NOISE_PATS: RegExp[] = [
+  /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/g,  // 전화번호
+  /\d{4}[-./]\d{1,2}[-./]\d{1,2}/g,          // YYYY-MM-DD 날짜
+  /\d{1,2}월\s*\d{1,2}일/g,                  // N월N일 날짜
+  /급여일\s*\d+/g,                             // 급여일
+  /\d+\s*개월/g,                               // 개월수
+  /\d{1,2}:\d{2}/g,                           // HH:MM 시간
+  /P[1-9](?:라인|LINE)?/gi,                    // P라인 현장명
+  /\d+\s*명/g,                                 // 인원수
+];
+
+/** 단일 숫자 문자열 → 원 단위 정수 정규화 */
+function normalizeSalaryNum(s: string): number | null {
+  s = s.trim().replace(/\s/g, '');
+  // N만N천: 18만5천
+  let m = s.match(/^(\d+)만(\d+)천$/);
+  if (m) return parseInt(m[1]) * 10000 + parseInt(m[2]) * 1000;
+  // N.N만 / N만원?: 16.5만, 17만, 17만원
+  m = s.match(/^([\d.]+)만원?$/);
+  if (m) return Math.round(parseFloat(m[1]) * 10000);
+  // 170,000 — 쉼표 천단위 구분자
+  m = s.match(/^(\d{2,3}),(\d{3})$/);
+  if (m) return parseInt(m[1]) * 1000 + parseInt(m[2]);
+  // 170.000 — 점 천단위 구분자 (유럽식)
+  m = s.match(/^(\d{2,3})\.(\d{3})$/);
+  if (m) return parseInt(m[1]) * 1000 + parseInt(m[2]);
+  // 순수 정수 (170000, 140000)
+  m = s.match(/^(\d+)원?$/);
+  if (m) {
+    const n = parseInt(m[1]);
+    if (n >= 50000 && n <= 800000) return n;
+    return null;
   }
-
-  // 2순위: N.M만 (예: 18.5만, 16.5)
-  const mDec = t.match(/([\d]+\.[\d]+)\s*만?/);
-  if (mDec) {
-    const val = parseFloat(mDec[1]);
-    if (val >= 10 && val <= 50) {
-      const man = Math.floor(val), chun = Math.round((val - man) * 10);
-      return { text: formatSalary(man, chun), num: man * 10000 + chun * 1000 };
-    }
-  }
-
-  // 3순위: N만 (예: 20만, 180만 제외)
-  const mInt = t.match(/(\d{2,3})\s*만/);
-  if (mInt) {
-    const man = parseInt(mInt[1]);
-    return { text: formatSalary(man, 0), num: man * 10000 };
-  }
-
-  // 4순위: 단가 N / 일당 N (10~49 사이 정수, 전화번호·날짜 제외, 키워드 필수)
-  // 전화번호(010·011·016·019 등)는 무시
-  const noPhone = t.replace(/0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g, '');
-  const mShort = noPhone.match(/(?:단가|일당|일급|공임)\s*([1-4][0-9])(?![0-9])/);
-  if (mShort) {
-    const num = parseInt(mShort[1]);
-    if (num >= 10 && num <= 49) {
-      return { text: formatSalary(num, 0), num: num * 10000 };
-    }
-  }
-
   return null;
+}
+
+/** 텍스트에서 단가(일당) 후보 배열과 최선 결과 반환 */
+function extractSalary(text: string): { text: string; num: number; score: number; candidates: SalaryCandidate[] } | null {
+  let cleaned = text;
+  for (const pat of NOISE_PATS) cleaned = cleaned.replace(new RegExp(pat.source, pat.flags), ' ');
+
+  const candidates: SalaryCandidate[] = [];
+  const seenNums = new Set<number>();
+
+  function add(raw: string, num: number, score: number, reason: string) {
+    if (num < 50000 || num > 800000) return;
+    if (seenNums.has(num)) {
+      const idx = candidates.findIndex((c) => c.num === num);
+      if (idx >= 0 && candidates[idx].score < score) candidates[idx] = { raw, num, score, reason };
+      return;
+    }
+    seenNums.add(num);
+    candidates.push({ raw, num, score, reason });
+  }
+
+  let m: RegExpExecArray | null;
+
+  // ── 1순위: 키워드 + 명시적 금액 ─────────────────────────────────────────
+  // 예: "조공 15만", "안전담당자 170,000", "초보 140000"
+  const kwExplicit = new RegExp(
+    `(${SALARY_KW})\\s*(?:[가-힣]{0,6}\\s*)?(\\d{1,3}(?:[.,]\\d{3})?(?:\\.\\d+)?\\s*만원?|\\d{5,6}|\\d{2,3}[.,]\\d{3})`,
+    'gi'
+  );
+  while ((m = kwExplicit.exec(cleaned)) !== null) {
+    const num = normalizeSalaryNum(m[2].trim());
+    if (num) add(m[0], num, 90, `키워드 "${m[1]}" + 금액`);
+  }
+
+  // ── 2순위: 키워드 + 만원단위 소수/정수 (일당 17, 팀원 단가 16.5) ──────────
+  const kwImplicit = new RegExp(
+    `(${SALARY_KW})\\s*(?:[가-힣]{0,6}\\s*)?((?:1[0-9]|[2-4][0-9])(?:\\.\\d+)?)(?![0-9만천,\\.원])`,
+    'gi'
+  );
+  while ((m = kwImplicit.exec(cleaned)) !== null) {
+    const val = parseFloat(m[2]);
+    if (val >= 10 && val < 50) add(m[0], Math.round(val * 10000), 85, `키워드 "${m[1]}" + 만원단위`);
+  }
+
+  // ── 3순위: N만N천 / N.N만 / N만 표현 ─────────────────────────────────────
+  const manPat = /(\d{1,3})\s*만\s*(\d)\s*천|([\d]{1,3}(?:\.\d+)?)\s*만원?/g;
+  while ((m = manPat.exec(cleaned)) !== null) {
+    const num = normalizeSalaryNum(m[0].replace(/\s/g, ''));
+    if (num) add(m[0], num, 70, '만원 표현');
+  }
+
+  // ── 4순위: NNN,NNN / NNN.NNN (쉼표·점 천단위 구분자) ──────────────────────
+  const sepPat = /\b(\d{2,3})[.,](\d{3})\b/g;
+  while ((m = sepPat.exec(cleaned)) !== null) {
+    const num = normalizeSalaryNum(m[0]);
+    if (num) add(m[0], num, 75, '구분자 금액');
+  }
+
+  // ── 5순위 (AI 휴리스틱): 순수 5~6자리 정수 (170000, 140000) ──────────────
+  const intPat = /\b(\d{5,6})\b/g;
+  while ((m = intPat.exec(cleaned)) !== null) {
+    const num = parseInt(m[1]);
+    if (num >= 50000 && num <= 800000) add(m[1], num, 55, '숫자 직접 표기');
+  }
+
+  if (candidates.length === 0) return null;
+
+  // 점수 내림차순, 동점이면 금액 높은 순
+  candidates.sort((a, b) => (b.score !== a.score ? b.score - a.score : b.num - a.num));
+  const best = candidates[0];
+  return { text: formatSalary(best.num), num: best.num, score: best.score, candidates };
 }
 
 function makeNote(text: string): string {
@@ -198,8 +272,8 @@ function makeNote(text: string): string {
   return sentences.join(' ').slice(0, 60);
 }
 
-function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
-  const r: Partial<Job> & { _salaryCalc?: string } = { originalText: text };
+function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[] } {
+  const r: Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[] } = { originalText: text };
 
   // ── 제목: 첫 줄 이모지·특수문자 제거 ──
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -237,7 +311,14 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
 
   // ── 급여 ──
   const sal = extractSalary(text);
-  if (sal) { r.salary = sal.text; r.salaryNum = sal.num; }
+  if (sal) {
+    r.salary = sal.text;
+    r.salaryNum = sal.num;
+    r._salaryCandidates = sal.candidates;
+    if (sal.candidates.length > 1) {
+      r._salaryCalc = `신뢰도 ${sal.score}점 · 후보 ${sal.candidates.length}개 감지`;
+    }
+  }
 
   // ── 급여 합산 계산 (기본 N만 + 식대/일비 M만[K천]) ──
   const calcM = text.match(/([\d.]+)\s*만원?\s*\+\s*(식대|일비)\s*([\d.]+)\s*만(?:\s*(\d)\s*천)?/);
@@ -247,9 +328,9 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string } {
     const addonMan = parseFloat(calcM[3]);
     const addonChun = parseInt(calcM[4] || '0');
     const total = base + addonMan + addonChun * 0.1;
-    const totalMan = Math.floor(total), totalChun = Math.round((total - totalMan) * 10);
+    const totalNum = Math.round(total * 10000);
     const addonStr = addonChun ? `${addonMan}만${addonChun}천` : `${addonMan}만`;
-    r._salaryCalc = `기본 ${base}만 + ${label} ${addonStr} = 총 ${formatSalary(totalMan, totalChun)}`;
+    r._salaryCalc = `기본 ${base}만 + ${label} ${addonStr} = 총 ${formatSalary(totalNum)}`;
   }
 
   // ── 전화번호 (-·. 구분자 모두 지원) ──
@@ -349,7 +430,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Partial<Job>>(emptyForm());
   const [parseText, setParseText] = useState('');
-  const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string }) | null>(null);
+  const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[] }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState('');
   const [showReserveModal, setShowReserveModal] = useState(false);
@@ -761,8 +842,8 @@ export default function Admin() {
     if (!parseText.trim()) return;
     const parsed = parseJobText(parseText);
     setParseResult(parsed);
-    // _salaryCalc는 표시용이므로 form에는 제외
-    const { _salaryCalc: _sc, ...formData } = parsed;
+    // _salaryCalc, _salaryCandidates는 표시용이므로 form에는 제외
+    const { _salaryCalc: _sc, _salaryCandidates: _cands, ...formData } = parsed;
     setForm((prev) => ({ ...prev, ...formData }));
   }
 
@@ -1143,11 +1224,41 @@ export default function Admin() {
                   ageLimit: '🎂 나이제한', startDate: '📅 투입시기', manager: '👤 담당자',
                   site: '🏭 현장', line: '🔢 라인',
                 };
-                const SKIP = new Set(['originalText', '_salaryCalc', 'salaryNum']);
+                const SKIP = new Set(['originalText', '_salaryCalc', '_salaryCandidates', 'salaryNum']);
                 const entries = Object.entries(parseResult).filter(([k, v]) => !SKIP.has(k) && v && String(v) !== '0');
                 return (
                   <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-[10px] p-4 space-y-3">
                     <h4 className="text-sm font-bold text-blue-800">✅ 파싱 결과 — 아래 폼에 자동 반영됐습니다</h4>
+                    {/* 단가 후보 카드 */}
+                    {parseResult._salaryCandidates && parseResult._salaryCandidates.length > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                        <div className="text-xs font-bold text-amber-800 mb-2">
+                          💰 단가 후보 ({parseResult._salaryCandidates.length}개) — 최선 신뢰도 {parseResult._salaryCandidates[0]?.score}점
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {parseResult._salaryCandidates.map((c, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              title={`출처: "${c.raw}" / ${c.reason}`}
+                              className={`text-xs px-2.5 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer font-[inherit] ${
+                                i === 0
+                                  ? 'bg-amber-400 border-amber-500 text-amber-900'
+                                  : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'
+                              }`}
+                              onClick={() => {
+                                setField('salary', c.num.toLocaleString('ko-KR') + '원');
+                                setForm((prev) => ({ ...prev, salaryNum: c.num }));
+                                showToast(`✅ ${c.num.toLocaleString('ko-KR')}원으로 변경됐습니다`);
+                              }}
+                            >
+                              {c.num.toLocaleString('ko-KR')}원{i === 0 ? ' ★' : ''} <span className="opacity-60">({c.score}점)</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-amber-600 mt-1.5">★ 후보를 클릭하면 급여 값이 변경됩니다</p>
+                      </div>
+                    )}
                     {parseResult._salaryCalc && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs font-bold text-orange-700">
                         💡 급여 계산: {parseResult._salaryCalc}
