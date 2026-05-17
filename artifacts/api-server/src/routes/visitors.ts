@@ -9,7 +9,12 @@ const SALT = "geonseolup_visitor_2026";
 
 const pool = new Pool({
   connectionString: process.env["DATABASE_URL"],
-  ssl: process.env["NODE_ENV"] === "production" ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false },
+});
+
+// idle 클라이언트 에러가 프로세스를 죽이지 않도록 처리
+pool.on("error", (err) => {
+  console.error("[DB Pool] Unexpected idle client error:", err.message);
 });
 
 // KST (UTC+9) 기준 날짜 / 시간
