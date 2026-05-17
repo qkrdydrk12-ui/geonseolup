@@ -1050,31 +1050,41 @@ export default function Admin() {
       showToast(`⚡ 동시간대 분산: ${formatKST(reservedAt)}으로 조정됩니다`);
     }
     setSubmitting(true);
-    const jobData: Omit<Job, 'id'> = {
-      ...(form as Omit<Job, 'id'>),
-      salaryNum: parseSalaryNum(form.salary || ''),
-      date: new Date().toISOString(),
-      hidden: false,
-      repeatDays,
-      retryCount: 0,
-    };
-    await fbAddReservedJob(jobData, reservedAt);
-    await fbSaveReservationLog({
-      jobId: '',
-      jobTitle: form.title || '',
-      scheduledAt: reservedAt,
-      status: 'published',
-      repeatDays: repeatDays || undefined,
-      isRepeat: false,
-      createdAt: new Date().toISOString(),
-    });
-    const repeatLabel = repeatDays > 0 ? ` (${repeatDays}일 반복 설정)` : '';
-    showToast(`✅ ${formatKST(reservedAt)} 예약됐습니다${repeatLabel}`);
-    setShowReserveModal(false);
-    applySmartClear(form);
-    if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
-    loadJobs(); // 백그라운드 업데이트
-    setSubmitting(false);
+    try {
+      const jobData: Omit<Job, 'id'> = {
+        ...(form as Omit<Job, 'id'>),
+        salaryNum: parseSalaryNum(form.salary || ''),
+        date: new Date().toISOString(),
+        hidden: false,
+        repeatDays,
+        retryCount: 0,
+        dispatchMode: 'manual' as const,
+      };
+      console.log('[Reserve] Firebase 저장 시작:', form.title, '→', formatKST(reservedAt));
+      const savedId = await fbAddReservedJob(jobData, reservedAt);
+      console.log('[Reserve] Firebase 저장 완료, id:', savedId, 'reservedAt:', reservedAt);
+      await fbSaveReservationLog({
+        jobId: savedId,
+        jobTitle: form.title || '',
+        scheduledAt: reservedAt,
+        status: 'published',
+        repeatDays: repeatDays || undefined,
+        isRepeat: false,
+        createdAt: new Date().toISOString(),
+      });
+      const repeatLabel = repeatDays > 0 ? ` (${repeatDays}일 반복 설정)` : '';
+      showToast(`✅ ${formatKST(reservedAt)} 예약됐습니다${repeatLabel}`);
+      setShowReserveModal(false);
+      applySmartClear(form);
+      if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+      await loadJobs();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Reserve] 예약 등록 실패:', msg, err);
+      showToast(`❌ 예약 실패: ${msg.slice(0, 60)}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   // 예약 취소
@@ -1240,19 +1250,31 @@ export default function Admin() {
         const delayMin = calcNaturalDelay(pendingCount);
         let reservedAt = new Date(Date.now() + delayMin * 60000).toISOString();
         // 충돌 방지: 기존 예약과 3분 이내 겹치면 뒤로 밀기
-        const reserved = jobs.filter((j) => j.status === 'reserved' && j.reservedAt);
+        const reservedList = jobs.filter((j) => j.status === 'reserved' && j.reservedAt);
         const targetMs = new Date(reservedAt).getTime();
-        const conflicting = reserved.filter((j) => Math.abs(new Date(j.reservedAt!).getTime() - targetMs) < 3 * 60000);
+        const conflicting = reservedList.filter((j) => Math.abs(new Date(j.reservedAt!).getTime() - targetMs) < 3 * 60000);
         if (conflicting.length > 0) {
           const latestMs = Math.max(...conflicting.map((j) => new Date(j.reservedAt!).getTime()));
           reservedAt = new Date(latestMs + (Math.floor(Math.random() * 3) + 2) * 60000).toISOString();
         }
-        await fbAddReservedJob({ ...baseJob, dispatchMode: 'natural' }, reservedAt);
+        console.log('[Natural] 랜덤 지연:', Math.round(delayMin), '분 / 예정 발행:', reservedAt);
+        console.log('[Natural] Firebase 저장 시작 (dispatchMode: natural):', form.title);
+        const savedId = await fbAddReservedJob({ ...baseJob, dispatchMode: 'natural' }, reservedAt);
+        console.log('[Natural] Firebase 저장 완료, id:', savedId, '/ 스케줄러가 발행 예정:', formatKST(reservedAt));
+        // 예약 로그 저장 (예약 로그 탭에 표시되도록)
+        await fbSaveReservationLog({
+          jobId: savedId,
+          jobTitle: form.title || '',
+          scheduledAt: reservedAt,
+          status: 'published',
+          isRepeat: false,
+          createdAt: new Date().toISOString(),
+        });
         updateAcHistory();
         await loadJobs();
         const dispMin = Math.round(delayMin);
-        const dispLabel = dispMin <= 0 ? '곧' : `${dispMin}분 후`;
-        showToast(`🎲 ${dispLabel} 자동 발행 예정 (랜덤 분산)`);
+        const dispLabel = dispMin <= 0 ? '곧' : `약 ${dispMin}분 후`;
+        showToast(`🎲 ${dispLabel} 자동 발행 예정 — ${formatKST(reservedAt)}`);
         applySmartClear(form);
       } else {
         // ── 즉시 발행 ──

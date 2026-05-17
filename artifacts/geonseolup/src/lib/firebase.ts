@@ -224,22 +224,20 @@ export async function fbPurgeOldHiddenJobs(jobs: Job[]): Promise<number> {
 
 // ── 예약 등록 ───────────────────────────────────────────────────────────────
 export async function fbAddReservedJob(job: Omit<Job, 'id'>, reservedAt: string): Promise<string> {
-  try {
-    const ref = await addDoc(JOBS_COL, {
+  // undefined 필드 제거 (Firestore는 undefined 값 거부 → 쓰기 실패 원인)
+  const clean = Object.fromEntries(
+    Object.entries({
       ...job,
       status: 'reserved',
       reservedAt,
       hidden: false,
       retryCount: 0,
       _createdAt: serverTimestamp(),
-    });
-    return ref.id;
-  } catch (e) {
-    console.warn('[Firebase] fbAddReservedJob failed:', e);
-    const id = Date.now().toString();
-    localSaveJob({ id, ...job, status: 'reserved', reservedAt, retryCount: 0 });
-    return id;
-  }
+    }).filter(([, v]) => v !== undefined)
+  );
+  // 에러는 호출자에게 전파 (silent fallback 제거 — localStorage에만 저장되면 스케줄러가 못 찾음)
+  const ref = await addDoc(JOBS_COL, clean);
+  return ref.id;
 }
 
 export async function fbPublishReservedJob(job: Job): Promise<void> {
