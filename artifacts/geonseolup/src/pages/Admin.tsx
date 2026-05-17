@@ -639,6 +639,29 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   return r;
 }
 
+// SEO 최적화 제목 자동 생성 (지역/현장 직종 모집 일N만 형식)
+function generateSEOTitle(p: Partial<Job>): string {
+  const parts: string[] = [];
+  if (p.site) {
+    parts.push(p.site);
+    if (p.line) parts.push(p.line);
+  } else if (p.region) {
+    parts.push(p.region);
+  }
+  if (p.job) parts.push(p.job);
+  if (p.weldSub) parts.push(p.weldSub);
+  parts.push('모집');
+  const wage = p.dailyWage || p.salaryNum;
+  if (wage && wage >= 100000) {
+    parts.push(`일${toManStr(wage)}`);
+    if (p.extraPay && p.extraPay > 0) parts.push(`+${toManStr(p.extraPay)}`);
+  }
+  if (p.lodging === '숙박제공') parts.push('숙박O');
+  else if (p.meal === '식사제공') parts.push('식사O');
+  const t = parts.join(' ');
+  return t.length > 5 ? t : '';
+}
+
 function emptyForm(): Partial<Job> {
   return {
     title: '', region: '', job: '', weldSub: '', weldTest: '',
@@ -755,6 +778,15 @@ export default function Admin() {
     const d = localStorage.getItem('cj_form_draft');
     if (!d) return false;
     try { const f = JSON.parse(d); return !!(f.title || f.originalText); } catch { return false; }
+  });
+
+  // ── 고속 등록 UX ──────────────────────────────────────────────────────────
+  const parseTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [dupWarning, setDupWarning] = useState<string | null>(null);
+  const [acHistory, setAcHistory] = useState<{ companies: string[]; sites: string[]; contacts: string[] }>(() => {
+    try { return JSON.parse(localStorage.getItem('cj_ac_history') || '{"companies":[],"sites":[],"contacts":[]}'); }
+    catch { return { companies: [], sites: [], contacts: [] }; }
   });
 
   const DEFAULT_REGIONS_ADMIN = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
@@ -1103,6 +1135,41 @@ export default function Admin() {
     return () => clearTimeout(timer);
   }, [form, authed]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── 단축키: Ctrl+Enter 즉시 등록 / Ctrl+Shift+Enter 예약 등록 ───────────────
+  useEffect(() => {
+    if (!authed || tab !== 'add') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.key !== 'Enter') return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (!form.title?.trim() || !form.region || !form.job) {
+          showToast('⚠️ 필수 항목을 입력해주세요 (제목·지역·직종)');
+          return;
+        }
+        setReserveDate(new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
+        const nh = new Date(Date.now() + 9 * 3600000 + 3600000);
+        setReserveTime(nh.toISOString().slice(11, 16));
+        setShowReserveModal(true);
+      } else {
+        if (formRef.current) formRef.current.requestSubmit();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, tab, form.title, form.region, form.job]);
+
+  // ── 중복 공고 감지 ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const digits = (form.contact || '').replace(/\D/g, '');
+    if (digits.length < 9) { setDupWarning(null); return; }
+    const dup = jobs.find(
+      (j) => j.contact === form.contact && j.status !== 'reserved' && !j.hidden && !j._deleted
+    );
+    setDupWarning(dup ? `⚠️ 같은 연락처 공고 이미 있음: "${(dup.title || '').slice(0, 20)}"` : null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.contact, jobs]);
+
   function applySmartClear(savedForm: Partial<Job>) {
     if (!clearAfterSubmit) return;
     const kept: Partial<Job> = {};
@@ -1130,6 +1197,13 @@ export default function Admin() {
       hidden: false,
     } as Omit<Job, 'id'>);
     showToast('✅ 공고가 등록됐습니다!');
+    // 자동완성 기록 업데이트
+    const acCopy = { companies: [...acHistory.companies], sites: [...acHistory.sites], contacts: [...acHistory.contacts] };
+    let acChanged = false;
+    const co = form.company?.trim(); if (co && !acCopy.companies.includes(co)) { acCopy.companies = [co, ...acCopy.companies].slice(0, 20); acChanged = true; }
+    const si = form.site?.trim(); if (si && !acCopy.sites.includes(si)) { acCopy.sites = [si, ...acCopy.sites].slice(0, 20); acChanged = true; }
+    const ct = form.contact?.trim(); if (ct && !acCopy.contacts.includes(ct)) { acCopy.contacts = [ct, ...acCopy.contacts].slice(0, 20); acChanged = true; }
+    if (acChanged) { setAcHistory(acCopy); localStorage.setItem('cj_ac_history', JSON.stringify(acCopy)); }
     applySmartClear(form);
     if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
     loadJobs(); // 백그라운드 업데이트
@@ -1147,6 +1221,20 @@ export default function Admin() {
     await fbDeleteJob(id);
     showToast('🗑 삭제됐습니다');
     await loadJobs();
+  }
+
+  function handleCloneJob(job: Job) {
+    // 발행 메타데이터 제외하고 내용만 복사
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id: _id, date: _d, status: _s, reservedAt: _r, publishedAt: _p,
+            retryCount: _rc, lastRetryAt: _lr, failReason: _f,
+            _deleted: _del, _createdAt: _ca, hiddenAt: _ha, hidden: _hid, ...rest } = job;
+    setForm({ ...emptyForm(), ...rest });
+    setParseText(rest.originalText || '');
+    setParseResult(null);
+    setTab('add');
+    showToast('📋 공고 복제됐습니다 — 내용 수정 후 등록하세요');
+    setTimeout(() => titleInputRef.current?.focus(), 150);
   }
 
   async function handleApprovePending(item: PendingJob) {
@@ -1185,13 +1273,20 @@ export default function Admin() {
     await loadPending();
   }
 
-  function handleParse() {
-    if (!parseText.trim()) return;
-    const parsed = parseJobText(parseText);
+  function handleParseText(text: string) {
+    const parsed = parseJobText(text);
+    // SEO 최적화 제목 생성
+    const seoTitle = generateSEOTitle(parsed);
+    if (seoTitle) parsed.title = seoTitle;
     setParseResult(parsed);
     // 표시 전용 필드 제외
     const { _salaryCalc: _sc, _salaryCandidates: _cands, _complexSalary: _cs, ...formData } = parsed;
     setForm((prev) => ({ ...prev, ...formData }));
+  }
+
+  function handleParse() {
+    if (!parseText.trim()) return;
+    handleParseText(parseText);
   }
 
 
@@ -1576,6 +1671,13 @@ export default function Admin() {
                         </button>
                       )}
                       <button
+                        className="bg-white border-2 border-blue-300 text-blue-600 py-[7px] px-3 rounded-lg text-[13px] font-bold cursor-pointer hover:bg-blue-50 transition-colors font-[inherit] whitespace-nowrap"
+                        onClick={() => handleCloneJob(job)}
+                        title="공고 복제 후 수정 등록"
+                      >
+                        📋 복제
+                      </button>
+                      <button
                         className="bg-white border-2 border-red-400 text-red-500 py-[7px] px-3.5 rounded-lg text-[13px] font-bold cursor-pointer hover:bg-red-50 transition-colors font-[inherit] whitespace-nowrap"
                         onClick={() => handleDelete(job.id)}
                       >
@@ -1651,9 +1753,20 @@ export default function Admin() {
             <div className="mb-5">
               <h3 className="text-sm font-bold text-gray-700 mb-2">📋 원문 붙여넣기로 자동 파싱</h3>
               <textarea
+                ref={parseTextareaRef}
                 value={parseText}
                 onChange={(e) => setParseText(e.target.value)}
-                placeholder="카카오톡/SNS 원문을 붙여넣으면 자동으로 파싱됩니다"
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData('text');
+                  if (text.trim().length > 15) {
+                    setTimeout(() => {
+                      setParseText(text);
+                      handleParseText(text);
+                      showToast('📋 붙여넣기 → 자동 파싱 완료!');
+                    }, 30);
+                  }
+                }}
+                placeholder="카카오톡 원문을 붙여넣으면 자동 파싱됩니다 (버튼 불필요 — 붙여넣기만 해도 OK!)"
                 rows={4}
                 className="w-full py-3.5 px-3.5 border-2 border-gray-200 rounded-[10px] text-sm outline-none font-[inherit] focus:border-[#f97316] resize-y min-h-[120px]"
               />
@@ -1804,7 +1917,7 @@ export default function Admin() {
               })()}
             </div>
 
-            <form onSubmit={handleAddJob}>
+            <form ref={formRef} onSubmit={handleAddJob}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="col-span-full">
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">공고 제목 <span className="text-[#f97316]">*</span></label>
@@ -1855,12 +1968,19 @@ export default function Admin() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">연락처</label>
-                  <input type="text" value={form.contact || ''} onChange={(e) => setField('contact', e.target.value)} placeholder="예: 010-1234-5678" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  <input type="tel" list="cj-ac-contacts" value={form.contact || ''} onChange={(e) => setField('contact', e.target.value)} placeholder="예: 010-1234-5678" className={`w-full py-2.5 px-3.5 border-2 rounded-lg text-sm outline-none font-[inherit] transition-colors ${dupWarning ? 'border-amber-400 bg-amber-50 focus:border-amber-500' : 'border-gray-200 focus:border-[#f97316]'}`} />
+                  <datalist id="cj-ac-contacts">{acHistory.contacts.map((c) => <option key={c} value={c} />)}</datalist>
+                  {dupWarning && (
+                    <p className="mt-1 text-[11px] font-bold text-amber-600 flex items-center gap-1">
+                      {dupWarning}
+                    </p>
+                  )}
                 </div>
                 {/* ── 추가 필드 ── */}
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">🏢 회사명</label>
-                  <input type="text" value={form.company || ''} onChange={(e) => setField('company', e.target.value)} placeholder="예: 두원전기" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  <input type="text" list="cj-ac-companies" value={form.company || ''} onChange={(e) => setField('company', e.target.value)} placeholder="예: 두원전기" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  <datalist id="cj-ac-companies">{acHistory.companies.map((c) => <option key={c} value={c} />)}</datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">👥 모집인원</label>
@@ -1868,7 +1988,10 @@ export default function Admin() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">🏭 현장명</label>
-                  <input type="text" value={form.site || ''} onChange={(e) => setField('site', e.target.value)} placeholder="예: 삼성 평택 반도체" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  <input type="text" list="cj-ac-sites" value={form.site || ''} onChange={(e) => setField('site', e.target.value)} placeholder="예: 삼성 평택 반도체" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  <datalist id="cj-ac-sites">
+                    {['삼성 반도체', '고덕 P4', '평택 P1', '평택 P2', '평택 P3', '평택 P4', '수원 S1', 'SK하이닉스', 'LG디스플레이', 'LG에너지솔루션', ...acHistory.sites].filter((v, i, a) => a.indexOf(v) === i).map((s) => <option key={s} value={s} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">🔢 라인</label>
@@ -1907,9 +2030,12 @@ export default function Admin() {
                   <textarea value={form.originalText || ''} onChange={(e) => setField('originalText', e.target.value)} rows={4} placeholder="원문 내용" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316] resize-y min-h-[100px]" />
                 </div>
               </div>
-              <button type="submit" disabled={submitting} className={`w-full mt-5 py-[14px] rounded-xl text-[15px] font-bold text-white border-none cursor-pointer font-[inherit] transition-colors ${submitting ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#f97316] hover:bg-[#ea580c]'}`}>
-                {submitting ? '등록 중...' : '✅ 공고 등록하기'}
-              </button>
+              <div className="mt-5 flex gap-2">
+                <button type="submit" disabled={submitting} className={`flex-1 py-[14px] rounded-xl text-[15px] font-bold text-white border-none cursor-pointer font-[inherit] transition-colors flex items-center justify-center gap-2 ${submitting ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#f97316] hover:bg-[#ea580c]'}`}>
+                  {submitting ? '등록 중...' : '✅ 공고 등록하기'}
+                  {!submitting && <span className="text-[11px] opacity-60 font-normal bg-white/20 px-1.5 py-0.5 rounded">Ctrl+Enter</span>}
+                </button>
+              </div>
             </form>
           </div>
         )}
