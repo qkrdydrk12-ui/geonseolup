@@ -743,6 +743,21 @@ export default function Admin() {
     adMaxWidth: localStorage.getItem('cj_ad_max_width') || '100%',
   });
 
+  // ── 연속 등록 UX 설정 ──────────────────────────────────────────────────────
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [quickMode, setQuickMode] = useState(() => localStorage.getItem('cj_quick_mode') === '1');
+  const [clearAfterSubmit, setClearAfterSubmit] = useState(() => localStorage.getItem('cj_clear_after_submit') !== '0');
+  const [keepFields, setKeepFields] = useState<{ company: boolean; region: boolean; contact: boolean }>(() => {
+    try { return JSON.parse(localStorage.getItem('cj_keep_fields') || '{"company":false,"region":false,"contact":false}'); }
+    catch { return { company: false, region: false, contact: false }; }
+  });
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [draftAvailable, setDraftAvailable] = useState(() => {
+    const d = localStorage.getItem('cj_form_draft');
+    if (!d) return false;
+    try { const f = JSON.parse(d); return !!(f.title || f.originalText); } catch { return false; }
+  });
+
   const DEFAULT_REGIONS_ADMIN = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
   const DEFAULT_JOBS_ADMIN = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '안전담당자', '품질담당자', '공사담당자', '기타'];
 
@@ -1014,12 +1029,10 @@ export default function Admin() {
     });
     const repeatLabel = repeatDays > 0 ? ` (${repeatDays}일 반복 설정)` : '';
     showToast(`✅ ${formatKST(reservedAt)} 예약됐습니다${repeatLabel}`);
-    setForm(emptyForm());
-    setParseResult(null);
-    setParseText('');
     setShowReserveModal(false);
-    await loadJobs();
-    setTab('jobs');
+    applySmartClear(form);
+    if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+    loadJobs(); // 백그라운드 업데이트
     setSubmitting(false);
   }
 
@@ -1069,6 +1082,32 @@ export default function Admin() {
     setForm((prev) => ({ ...prev, [key]: val }));
   }
 
+  // 폼 임시저장 (800ms 디바운스)
+  useEffect(() => {
+    if (!authed) return;
+    if (!form.title && !form.salary && !form.contact && !form.originalText) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem('cj_form_draft', JSON.stringify(form));
+      setDraftSaved(true);
+      setDraftAvailable(true);
+      setTimeout(() => setDraftSaved(false), 1500);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [form, authed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applySmartClear(savedForm: Partial<Job>) {
+    if (!clearAfterSubmit) return;
+    const kept: Partial<Job> = {};
+    if (keepFields.company) kept.company = savedForm.company;
+    if (keepFields.region) kept.region = savedForm.region;
+    if (keepFields.contact) kept.contact = savedForm.contact;
+    setForm({ ...emptyForm(), ...kept });
+    setParseResult(null);
+    setParseText('');
+    localStorage.removeItem('cj_form_draft');
+    setDraftAvailable(false);
+  }
+
   async function handleAddJob(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title?.trim() || !form.region || !form.job) {
@@ -1083,11 +1122,9 @@ export default function Admin() {
       hidden: false,
     } as Omit<Job, 'id'>);
     showToast('✅ 공고가 등록됐습니다!');
-    setForm(emptyForm());
-    setParseResult(null);
-    setParseText('');
-    await loadJobs();
-    setTab('jobs');
+    applySmartClear(form);
+    if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+    loadJobs(); // 백그라운드 업데이트
     setSubmitting(false);
   }
 
@@ -1505,6 +1542,59 @@ export default function Admin() {
           <div className="bg-white rounded-xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100">➕ 공고 직접 등록</h2>
 
+            {/* 연속 등록 UX 설정 바 */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-5 flex flex-wrap items-center gap-x-5 gap-y-2">
+              {/* 빠른 등록 모드 토글 */}
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <button
+                  type="button"
+                  onClick={() => { const n = !quickMode; setQuickMode(n); localStorage.setItem('cj_quick_mode', n ? '1' : '0'); }}
+                  className={`relative inline-flex w-10 h-[22px] rounded-full transition-colors ${quickMode ? 'bg-orange-500' : 'bg-gray-300'}`}
+                >
+                  <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-transform ${quickMode ? 'translate-x-5' : 'translate-x-[3px]'}`} />
+                </button>
+                <span className="text-xs font-bold text-gray-700">⚡ 빠른 등록</span>
+                {quickMode && <span className="text-[10px] text-orange-500 font-semibold hidden sm:inline">등록 후 제목 칸 자동 포커스</span>}
+              </label>
+
+              {/* 초기화 옵션 */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={clearAfterSubmit} onChange={(e) => { setClearAfterSubmit(e.target.checked); localStorage.setItem('cj_clear_after_submit', e.target.checked ? '1' : '0'); }} className="w-3.5 h-3.5 accent-orange-500 cursor-pointer" />
+                  <span className="font-semibold">등록 후 초기화</span>
+                </label>
+                {clearAfterSubmit && (
+                  <>
+                    <span className="text-gray-300">|</span>
+                    <span className="text-gray-400 text-[11px]">유지:</span>
+                    {(['company', 'region', 'contact'] as const).map((f) => (
+                      <label key={f} className="flex items-center gap-1 cursor-pointer select-none">
+                        <input type="checkbox" checked={!!keepFields[f]} onChange={(e) => { const n = { ...keepFields, [f]: e.target.checked }; setKeepFields(n); localStorage.setItem('cj_keep_fields', JSON.stringify(n)); }} className="w-3 h-3 accent-blue-500 cursor-pointer" />
+                        <span>{f === 'company' ? '업체명' : f === 'region' ? '지역' : '연락처'}</span>
+                      </label>
+                    ))}
+                  </>
+                )}
+              </div>
+
+              {/* 임시저장/복구 */}
+              <div className="ml-auto flex items-center gap-2">
+                {draftSaved && <span className="text-[11px] text-green-600 font-semibold">💾 임시저장됨</span>}
+                {draftAvailable && !form.title && (
+                  <button
+                    type="button"
+                    className="text-[11px] bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-lg font-bold cursor-pointer hover:bg-blue-100 font-[inherit]"
+                    onClick={() => {
+                      const d = localStorage.getItem('cj_form_draft');
+                      if (d) { try { setForm(JSON.parse(d)); setDraftAvailable(false); showToast('📝 임시저장 복구됐습니다'); } catch { /* ignore */ } }
+                    }}
+                  >
+                    📝 임시저장 복구
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* 원문 파싱 */}
             <div className="mb-5">
               <h3 className="text-sm font-bold text-gray-700 mb-2">📋 원문 붙여넣기로 자동 파싱</h3>
@@ -1666,7 +1756,7 @@ export default function Admin() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="col-span-full">
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">공고 제목 <span className="text-[#f97316]">*</span></label>
-                  <input type="text" value={form.title || ''} onChange={(e) => setField('title', e.target.value)} placeholder="공고 제목" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
+                  <input ref={titleInputRef} type="text" value={form.title || ''} onChange={(e) => setField('title', e.target.value)} placeholder="공고 제목" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316]" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">지역 <span className="text-[#f97316]">*</span></label>
