@@ -707,6 +707,16 @@ export default function Admin() {
   const [repeatDays, setRepeatDays] = useState<number>(0);
   const [useRandomSpread, setUseRandomSpread] = useState(false);
   const [reservationLogs, setReservationLogs] = useState<ReservationLog[]>([]);
+  // ── 자연스러운 발행 (랜덤 분산) 설정 ──────────────────────────────────────
+  const [naturalPublish, setNaturalPublish] = useState(() => localStorage.getItem('cj_natural_publish') === '1');
+  const [naturalRandRange, setNaturalRandRange] = useState<'0-3' | '0-5' | '5-10' | 'custom'>(() => {
+    const v = localStorage.getItem('cj_natural_range');
+    return (['0-3', '0-5', '5-10', 'custom'].includes(v || '') ? v : '0-5') as '0-3' | '0-5' | '5-10' | 'custom';
+  });
+  const [naturalCustomMin, setNaturalCustomMin] = useState(() => Number(localStorage.getItem('cj_natural_cmin') || '2'));
+  const [naturalCustomMax, setNaturalCustomMax] = useState(() => Number(localStorage.getItem('cj_natural_cmax') || '10'));
+  // ── 붙여넣기 자동 교체 설정 ────────────────────────────────────────────────
+  const [autoReplacePaste, setAutoReplacePaste] = useState(() => localStorage.getItem('cj_auto_replace_paste') !== '0');
   const [showLogsModal, setShowLogsModal] = useState(false);
   // 방문 통계
   const [hourlyData, setHourlyData] = useState<HourlyRow[]>([]);
@@ -1171,7 +1181,6 @@ export default function Admin() {
   }, [form.contact, jobs]);
 
   function applySmartClear(savedForm: Partial<Job>) {
-    if (!clearAfterSubmit) return;
     const kept: Partial<Job> = {};
     if (keepFields.company) kept.company = savedForm.company;
     if (keepFields.region) kept.region = savedForm.region;
@@ -1181,6 +1190,23 @@ export default function Admin() {
     setParseText('');
     localStorage.removeItem('cj_form_draft');
     setDraftAvailable(false);
+    // 등록 후 원문 입력칸으로 포커스 이동 → 다음 공고 즉시 붙여넣기 가능
+    setTimeout(() => parseTextareaRef.current?.focus(), 80);
+  }
+
+  // ── 자연 발행 랜덤 지연 계산 ────────────────────────────────────────────────
+  function calcNaturalDelay(pendingCount: number): number {
+    let [minM, maxM] = (() => {
+      if (naturalRandRange === '0-3') return [0, 3];
+      if (naturalRandRange === '0-5') return [0, 5];
+      if (naturalRandRange === '5-10') return [5, 10];
+      return [naturalCustomMin, Math.max(naturalCustomMin, naturalCustomMax)];
+    })();
+    // 스마트 분산: 예약 공고가 많을수록 대기 시간 자동 강화
+    if (pendingCount >= 6) { minM = Math.max(minM, 2); maxM = Math.max(maxM * 2, 10); }
+    else if (pendingCount >= 3) { maxM = Math.round(maxM * 1.5); }
+    const range = Math.max(maxM - minM, 0);
+    return minM + Math.random() * range;
   }
 
   async function handleAddJob(e: React.FormEvent) {
@@ -1191,30 +1217,53 @@ export default function Admin() {
     }
     setSubmitting(true);
     try {
-      console.log('[Admin] 공고 등록 시작:', form.title);
-      const savedId = await fbAddJob({
+      const baseJob: Omit<Job, 'id'> = {
         ...form,
         salaryNum: parseSalaryNum(form.salary || ''),
         date: new Date().toISOString(),
         hidden: false,
-      } as Omit<Job, 'id'>);
-      console.log('[Admin] Firebase 저장 완료, id:', savedId);
+      } as Omit<Job, 'id'>;
 
-      // ── 저장 확인 후 자동완성 기록 업데이트 ──
-      const acCopy = { companies: [...acHistory.companies], sites: [...acHistory.sites], contacts: [...acHistory.contacts] };
-      let acChanged = false;
-      const co = form.company?.trim(); if (co && !acCopy.companies.includes(co)) { acCopy.companies = [co, ...acCopy.companies].slice(0, 20); acChanged = true; }
-      const si = form.site?.trim(); if (si && !acCopy.sites.includes(si)) { acCopy.sites = [si, ...acCopy.sites].slice(0, 20); acChanged = true; }
-      const ct = form.contact?.trim(); if (ct && !acCopy.contacts.includes(ct)) { acCopy.contacts = [ct, ...acCopy.contacts].slice(0, 20); acChanged = true; }
-      if (acChanged) { setAcHistory(acCopy); localStorage.setItem('cj_ac_history', JSON.stringify(acCopy)); }
+      // ── 자동완성 기록 업데이트 헬퍼 ──
+      function updateAcHistory() {
+        const acCopy = { companies: [...acHistory.companies], sites: [...acHistory.sites], contacts: [...acHistory.contacts] };
+        let changed = false;
+        const co = form.company?.trim(); if (co && !acCopy.companies.includes(co)) { acCopy.companies = [co, ...acCopy.companies].slice(0, 20); changed = true; }
+        const si = form.site?.trim(); if (si && !acCopy.sites.includes(si)) { acCopy.sites = [si, ...acCopy.sites].slice(0, 20); changed = true; }
+        const ct = form.contact?.trim(); if (ct && !acCopy.contacts.includes(ct)) { acCopy.contacts = [ct, ...acCopy.contacts].slice(0, 20); changed = true; }
+        if (changed) { setAcHistory(acCopy); localStorage.setItem('cj_ac_history', JSON.stringify(acCopy)); }
+      }
 
-      // ── 목록 새로고침 (저장 확인 후) ──
-      await loadJobs();
-
-      // ── 성공 toast (DB 저장 완료 후에만 표시) ──
-      showToast('✅ 공고가 등록됐습니다!');
-      applySmartClear(form);
-      if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+      if (naturalPublish) {
+        // ── 자연스러운 랜덤 발행: 짧은 지연 후 예약 발행 ──
+        const pendingCount = jobs.filter((j) => j.status === 'reserved').length;
+        const delayMin = calcNaturalDelay(pendingCount);
+        let reservedAt = new Date(Date.now() + delayMin * 60000).toISOString();
+        // 충돌 방지: 기존 예약과 3분 이내 겹치면 뒤로 밀기
+        const reserved = jobs.filter((j) => j.status === 'reserved' && j.reservedAt);
+        const targetMs = new Date(reservedAt).getTime();
+        const conflicting = reserved.filter((j) => Math.abs(new Date(j.reservedAt!).getTime() - targetMs) < 3 * 60000);
+        if (conflicting.length > 0) {
+          const latestMs = Math.max(...conflicting.map((j) => new Date(j.reservedAt!).getTime()));
+          reservedAt = new Date(latestMs + (Math.floor(Math.random() * 3) + 2) * 60000).toISOString();
+        }
+        await fbAddReservedJob({ ...baseJob, dispatchMode: 'natural' }, reservedAt);
+        updateAcHistory();
+        await loadJobs();
+        const dispMin = Math.round(delayMin);
+        const dispLabel = dispMin <= 0 ? '곧' : `${dispMin}분 후`;
+        showToast(`🎲 ${dispLabel} 자동 발행 예정 (랜덤 분산)`);
+        applySmartClear(form);
+      } else {
+        // ── 즉시 발행 ──
+        const savedId = await fbAddJob(baseJob);
+        console.log('[Admin] Firebase 저장 완료, id:', savedId);
+        updateAcHistory();
+        await loadJobs();
+        showToast('✅ 공고가 등록됐습니다!');
+        applySmartClear(form);
+        if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[Admin] 공고 등록 실패:', msg, err);
@@ -1653,8 +1702,8 @@ export default function Admin() {
                         <span>💰 {job.salary || '협의'}</span>
                         <span>🕐 {formatDate(job.date)}</span>
                         {job.status === 'reserved' && job.reservedAt && (
-                          <span className="text-violet-600 font-bold">
-                            📅 예약중 · {formatKST(job.reservedAt)} 게시
+                          <span className={`font-bold ${job.dispatchMode === 'natural' ? 'text-emerald-600' : 'text-violet-600'}`}>
+                            {job.dispatchMode === 'natural' ? '🎲 랜덤 분산 대기' : '📅 예약중'} · {formatKST(job.reservedAt)} 발행
                             {job.repeatDays && job.repeatDays > 0 ? ` 🔁${job.repeatDays}일` : ''}
                           </span>
                         )}
@@ -1734,21 +1783,21 @@ export default function Admin() {
               {/* 초기화 옵션 */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input type="checkbox" checked={clearAfterSubmit} onChange={(e) => { setClearAfterSubmit(e.target.checked); localStorage.setItem('cj_clear_after_submit', e.target.checked ? '1' : '0'); }} className="w-3.5 h-3.5 accent-orange-500 cursor-pointer" />
-                  <span className="font-semibold">등록 후 초기화</span>
+                  <span className="font-semibold text-green-700">✅ 등록 후 자동 초기화</span>
                 </label>
-                {clearAfterSubmit && (
-                  <>
-                    <span className="text-gray-300">|</span>
-                    <span className="text-gray-400 text-[11px]">유지:</span>
-                    {(['company', 'region', 'contact'] as const).map((f) => (
-                      <label key={f} className="flex items-center gap-1 cursor-pointer select-none">
-                        <input type="checkbox" checked={!!keepFields[f]} onChange={(e) => { const n = { ...keepFields, [f]: e.target.checked }; setKeepFields(n); localStorage.setItem('cj_keep_fields', JSON.stringify(n)); }} className="w-3 h-3 accent-blue-500 cursor-pointer" />
-                        <span>{f === 'company' ? '업체명' : f === 'region' ? '지역' : '연락처'}</span>
-                      </label>
-                    ))}
-                  </>
-                )}
+                <span className="text-gray-300">|</span>
+                <span className="text-gray-400 text-[11px]">유지:</span>
+                {(['company', 'region', 'contact'] as const).map((f) => (
+                  <label key={f} className="flex items-center gap-1 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!keepFields[f]} onChange={(e) => { const n = { ...keepFields, [f]: e.target.checked }; setKeepFields(n); localStorage.setItem('cj_keep_fields', JSON.stringify(n)); }} className="w-3 h-3 accent-blue-500 cursor-pointer" />
+                    <span>{f === 'company' ? '업체명' : f === 'region' ? '지역' : '연락처'}</span>
+                  </label>
+                ))}
+                <span className="text-gray-300">|</span>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={autoReplacePaste} onChange={(e) => { setAutoReplacePaste(e.target.checked); localStorage.setItem('cj_auto_replace_paste', e.target.checked ? '1' : '0'); }} className="w-3.5 h-3.5 accent-orange-500 cursor-pointer" />
+                  <span className="font-semibold">새 붙여넣기 시 자동 교체</span>
+                </label>
               </div>
 
               {/* 임시저장/복구 */}
@@ -1779,11 +1828,18 @@ export default function Admin() {
                 onPaste={(e) => {
                   const text = e.clipboardData.getData('text');
                   if (text.trim().length > 15) {
-                    setTimeout(() => {
+                    if (autoReplacePaste) {
+                      e.preventDefault();
                       setParseText(text);
                       handleParseText(text);
                       showToast('📋 붙여넣기 → 자동 파싱 완료!');
-                    }, 30);
+                    } else {
+                      setTimeout(() => {
+                        setParseText(text);
+                        handleParseText(text);
+                        showToast('📋 붙여넣기 → 자동 파싱 완료!');
+                      }, 30);
+                    }
                   }
                 }}
                 placeholder="카카오톡 원문을 붙여넣으면 자동 파싱됩니다 (버튼 불필요 — 붙여넣기만 해도 OK!)"
@@ -2050,9 +2106,50 @@ export default function Admin() {
                   <textarea value={form.originalText || ''} onChange={(e) => setField('originalText', e.target.value)} rows={4} placeholder="원문 내용" className="w-full py-2.5 px-3.5 border-2 border-gray-200 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316] resize-y min-h-[100px]" />
                 </div>
               </div>
-              <div className="mt-5 flex gap-2">
-                <button type="submit" disabled={submitting} className={`flex-1 py-[14px] rounded-xl text-[15px] font-bold text-white border-none cursor-pointer font-[inherit] transition-colors flex items-center justify-center gap-2 ${submitting ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#f97316] hover:bg-[#ea580c]'}`}>
-                  {submitting ? '등록 중...' : '✅ 공고 등록하기'}
+              {/* 자연스러운 랜덤 발행 설정 */}
+              <div className="mt-4 mb-1">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                  <div
+                    className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 relative ${naturalPublish ? 'bg-violet-600' : 'bg-gray-300'}`}
+                    onClick={() => { const n = !naturalPublish; setNaturalPublish(n); localStorage.setItem('cj_natural_publish', n ? '1' : '0'); }}
+                  >
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${naturalPublish ? 'left-[22px]' : 'left-[2px]'}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-700">🎲 자연스러운 랜덤 발행 적용</p>
+                    <p className="text-xs text-gray-400">즉시 등록 대신 짧은 랜덤 지연 후 발행 — 운영자 패턴 분산</p>
+                  </div>
+                </label>
+                {naturalPublish && (
+                  <div className="mt-2 px-4 py-3 bg-violet-50 border border-violet-200 rounded-xl space-y-2">
+                    <p className="text-xs font-bold text-violet-700">발행 지연 범위</p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {(['0-3', '0-5', '5-10', 'custom'] as const).map((r) => (
+                        <button key={r} type="button"
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold border-2 cursor-pointer transition-all font-[inherit] ${naturalRandRange === r ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-200 hover:border-violet-400 hover:text-violet-600'}`}
+                          onClick={() => { setNaturalRandRange(r); localStorage.setItem('cj_natural_range', r); }}
+                        >{r === '0-3' ? '0~3분' : r === '0-5' ? '0~5분' : r === '5-10' ? '5~10분' : '사용자 지정'}</button>
+                      ))}
+                    </div>
+                    {naturalRandRange === 'custom' && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <input type="number" min={0} max={60} value={naturalCustomMin}
+                          onChange={(e) => { const v = Number(e.target.value); setNaturalCustomMin(v); localStorage.setItem('cj_natural_cmin', String(v)); }}
+                          className="w-16 py-1.5 px-2 border-2 border-gray-200 rounded-lg text-xs outline-none font-[inherit] focus:border-violet-400" />
+                        <span className="text-xs text-gray-500">분 ~</span>
+                        <input type="number" min={0} max={60} value={naturalCustomMax}
+                          onChange={(e) => { const v = Number(e.target.value); setNaturalCustomMax(v); localStorage.setItem('cj_natural_cmax', String(v)); }}
+                          className="w-16 py-1.5 px-2 border-2 border-gray-200 rounded-lg text-xs outline-none font-[inherit] focus:border-violet-400" />
+                        <span className="text-xs text-gray-500">분</span>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-violet-500">스마트 분산: 대기 공고가 많을수록 지연 자동 강화 · 예약과 충돌 방지</p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button type="submit" disabled={submitting} className={`flex-1 py-[14px] rounded-xl text-[15px] font-bold text-white border-none cursor-pointer font-[inherit] transition-colors flex items-center justify-center gap-2 ${submitting ? 'bg-gray-300 cursor-not-allowed' : naturalPublish ? 'bg-violet-600 hover:bg-violet-700' : 'bg-[#f97316] hover:bg-[#ea580c]'}`}>
+                  {submitting ? '등록 중...' : naturalPublish ? '🎲 랜덤 발행 등록' : '✅ 공고 등록하기'}
                   {!submitting && <span className="text-[11px] opacity-60 font-normal bg-white/20 px-1.5 py-0.5 rounded">Ctrl+Enter</span>}
                 </button>
               </div>

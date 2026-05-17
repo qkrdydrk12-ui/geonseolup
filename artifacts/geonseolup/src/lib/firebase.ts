@@ -67,6 +67,7 @@ export interface Job {
   hiddenAt?: number;
   _deleted?: boolean;
   _createdAt?: unknown;
+  dispatchMode?: 'natural' | 'manual';
   // 확장 필드
   company?: string;
   headcount?: string;
