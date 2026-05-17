@@ -124,19 +124,19 @@ export default function Detail({ id }: Props) {
       : 'text-xs font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-700';
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: '#f1f5f9' }}>
-      <div className="max-w-[860px] mx-auto px-4 pt-5">
+    <div className="min-h-screen pb-32" style={{ background: '#f1f5f9' }}>
+      <div className="max-w-[860px] mx-auto px-3 sm:px-4 pt-4 sm:pt-5">
 
         {/* 공유 버튼 */}
         <div className="flex gap-2 mb-4 flex-wrap">
           <button
-            className="flex items-center gap-[5px] px-3.5 py-2 rounded-lg text-sm font-bold cursor-pointer border-[1.5px] border-gray-200 bg-gray-50 text-[#1e3a5f] hover:bg-[#1e3a5f] hover:text-white transition-all font-[inherit]"
+            className="flex items-center gap-[5px] px-3 py-2 rounded-lg text-sm font-bold cursor-pointer border-[1.5px] border-gray-200 bg-gray-50 text-[#1e3a5f] hover:bg-[#1e3a5f] hover:text-white transition-all font-[inherit]"
             onClick={doCopyLink}
           >
             🔗 링크 복사
           </button>
           <button
-            className="flex items-center gap-[5px] px-3.5 py-2 rounded-lg text-sm font-bold cursor-pointer border-none font-[inherit] hover:opacity-90 transition-opacity"
+            className="flex items-center gap-[5px] px-3 py-2 rounded-lg text-sm font-bold cursor-pointer border-none font-[inherit] hover:opacity-90 transition-opacity"
             style={{ background: '#fee500', color: '#3c1e1e' }}
             onClick={doShare}
           >
@@ -147,48 +147,58 @@ export default function Detail({ id }: Props) {
         {/* 상세 카드 */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden mb-5">
           {/* hero */}
-          <div className="px-[22px] py-[22px] border-b-2 border-gray-100" style={{ background: 'linear-gradient(135deg,#f8faff,#fff)' }}>
-            <div className="flex items-start gap-[14px] mb-[14px]">
+          <div className="px-4 sm:px-[22px] py-4 sm:py-[22px] border-b-2 border-gray-100" style={{ background: 'linear-gradient(135deg,#f8faff,#fff)' }}>
+            <div className="flex items-start gap-3 sm:gap-[14px] mb-3 sm:mb-[14px]">
+              {/* 직종 아이콘 — 모바일에서 크기 축소 */}
               <div
-                className="w-[58px] h-[58px] rounded-[14px] flex items-center justify-center text-[28px] shrink-0"
+                className="w-11 h-11 sm:w-[58px] sm:h-[58px] rounded-xl sm:rounded-[14px] flex items-center justify-center text-2xl sm:text-[28px] shrink-0"
                 style={{ background: jobBg }}
               >
                 {getJobIcon(job.job)}
               </div>
-              <div className="flex-1">
-                <h1 className="text-xl font-extrabold leading-snug mb-2 text-gray-900">{job.title}</h1>
+              <div className="flex-1 min-w-0">
+                {/* 제목 — 모바일 overflow 방지 */}
+                <h1 className="text-base sm:text-xl font-extrabold leading-snug mb-2 text-gray-900 break-words"
+                  style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                  {job.title}
+                </h1>
+                {/* 배지 — 줄바꿈 허용 */}
                 <div className="flex flex-wrap gap-[5px]">
                   {_isNew && (
-                    <span className="text-xs font-bold px-[9px] py-1 rounded-[7px] bg-[#f97316] text-white">NEW</span>
+                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-[7px] bg-[#f97316] text-white shrink-0">NEW</span>
                   )}
                   <span
-                    className="text-xs font-bold px-[9px] py-1 rounded-[7px]"
+                    className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-[7px] shrink-0"
                     style={{ background: jobBadge.bg, color: jobBadge.text }}
                   >
                     {job.job}
                   </span>
                   {job.weldTest && (
-                    <span className={`text-xs font-bold px-[9px] py-1 rounded-[7px] ${job.weldTest === '가능' ? 'bg-pink-100 text-pink-800' : 'bg-purple-100 text-purple-800'}`}>
+                    <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-[7px] shrink-0 ${job.weldTest === '가능' ? 'bg-pink-100 text-pink-800' : 'bg-purple-100 text-purple-800'}`}>
                       시험{job.weldTest}
                     </span>
                   )}
-                  <span className="text-xs font-bold px-[9px] py-1 rounded-[7px] bg-sky-50 text-sky-700">
+                  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-[7px] bg-sky-50 text-sky-700 shrink-0">
                     📍 {job.region || '지역미상'}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* 급여 하이라이트 */}
-            <div className="flex items-center gap-2.5 rounded-[10px] px-[18px] py-[14px] border-2 border-[#fb923c]" style={{ background: 'linear-gradient(135deg,#fff7ed,#fed7aa)' }}>
-              <span className="text-2xl">💰</span>
-              <span className="text-[13px] text-orange-900 font-semibold">일급</span>
-              <span className="text-[26px] font-black text-[#f97316]">{job.salary || '협의'}</span>
+            {/* 급여 하이라이트 — 모바일 폰트 축소 */}
+            <div className="flex items-center gap-2 sm:gap-2.5 rounded-[10px] px-3 sm:px-[18px] py-3 sm:py-[14px] border-2 border-[#fb923c]"
+              style={{ background: 'linear-gradient(135deg,#fff7ed,#fed7aa)' }}>
+              <span className="text-xl sm:text-2xl shrink-0">💰</span>
+              <span className="text-xs sm:text-[13px] text-orange-900 font-semibold shrink-0">일급</span>
+              <span className="text-[20px] sm:text-[26px] font-black text-[#f97316] min-w-0 break-all">
+                {job.salary || '협의'}
+              </span>
             </div>
           </div>
 
           {/* 정보 그리드 */}
-          <div className="px-[22px] py-5 border-b border-gray-200">
+          <div className="px-3 sm:px-[22px] py-4 sm:py-5 border-b border-gray-200">
+            {/* 모바일: 1컬럼, md: 2컬럼 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
               {[
                 job.site       ? { ico: '🏭', key: '현장명',   val: job.site + (job.line ? ` ${job.line}` : '') } : null,
@@ -210,21 +220,32 @@ export default function Detail({ id }: Props) {
                 .map((row, i) => (
                   <div
                     key={i}
-                    className={`flex items-start gap-2.5 py-[11px] border-b border-gray-100 text-sm last:border-b-0 ${row!.full ? 'col-span-2' : ''}`}
+                    className={`flex items-start gap-2 py-[10px] border-b border-gray-100 text-sm last:border-b-0 ${row!.full ? 'md:col-span-2' : ''}`}
                   >
-                    <span className="text-base shrink-0 mt-0.5">{row!.ico}</span>
-                    <span className="text-gray-500 text-[13px] min-w-[56px] shrink-0">{row!.key}</span>
-                    <span className="flex-1 font-semibold text-gray-800 break-keep">{row!.val}</span>
+                    {/* 아이콘 — 고정 크기 */}
+                    <span className="text-base shrink-0 mt-0.5 w-5 text-center">{row!.ico}</span>
+                    {/* 레이블 — 최소 너비 고정으로 정렬 */}
+                    <span className="text-gray-500 text-[12px] sm:text-[13px] w-[52px] sm:min-w-[56px] shrink-0 leading-5">{row!.key}</span>
+                    {/* 값 — min-w-0 + overflow 허용으로 깨짐 방지 */}
+                    <span
+                      className="flex-1 min-w-0 font-semibold text-gray-800 text-[13px] sm:text-sm leading-5"
+                      style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                    >
+                      {row!.val}
+                    </span>
                   </div>
                 ))}
             </div>
           </div>
 
-          {/* 원문 */}
+          {/* 원문 — 모바일 overflow 방지 */}
           {job.originalText && (
-            <div className="px-[22px] py-5">
+            <div className="px-3 sm:px-[22px] py-4 sm:py-5">
               <div className="text-[13px] font-bold text-gray-500 mb-2.5">📄 원문 내용</div>
-              <pre className="bg-[#f8fafc] border border-gray-200 rounded-lg p-[14px] text-[13px] text-gray-500 whitespace-pre-wrap leading-7 max-h-56 overflow-y-auto">
+              <pre
+                className="bg-[#f8fafc] border border-gray-200 rounded-lg p-3 sm:p-[14px] text-[12px] sm:text-[13px] text-gray-500 leading-6 max-h-56 overflow-y-auto"
+                style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+              >
                 {job.originalText}
               </pre>
             </div>

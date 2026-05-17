@@ -3,7 +3,7 @@ import type { Job } from '@/lib/firebase';
 import { fbOnJobs } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { isAutoHidden, WELD_SUBS, isWeld } from '@/lib/utils';
-import { getToken } from '@/lib/adminAuth';
+import { getToken, apiVerify } from '@/lib/adminAuth';
 import JobCard from '@/components/JobCard';
 
 const DEFAULT_AUTO_HIDE = 0;
@@ -210,8 +210,9 @@ export default function Home() {
   const [loadMoreBusy, setLoadMoreBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [regionOpen, setRegionOpen] = useState(false);
-  // 관리자 로그인 상태 감지 (sessionStorage 기반)
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => !!getToken());
+  // 관리자 로그인 상태 — 반드시 false에서 시작해 서버 토큰 검증 후에만 true
+  // (초기값 false → SSR/hydration 플래시 없이 삭제 버튼 절대 선노출 방지)
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [jobOpen, setJobOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -230,11 +231,19 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 관리자 상태 실시간 감지 (같은 탭 내 로그인/아웃 반영)
+  // 관리자 상태 실시간 감지 — 서버 토큰 검증 후에만 isAdmin=true
+  // getToken() 값이 있어도 apiVerify() 실패하면 false 유지 (stale 토큰 방지)
   useEffect(() => {
-    const check = () => setIsAdmin(!!getToken());
-    const timer = setInterval(check, 3000);
-    return () => clearInterval(timer);
+    let cancelled = false;
+    async function check() {
+      const token = getToken();
+      if (!token) { if (!cancelled) setIsAdmin(false); return; }
+      const ok = await apiVerify();
+      if (!cancelled) setIsAdmin(ok);
+    }
+    check(); // 마운트 즉시 1회 검증
+    const timer = setInterval(check, 30000); // 30초마다 재검증
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
   // 공고 소프트 삭제 — 백엔드 API 통해 관리자 권한 검증 후 처리
