@@ -572,12 +572,16 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
       .trim();
   }
 
-  /** 단가·날짜·P공수 오인식 방지 */
+  /** 단가·날짜·P공수 오인식 방지
+   *  ※ 과잉 필터 방지: "17.5 담당자 : 010-..." 처럼 소수점이 멀리 있으면 제외 안 함
+   *  → 소수점+숫자 패턴이 010 바로 직전(끝부분)에 붙어있을 때만 날짜/분수로 판정 */
   function isFP(text: string, idx: number, len: number): boolean {
     const before = text.slice(Math.max(0, idx - 6), idx);
     const after  = text.slice(idx + len, idx + len + 6);
     if (/[만천억원]/.test(before) || /[만천억원]/.test(after)) return true; // 금액 단위
-    if (/[\/.]/.test(before) && /\d/.test(before))              return true; // 날짜/분수
+    // 소수점/슬래시 패턴이 번호 바로 앞에서 끝날 때만 날짜/분수로 판정
+    // "17.5 " → before 끝이 공백이므로 false  /  "17.5" → true  / "01/0" → true
+    if (/\d[\/\.]\d*$/.test(before))                            return true; // 날짜/분수 직접 인접
     if (/^[\/.]/.test(after))                                   return true;
     if (/P\d$/.test(before))                                    return true; // P1/P2 공수
     return false;
@@ -601,7 +605,29 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
 
   let m: RegExpExecArray | null;
 
-  // ══ 패턴 A: 구분자 유무 무관 (-, ., 공백, 없음) ═══════════════════════════
+  // ══ 패턴 P: 원본 텍스트 선행 추출 (cleanup 전) ════════════════════════════
+  //   ☎️담당자 : 010-7710-3498 처럼 이모지+키워드 조합에서도 안전하게 먼저 캡처
+  //   → 이후 패턴들이 실패해도 여기서 잡힌 번호는 보존됨
+  const reP = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}/g;
+  while ((m = reP.exec(rawText)) !== null) {
+    // isFP 적용 전, rawText 그대로 — 이모지가 before에 있어도 금액단위·날짜 아니면 통과
+    const before0 = rawText.slice(Math.max(0, m.index - 4), m.index);
+    const after0  = rawText.slice(m.index + m[0].length, m.index + m[0].length + 4);
+    const skip = /[만천억원]/.test(before0) || /[만천억원]/.test(after0)
+               || /\d[\/\.]\d*$/.test(before0)
+               || /P\d$/.test(before0);
+    if (!skip) add(m[0], 'pristine');
+  }
+  // 연속 11자리 — 원본에서 선행 캡처
+  const rePb = /01[016789]\d{7,8}/g;
+  while ((m = rePb.exec(rawText)) !== null) {
+    const before0 = rawText.slice(Math.max(0, m.index - 4), m.index);
+    const after0  = rawText.slice(m.index + m[0].length, m.index + m[0].length + 4);
+    const skip = /[만천억원]/.test(before0) || /[만천억원]/.test(after0) || /P\d$/.test(before0);
+    if (!skip) add(m[0], 'pristine-d');
+  }
+
+  // ══ 패턴 A: 구분자 유무 무관 (clean 텍스트 기준) ═════════════════════════
   //   01033769065 / 010 3376 9065 / 010-3376-9065 / 010.3376.9065
   const reA = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}/g;
   for (const src of [clean, cleanML]) {
@@ -614,7 +640,7 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
   // ══ 패턴 B: 연속 11자리 숫자 (이모지·한글 바로 뒤) ════════════════════════
   //   01033769065 / 📲01057954982 / 팀장직접구인01048263114
   const reB = /01[016789]\d{7,8}/g;
-  for (const src of [rawText, clean, cleanML]) {
+  for (const src of [clean, cleanML]) {
     reB.lastIndex = 0;
     while ((m = reB.exec(src)) !== null) {
       if (!isFP(src, m.index, m[0].length)) add(m[0], 'digits11');
@@ -622,8 +648,9 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
   }
 
   // ══ 패턴 C: 문맥 키워드 근처 (clean 기준 — 이모지가 키워드~번호 사이 막는 현상 방지) ══
-  //   총무 : 010 3376 9065 / 팀장 010-... / 반장 010...
-  const KW = '연락처|연락|문의|전화|문자|연락주|연락바|contact|팀장|반장|총무|팀원|직접구인|직통|구인|지원';
+  //   ☎️담당자 : 010-7710-3498 / 총무 : 010 3376 9065 / 팀장 010-...
+  //   담당자 추가: "☎️담당자 : 010-..." 패턴 명시 지원
+  const KW = '연락처|연락|문의|전화|문자|연락주|연락바|contact|팀장|반장|총무|팀원|직접구인|직통|구인|지원|담당자|연락담당';
   const reC = new RegExp(`(?:${KW})\\s*[:：]?\\s*(01[016789][\\d\\s.\\-]{8,12})`, 'gi');
   for (const src of [clean, rawText]) {
     reC.lastIndex = 0;
@@ -631,21 +658,18 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
   }
 
   // ══ 패턴 D: 줄 단위 독립 탐색 (가장 강건 — 이모지·특수문자 줄에서도 추출) ══
-  //   ▫️ 팀 총무 : 010 3376 9065 ( 문자주세요 )
-  //   📞 010-7789-2390
-  //   📲01057954982
+  //   ☎️담당자 : 010-7710-3498 → 줄 clean → "담당자 : 010-7710-3498" → 매칭
+  //   ▫️ 팀 총무 : 010 3376 9065 ( 문자주세요 ) / 📞 010-7789-2390 / 📲01057954982
   const lines = rawText.split('\n');
   dbg.push(`  lines=${lines.length}`);
   for (let li = 0; li < lines.length; li++) {
     const lc = toClean(lines[li]);
     if (!lc) continue;
     const tag = `L${li + 1}`;
-    // 구분자 있음/없음
     const reD1 = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}/g;
     while ((m = reD1.exec(lc)) !== null) {
       if (!isFP(lc, m.index, m[0].length)) add(m[0], tag);
     }
-    // 연속 숫자
     const reD2 = /01[016789]\d{7,8}/g;
     while ((m = reD2.exec(lc)) !== null) {
       if (!isFP(lc, m.index, m[0].length)) add(m[0], `${tag}-d`);
@@ -653,7 +677,6 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
   }
 
   // ══ 패턴 E: 괄호 설명문 포함 — `010 3376 9065 ( 문자주세요 )` ══
-  //   괄호 앞 공백까지 포함해 번호 추출 (괄호 내용 무시)
   const reE = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}(?=\s*[\(（])/g;
   while ((m = reE.exec(clean)) !== null) {
     if (!isFP(clean, m.index, m[0].length)) add(m[0], 'paren');
