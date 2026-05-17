@@ -516,10 +516,12 @@ function makeNote(text: string): string {
   return sentences.join(' ').slice(0, 60);
 }
 
-/** 전화번호 추출 — 이모지/특수문자 제거, 구분자 유무 무관, 문맥 추론 */
+/** 전화번호 추출 — 이모지/특수문자·비표준공백 제거, 구분자 유무 무관, 문맥 추론 */
 function extractPhones(rawText: string): { main: string | null; candidates: string[] } {
   const found = new Set<string>();
+  const debugLines: string[] = [];
 
+  /** 숫자만 뽑아 010-XXXX-XXXX 포맷으로 반환 */
   function normalizeDigits(raw: string): string | null {
     const d = raw.replace(/\D/g, '');
     if (!/^01[016789]/.test(d)) return null;
@@ -528,34 +530,79 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
     return null;
   }
 
-  // 이모지·유니코드 특수문자를 공백으로 치환한 클린 텍스트
-  const clean = rawText
-    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')  // surrogate pair 이모지
-    .replace(/[\u2600-\u27FF\u1F300-\u1FFFF]/gu, ' ')  // 기호/이모지 유니코드 블록
-    .replace(/\s+/g, ' ');
+  /** 단가·날짜·인원 오인식 방지 */
+  function isFalsePositive(text: string, idx: number, len: number): boolean {
+    const before = text.slice(Math.max(0, idx - 6), idx);
+    const after  = text.slice(idx + len, idx + len + 6);
+    if (/[만천억원]/.test(before) || /[만천억원]/.test(after)) return true; // 금액
+    if (/[\/.]/.test(before) && /\d/.test(before))              return true; // 날짜 분수
+    if (/^[\/.]/.test(after))                                   return true;
+    if (/P\d$/.test(before))                                    return true; // P1/P2 공수
+    return false;
+  }
 
-  // 패턴 1: 구분자 있음/없음 모두 (-, ., space 또는 없음)
-  const re1 = /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/g;
+  function addPhone(raw: string, tag: string) {
+    const n = normalizeDigits(raw);
+    if (n) { found.add(n); debugLines.push(`[phone:${tag}] "${raw}" → ${n}`); }
+  }
+
+  // ── 이모지·비표준 공백 제거 후 clean 텍스트 생성 ──────────────────────────
+  // 핵심: 카카오 복붙 시 전각공백(U+3000), NBSP(U+00A0), 영폭공백 등이 섞여
+  //       일반 \s가 인식 못하는 버그 → 아래에서 명시적으로 정규화
+  const clean = rawText
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')                        // surrogate 이모지
+    .replace(/[\u2600-\u27FF\u1F300-\u1FFFF]/gu, ' ')                       // 기호/이모지
+    .replace(/[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000\uFEFF]/g, ' ')   // 비표준 공백 전부 → 일반 공백
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  debugLines.push(`[phone] rawLen=${rawText.length} cleanLen=${clean.length}`);
+  debugLines.push(`[phone] clean="${clean.slice(0, 120)}"`);
+
+  // 패턴 1: 구분자(-, ., 공백) 있음/없음 모두
+  //   010 4826 3114 / 010-4826-3114 / 010.4826.3114 / 01048263114
+  const re1 = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}/g;
   let m: RegExpExecArray | null;
   while ((m = re1.exec(clean)) !== null) {
-    const n = normalizeDigits(m[0]); if (n) found.add(n);
+    if (!isFalsePositive(clean, m.index, m[0].length)) addPhone(m[0], 're1');
   }
 
-  // 패턴 2: 연속 숫자 (이모지 바로 뒤 숫자 포함: 📲📲📲 01057954982)
+  // 패턴 1b: 공백 구분 전용 (탭·전각공백이 정규화된 뒤 남은 공백 처리 보완)
+  //   010  4826  3114 처럼 여러 공백이 있던 경우도 clean 후 단일 공백으로 처리됨
+  const re1b = /01[016789] \d{3,4} \d{4}/g;
+  while ((m = re1b.exec(clean)) !== null) {
+    if (!isFalsePositive(clean, m.index, m[0].length)) addPhone(m[0], 're1b-space');
+  }
+
+  // 패턴 2: 연속 11자리 숫자 (이모지 바로 뒤, 한글 바로 뒤 포함)
+  //   팀장직접구인01048263114 / 📲01057954982
   const re2 = /01[016789]\d{7,8}/g;
   while ((m = re2.exec(rawText)) !== null) {
-    // 오인식 방지: 앞뒤 문맥에 단가/금액 단위 있으면 제외
-    const before = rawText.slice(Math.max(0, m.index - 4), m.index);
-    const after = rawText.slice(m.index + m[0].length, m.index + m[0].length + 4);
-    if (/[만천억]/.test(before) || /[만천억원]/.test(after)) continue;
-    const n = normalizeDigits(m[0]); if (n) found.add(n);
+    if (!isFalsePositive(rawText, m.index, m[0].length)) addPhone(m[0], 're2-digits');
   }
 
-  // 패턴 3: 문맥 기반 추론 ("연락처", "문의", "전화", "문자" 근처)
-  const re3 = /(?:연락처|연락|문의|전화|문자|연락주|연락바|contact)\s*[:：]?\s*(01[016789][\d\s.\-]{8,12})/gi;
+  // 패턴 3: 문맥 키워드 근처 — 연락처·문의·팀장·반장·직접구인 등
+  const re3 = /(?:연락처|연락|문의|전화|문자|연락주|연락바|contact|팀장|반장|직접구인|직통|구인)\s*[:：]?\s*(01[016789][\d\s.\-]{8,12})/gi;
   while ((m = re3.exec(rawText)) !== null) {
-    const n = normalizeDigits(m[1]); if (n) found.add(n);
+    addPhone(m[1], 're3-context');
   }
+
+  // 패턴 4: 공백 구분 + 문맥 키워드 (팀장 010 4826 3114 처럼 붙어있는 형태)
+  const re4 = /(?:팀장|반장|직접구인|직통|연락처|연락|문의)\s*[:：]?\s*(01[016789][ \-.]?\d{3,4}[ \-.]?\d{4})/gi;
+  while ((m = re4.exec(rawText)) !== null) {
+    addPhone(m[1], 're4-ctx+space');
+  }
+
+  // 패턴 5: clean 텍스트에서 공백으로 분리된 3-4-4 블록 (010 #### ####)
+  // 앞 문자가 한글/알파뱃이어도 인식
+  const re5 = /(?<![0-9])(01[016789])[ \t](\d{3,4})[ \t](\d{4})(?![0-9])/g;
+  while ((m = re5.exec(clean)) !== null) {
+    if (!isFalsePositive(clean, m.index, m[0].length)) addPhone(m[0], 're5-lookaround');
+  }
+
+  const result = found.size === 0 ? '없음' : [...found].join(' / ');
+  debugLines.push(`[phone] 최종=${result}`);
+  console.log(debugLines.join('\n'));
 
   const list = [...found];
   return { main: list[0] ?? null, candidates: list };
