@@ -157,7 +157,9 @@ export interface ComplexSalaryResult {
 }
 
 const EXTRA_KW_PAT = '일비|숙식비?|숙박비|식대|유류비|식비';
-const ROLE_KW_PAT = '조공|기공|안전담당자|안담|화기감시자|화감|팀장|팀원|반장|초보|경력자?|기사|용접사|배관공';
+const ROLE_KW_PAT = '조공|기공|준기공|안전담당자|안담|화기감시자|화감|팀장|팀원|반장|초보|경력자?|기사|용접사|배관공|배관사|전공';
+/** 단가 prefix 기호: -, ~, •, ·, >, ※, * — 건설 구인 문맥에서 "단가 표시"로 쓰임 */
+const WAGE_PREFIX = '[-~•·>※*]';
 
 /** 암묵적 만원 단위 포함 숫자 파싱: 14.5→145000, 15→150000, 170000→170000 */
 function parseManValue(raw: string): number {
@@ -220,6 +222,9 @@ const NOISE_PATS: RegExp[] = [
   /\d{1,2}:\d{2}/g,                           // HH:MM 시간
   /P[1-9](?:라인|LINE)?/gi,                    // P라인 현장명
   /\d+\s*명/g,                                 // 인원수
+  /\d+\s*층/g,                                 // 층수 (건물/현장 층)
+  /B\d+/gi,                                    // 지하층 (B1, B2 등)
+  /\d+\s*호(?:기|실)?/g,                       // 호기/호실
 ];
 
 /** 단일 숫자 문자열 → 원 단위 정수 정규화 */
@@ -310,6 +315,21 @@ function extractSalary(text: string): { text: string; num: number; score: number
     if (num >= 50000 && num <= 800000) add(m[1], num, 55, '숫자 직접 표기');
   }
 
+  // ── 6순위: 기호 prefix 단가 (-, ~, •, >, * 등) ───────────────────────────
+  // 예: "-17" → 170000, "~14.5" → 145000, "• 16.5" → 165000
+  // 줄 시작 / 공백·구분자 다음에 오는 기호+숫자, 1~30 범위만 허용
+  const prefixSymPat = new RegExp(
+    `(?:^|[\\s\\n,/|])${WAGE_PREFIX}\\s*(\\d+(?:\\.\\d+)?)(?:\\s*만원?)?(?![\\d\\-])`,
+    'gm'
+  );
+  while ((m = prefixSymPat.exec(cleaned)) !== null) {
+    const n = parseFloat(m[1]);
+    if (n >= 1 && n < 50) {
+      const num = Math.round(n * 10000);
+      add(m[0].trim(), num, 72, `기호 prefix "${m[0].trim()}"`);
+    }
+  }
+
   if (candidates.length === 0) return null;
 
   // 점수 내림차순, 동점이면 금액 높은 순
@@ -322,6 +342,8 @@ function extractSalary(text: string): { text: string; num: number; score: number
 function extractComplexSalary(text: string): ComplexSalaryResult | null {
   let cleaned = text;
   for (const pat of NOISE_PATS) cleaned = cleaned.replace(new RegExp(pat.source, pat.flags), ' ');
+  // 전화번호 패턴에서 빠진 하이픈 연속 숫자 제거 (예: 010-1234-5678 잔여)
+  cleaned = cleaned.replace(/\d{3,4}-\d{4}\b/g, ' ');
 
   const wageBreakdowns: WageBreakdown[] = [];
   const candidates: SalaryCandidate[] = [];
@@ -341,10 +363,10 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
 
   let m: RegExpExecArray | null;
 
-  // ── A: 역할 + 기본단가 + '+' + 일비/숙식비 ─────────────────────────────────
-  // 예: "조공 15+일비2.5", "안담단가 : 14.5+숙식3", "조공 15 + 숙식 2.5"
+  // ── A: 역할 + 기본단가 + '+' + 일비/숙식비 (기호 prefix 허용) ──────────────
+  // 예: "조공 15+일비2.5", "안담단가:-14.5+숙식3", "조공 ~15 + 숙식 2.5"
   const roleExtraPat = new RegExp(
-    `(${ROLE_KW_PAT})\\s*단가?\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?\\s*\\+\\s*(${EXTRA_KW_PAT})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?`,
+    `(${ROLE_KW_PAT})\\s*(?:단가)?\\s*[:：]?\\s*${WAGE_PREFIX}?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?\\s*\\+\\s*(${EXTRA_KW_PAT})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?`,
     'gi'
   );
   while ((m = roleExtraPat.exec(cleaned)) !== null) {
@@ -361,29 +383,27 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
     if (bestScore < 95) bestScore = 95;
   }
 
-  // ── B: 역할 + 기본단가 (extra 없음) ──────────────────────────────────────
-  // 예: "조공 15만", "팀원단가:16.5"
-  if (wageBreakdowns.length === 0) {
-    const roleSimplePat = new RegExp(
-      `(${ROLE_KW_PAT})\\s*단가?\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*만원?)?(?![\\s]*[+\\d])`,
-      'gi'
-    );
-    while ((m = roleSimplePat.exec(cleaned)) !== null) {
-      const role = normalizeRoleName(m[1]);
-      const wage = parseManValue(m[2]);
-      if (wage <= 0) continue;
-      if (!wageBreakdowns.find((b) => b.role === role)) {
-        wageBreakdowns.push({ role, wage, extraPay: 0, extraLabel: '', total: wage });
-        addCand(m[0], wage, 85, `역할 "${role}"`);
-        if (bestScore < 85) bestScore = 85;
-      }
+  // ── B: 역할 + 기본단가 (기호 prefix 허용, extra 없음) ────────────────────
+  // 예: "조공 15만", "팀원단가:-16.5", "기공 ~17"
+  const roleSimplePat = new RegExp(
+    `(${ROLE_KW_PAT})\\s*(?:단가)?\\s*[:：]?\\s*${WAGE_PREFIX}?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*만원?)?(?![\\s]*[+\\d])`,
+    'gi'
+  );
+  while ((m = roleSimplePat.exec(cleaned)) !== null) {
+    const role = normalizeRoleName(m[1]);
+    const wage = parseManValue(m[2]);
+    if (wage <= 0) continue;
+    if (!wageBreakdowns.find((b) => b.role === role)) {
+      wageBreakdowns.push({ role, wage, extraPay: 0, extraLabel: '', total: wage });
+      addCand(m[0], wage, 85, `역할 "${role}"`);
+      if (bestScore < 85) bestScore = 85;
     }
   }
 
-  // ── C: 단순 기본단가 + '+' + 일비/숙식비 (역할 없음) ─────────────────────
-  // 예: "15+일비2.5", "16 + 숙식비 3", "17만 + 일비 2만"
+  // ── C: 단순 기본단가 + '+' + 일비/숙식비 (기호 prefix 허용, 역할 없음) ────
+  // 예: "15+일비2.5", "~16 + 숙식비 3", "-17만 + 일비 2만"
   const simpleExtraPat = new RegExp(
-    `(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?\\s*\\+\\s*(${EXTRA_KW_PAT})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?`,
+    `${WAGE_PREFIX}?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?\\s*\\+\\s*(${EXTRA_KW_PAT})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:만원?)?`,
     'gi'
   );
   while ((m = simpleExtraPat.exec(cleaned)) !== null) {
@@ -397,6 +417,41 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
     }
     addCand(m[0], total || wage, 88, `기본단가 + ${extraLabel}`);
     if (bestScore < 88) bestScore = 88;
+  }
+
+  // ── D: 역할 + 줄바꿈 + (기호 +) 단가 ────────────────────────────────────
+  // 예: "조공\n-17", "안담\n~14.5", "전공\n  -16.5"
+  const roleLinePat = new RegExp(
+    `(${ROLE_KW_PAT})[ \\t]*[\\n\\r]+[ \\t]*${WAGE_PREFIX}?[ \\t]*(\\d+(?:\\.\\d+)?)(?:[ \\t]*만원?)?`,
+    'gi'
+  );
+  while ((m = roleLinePat.exec(text)) !== null) {          // 원본 text 사용 (줄바꿈 보존)
+    const role = normalizeRoleName(m[1]);
+    const wage = parseManValue(m[2]);
+    if (wage <= 0) continue;
+    if (!wageBreakdowns.find((b) => b.role === role)) {
+      wageBreakdowns.push({ role, wage, extraPay: 0, extraLabel: '', total: wage });
+    }
+    addCand(m[0].trim(), wage, 90, `역할 "${role}" (줄바꿈+기호)`);
+    if (bestScore < 90) bestScore = 90;
+  }
+
+  // ── E: 단독 기호 prefix 단가 (역할 무관, 1~30 범위) ──────────────────────
+  // 예: "-17", "~14.5", "• 16.5", "* 16" — 구인글 특화 단가 표기
+  // 이미 찾은 것보다 많이 있는 경우만 추가 (낮은 신뢰도)
+  const standalonePrefixPat = new RegExp(
+    `(?:^|[\\s\\n,/|])${WAGE_PREFIX}[ \\t]*(\\d+(?:\\.\\d+)?)(?:[ \\t]*만원?)?(?![\\d.])`,
+    'gm'
+  );
+  while ((m = standalonePrefixPat.exec(cleaned)) !== null) {
+    const n = parseFloat(m[1]);
+    if (n < 1 || n >= 50) continue;
+    const wage = Math.round(n * 10000);
+    if (wageBreakdowns.length === 0) {
+      wageBreakdowns.push({ role: '', wage, extraPay: 0, extraLabel: '', total: wage });
+    }
+    addCand(m[0].trim(), wage, 75, `기호 prefix 단가 "${m[0].trim()}"`);
+    if (bestScore < 75) bestScore = 75;
   }
 
   // ── Fallback: 기존 extractSalary 로직 사용 ───────────────────────────────
