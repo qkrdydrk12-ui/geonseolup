@@ -546,143 +546,112 @@ function makeNote(text: string): string {
   return sentences.join(' ').slice(0, 60);
 }
 
-/** 전화번호 추출 — 이모지/비표준공백 완전 정규화, 다중 패턴, 줄 단위 탐색 */
+/** ─────────────────────────────────────────────────────────────────────────
+ *  전화번호 추출 — 단순·강력 버전
+ *
+ *  핵심 규칙: "010 시작 + 숫자만 추출 시 11자리 → 무조건 전화번호"
+ *  복잡한 isFP/confidence 필터 제거. 제외 조건은 최소한만 유지:
+ *    ① 매치 직후에 만/원 이 바로 붙어있으면 금액 단위로 판단해 제외
+ *    ② P라인 번호 (P1~P9) 직전이면 제외
+ * ──────────────────────────────────────────────────────────────────────── */
 function extractPhones(rawText: string): { main: string | null; candidates: string[] } {
   const found = new Set<string>();
   const dbg: string[] = [];
 
-  /** 숫자만 추출 후 010-XXXX-XXXX 포맷 반환. 유효하지 않으면 null */
-  function fmt(raw: string): string | null {
+  /** 숫자만 추출 → 010-XXXX-XXXX 포맷. 유효하지 않으면 null */
+  function normalize(raw: string): string | null {
     const d = raw.replace(/\D/g, '');
-    if (!/^01[016789]/.test(d)) return null;
-    if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
-    if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+    if (d.startsWith('010') && d.length === 11)
+      return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+    if (/^01[16789]/.test(d) && d.length === 11)
+      return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+    if (/^01[016789]/.test(d) && d.length === 10)
+      return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
     return null;
   }
 
-  /** 이모지·변형선택자·비표준공백 완전 제거 → 정규화된 1줄 문자열
-   *  ▫️(U+25AB U+FE0F), ▶️, ✔️ 등 변형선택자(U+FE0F) 포함 처리 */
-  function toClean(s: string): string {
+  /** 이모지·변형선택자·비표준공백 제거 (개행 유지) */
+  function stripEmojis(s: string): string {
     return s
-      .replace(/\uFE0F/g, '')                                                 // 변형선택자(variation selector-16) 제거
-      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')                       // surrogate 이모지 (📞📲☎🔥)
-      .replace(/[\u2600-\u27FF\u1F300-\u1FFFF]/gu, ' ')                      // 기호·이모지 블록
-      .replace(/[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000\uFEFF]/g, ' ')  // 전각공백·NBSP 등
-      .replace(/\s+/g, ' ')
-      .trim();
+      .replace(/\uFE0F/g, '')
+      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')
+      .replace(/[\u2600-\u27FF\u1F300-\u1FFFF]/gu, ' ')
+      .replace(/[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000\uFEFF]/g, ' ');
   }
 
-  /** 단가·날짜·P공수 오인식 방지
-   *  ※ 과잉 필터 방지: "17.5 담당자 : 010-..." 처럼 소수점이 멀리 있으면 제외 안 함
-   *  → 소수점+숫자 패턴이 010 바로 직전(끝부분)에 붙어있을 때만 날짜/분수로 판정 */
-  function isFP(text: string, idx: number, len: number): boolean {
-    const before = text.slice(Math.max(0, idx - 6), idx);
-    const after  = text.slice(idx + len, idx + len + 6);
-    if (/[만천억원]/.test(before) || /[만천억원]/.test(after)) return true; // 금액 단위
-    // 소수점/슬래시 패턴이 번호 바로 앞에서 끝날 때만 날짜/분수로 판정
-    // "17.5 " → before 끝이 공백이므로 false  /  "17.5" → true  / "01/0" → true
-    if (/\d[\/\.]\d*$/.test(before))                            return true; // 날짜/분수 직접 인접
-    if (/^[\/.]/.test(after))                                   return true;
-    if (/P\d$/.test(before))                                    return true; // P1/P2 공수
-    return false;
-  }
-
-  function add(raw: string, tag: string) {
-    const n = fmt(raw);
-    if (n && !found.has(n)) { found.add(n); dbg.push(`  ✓ [${tag}] "${raw.trim()}" → ${n}`); }
-  }
-
-  // ══ Step 0: clean 텍스트 2종 생성 ══════════════════════════════════════════
-  const cleanML = rawText                          // 개행 유지 (줄별 탐색용)
-    .replace(/\uFE0F/g, '')
-    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')
-    .replace(/[\u2600-\u27FF\u1F300-\u1FFFF]/gu, ' ')
-    .replace(/[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000\uFEFF]/g, ' ')
-    .replace(/[ \t]+/g, ' ');
-  const clean = cleanML.replace(/\s+/g, ' ').trim();   // 개행도 제거 (전체 탐색용)
-
-  dbg.push(`[phone:start] raw.len=${rawText.length} clean="${clean.slice(0, 120)}"`);
-
-  let m: RegExpExecArray | null;
-
-  // ══ 패턴 P: 원본 텍스트 선행 추출 (cleanup 전) ════════════════════════════
-  //   ☎️담당자 : 010-7710-3498 처럼 이모지+키워드 조합에서도 안전하게 먼저 캡처
-  //   → 이후 패턴들이 실패해도 여기서 잡힌 번호는 보존됨
-  const reP = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}/g;
-  while ((m = reP.exec(rawText)) !== null) {
-    // isFP 적용 전, rawText 그대로 — 이모지가 before에 있어도 금액단위·날짜 아니면 통과
-    const before0 = rawText.slice(Math.max(0, m.index - 4), m.index);
-    const after0  = rawText.slice(m.index + m[0].length, m.index + m[0].length + 4);
-    const skip = /[만천억원]/.test(before0) || /[만천억원]/.test(after0)
-               || /\d[\/\.]\d*$/.test(before0)
-               || /P\d$/.test(before0);
-    if (!skip) add(m[0], 'pristine');
-  }
-  // 연속 11자리 — 원본에서 선행 캡처
-  const rePb = /01[016789]\d{7,8}/g;
-  while ((m = rePb.exec(rawText)) !== null) {
-    const before0 = rawText.slice(Math.max(0, m.index - 4), m.index);
-    const after0  = rawText.slice(m.index + m[0].length, m.index + m[0].length + 4);
-    const skip = /[만천억원]/.test(before0) || /[만천억원]/.test(after0) || /P\d$/.test(before0);
-    if (!skip) add(m[0], 'pristine-d');
-  }
-
-  // ══ 패턴 A: 구분자 유무 무관 (clean 텍스트 기준) ═════════════════════════
-  //   01033769065 / 010 3376 9065 / 010-3376-9065 / 010.3376.9065
-  const reA = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}/g;
-  for (const src of [clean, cleanML]) {
-    reA.lastIndex = 0;
-    while ((m = reA.exec(src)) !== null) {
-      if (!isFP(src, m.index, m[0].length)) add(m[0], 'sep±');
+  function tryAdd(raw: string, src: string, matchEnd: number, tag: string) {
+    // 최소 false-positive 체크 (금액 단위 / P라인)
+    const after2 = src.slice(matchEnd, matchEnd + 2);
+    const before4 = src.slice(Math.max(0, matchEnd - raw.length - 4), matchEnd - raw.length);
+    if (/^[만원]/.test(after2)) return;   // 만원/원이 바로 뒤 = 금액
+    if (/P\d$/.test(before4))  return;   // P1/P2 라인번호
+    const n = normalize(raw);
+    if (n && !found.has(n)) {
+      found.add(n);
+      dbg.push(`  ✓ [${tag}] "${raw.trim()}" → ${n}`);
     }
   }
 
-  // ══ 패턴 B: 연속 11자리 숫자 (이모지·한글 바로 뒤) ════════════════════════
-  //   01033769065 / 📲01057954982 / 팀장직접구인01048263114
-  const reB = /01[016789]\d{7,8}/g;
-  for (const src of [clean, cleanML]) {
-    reB.lastIndex = 0;
-    while ((m = reB.exec(src)) !== null) {
-      if (!isFP(src, m.index, m[0].length)) add(m[0], 'digits11');
-    }
-  }
+  dbg.push(`[phone:start] raw.len=${rawText.length}`);
 
-  // ══ 패턴 C: 문맥 키워드 근처 (clean 기준 — 이모지가 키워드~번호 사이 막는 현상 방지) ══
-  //   ☎️담당자 : 010-7710-3498 / 총무 : 010 3376 9065 / 팀장 010-...
-  //   담당자 추가: "☎️담당자 : 010-..." 패턴 명시 지원
-  const KW = '연락처|연락|문의|전화|문자|연락주|연락바|contact|팀장|반장|총무|팀원|직접구인|직통|구인|지원|담당자|연락담당';
-  const reC = new RegExp(`(?:${KW})\\s*[:：]?\\s*(01[016789][\\d\\s.\\-]{8,12})`, 'gi');
-  for (const src of [clean, rawText]) {
-    reC.lastIndex = 0;
-    while ((m = reC.exec(src)) !== null) add(m[1], 'keyword');
-  }
-
-  // ══ 패턴 D: 줄 단위 독립 탐색 (가장 강건 — 이모지·특수문자 줄에서도 추출) ══
-  //   ☎️담당자 : 010-7710-3498 → 줄 clean → "담당자 : 010-7710-3498" → 매칭
-  //   ▫️ 팀 총무 : 010 3376 9065 ( 문자주세요 ) / 📞 010-7789-2390 / 📲01057954982
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 1 — 줄 단위 스캔 (최우선, 이모지 제거 후)
+  //   각 줄을 독립적으로 처리 → 같은 줄의 노이즈 숫자가 다른 줄 번호에 영향 없음
+  // ══════════════════════════════════════════════════════════════════════════
   const lines = rawText.split('\n');
   dbg.push(`  lines=${lines.length}`);
+
   for (let li = 0; li < lines.length; li++) {
-    const lc = toClean(lines[li]);
-    if (!lc) continue;
+    const s = stripEmojis(lines[li]);
     const tag = `L${li + 1}`;
-    const reD1 = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}/g;
-    while ((m = reD1.exec(lc)) !== null) {
-      if (!isFP(lc, m.index, m[0].length)) add(m[0], tag);
-    }
-    const reD2 = /01[016789]\d{7,8}/g;
-    while ((m = reD2.exec(lc)) !== null) {
-      if (!isFP(lc, m.index, m[0].length)) add(m[0], `${tag}-d`);
+
+    // 패턴 ①: 구분자(-, ., 공백) 있음/없음 — 010-2813-5575 / 010 2813 5575 / 01028135575
+    const re1 = /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re1.exec(s)) !== null)
+      tryAdd(m[0], s, m.index + m[0].length, tag);
+
+    // 패턴 ②: 연속 11자리 (구분자 완전 없음) — 01028135575
+    const re2 = /01[016789]\d{7,8}/g;
+    while ((m = re2.exec(s)) !== null)
+      tryAdd(m[0], s, m.index + m[0].length, `${tag}-d`);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 2 — 전체 텍스트 스캔 (줄 탐색에서 놓친 경우 보완)
+  //   개행을 공백으로 통일한 단일 라인에서 재탐색
+  // ══════════════════════════════════════════════════════════════════════════
+  const flat = stripEmojis(rawText).replace(/\s+/g, ' ');
+
+  const reFlat1 = /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/g;
+  let mf: RegExpExecArray | null;
+  while ((mf = reFlat1.exec(flat)) !== null)
+    tryAdd(mf[0], flat, mf.index + mf[0].length, 'full');
+
+  const reFlat2 = /01[016789]\d{7,8}/g;
+  while ((mf = reFlat2.exec(flat)) !== null)
+    tryAdd(mf[0], flat, mf.index + mf[0].length, 'full-d');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 3 — 키워드 컨텍스트 스캔 (담당자/연락처/총무 등 근처 번호 우선 포착)
+  //   키워드 근처 번호는 false-positive 체크 완전 면제
+  // ══════════════════════════════════════════════════════════════════════════
+  const KW = '연락처|연락|문의|전화|문자|연락주|연락바|contact|팀장|반장|총무|팀원|직접구인|직통|구인|지원|담당자|연락담당';
+  const reKW = new RegExp(`(?:${KW})\\s*[:：]?\\s*(01[016789][\\d\\s.\\-]{8,12})`, 'gi');
+  const kwSources = [flat, rawText];
+  for (const src of kwSources) {
+    reKW.lastIndex = 0;
+    let mk: RegExpExecArray | null;
+    while ((mk = reKW.exec(src)) !== null) {
+      // 키워드 근처 번호는 금액 단위 체크만 적용
+      const after2 = src.slice(mk.index + mk[0].length, mk.index + mk[0].length + 2);
+      if (/^[만원]/.test(after2)) continue;
+      const n = normalize(mk[1]);
+      if (n && !found.has(n)) { found.add(n); dbg.push(`  ✓ [kw] "${mk[1].trim()}" → ${n}`); }
     }
   }
 
-  // ══ 패턴 E: 괄호 설명문 포함 — `010 3376 9065 ( 문자주세요 )` ══
-  const reE = /01[016789][-. ]?\d{3,4}[-. ]?\d{4}(?=\s*[\(（])/g;
-  while ((m = reE.exec(clean)) !== null) {
-    if (!isFP(clean, m.index, m[0].length)) add(m[0], 'paren');
-  }
-
-  dbg.push(`[phone:end] 최종=${found.size === 0 ? '없음' : [...found].join(' / ')}`);
+  dbg.push(`[phone:end] found=${found.size} → ${[...found].join(' / ') || '없음'}`);
   console.log(dbg.join('\n'));
 
   const list = [...found];
