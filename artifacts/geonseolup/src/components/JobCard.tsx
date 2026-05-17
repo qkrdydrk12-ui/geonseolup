@@ -20,6 +20,8 @@ import {
 interface Props {
   job: Job;
   isDupOld?: boolean;
+  isAdmin?: boolean;
+  onDelete?: (id: string, title: string) => void;
 }
 
 function maskContact(contact: string): string {
@@ -30,11 +32,14 @@ function maskContact(contact: string): string {
   return contact ? contact.slice(0, 3) + '****' : '번호없음';
 }
 
-export default function JobCard({ job, isDupOld }: Props) {
+export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Props) {
   const [, setLocation] = useLocation();
   const [detailOpen, setDetailOpen] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
   const _isHot = isHot(job.date);
@@ -46,6 +51,7 @@ export default function JobCard({ job, isDupOld }: Props) {
   const jobBadge = JOB_BADGE_COLOR[job.job] || { bg: '#f3f4f6', text: '#374151' };
 
   function handleCardClick() {
+    if (confirmDelete) return;
     markViewed(job.id);
     setLocation(`/detail/${job.id}`);
   }
@@ -66,11 +72,21 @@ export default function JobCard({ job, isDupOld }: Props) {
       ? 'text-xs font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-700'
       : 'text-xs font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-700';
 
+  async function handleConfirmDelete() {
+    if (!onDelete || deleting) return;
+    setDeleting(true);
+    onDelete(job.id, job.title || '');
+    setConfirmDelete(false);
+    setDeleting(false);
+  }
+
   return (
     <article
       className={`bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col cursor-pointer transition-all hover:-translate-y-[3px] hover:shadow-md ${
         viewed ? 'bg-[#f8f9fb] border-[#dde1e8] opacity-80 hover:opacity-100' : 'border-gray-200'
-      } ${isDupOld ? 'opacity-70 border-dashed bg-gray-50' : ''}`}
+      } ${isDupOld ? 'opacity-70 border-dashed bg-gray-50' : ''} ${
+        isAdmin && !hasPhone ? 'ring-2 ring-red-300 ring-offset-1' : ''
+      }`}
       data-id={job.id}
       onClick={handleCardClick}
     >
@@ -80,95 +96,90 @@ export default function JobCard({ job, isDupOld }: Props) {
         </div>
       )}
 
-      <div className="px-[13px] pt-[11px] pb-[9px] border-b border-gray-100 flex items-start gap-[9px]">
+      {/* 관리자 전용: 번호없음 경고 배지 */}
+      {isAdmin && !hasPhone && (
+        <div className="bg-red-500 text-white text-[10px] font-bold py-1 text-center tracking-wide">
+          ⚠️ 번호없음 — 관리자 전용 경고
+        </div>
+      )}
+
+      <div className="p-[13px] flex gap-[10px] flex-1">
         <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-[17px] shrink-0"
+          className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 mt-0.5"
           style={{ background: jobBg }}
         >
           {getJobIcon(job.job)}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-bold leading-snug mb-1 text-gray-900 line-clamp-2">
-            {job.title}
-          </div>
-          <div className="flex flex-wrap gap-[3px]">
+          <div className="flex items-start gap-1.5 flex-wrap mb-1">
             {_isNew && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#f97316] text-white animate-pulse">
+              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#f97316] text-white tracking-wide shrink-0">
                 NEW
               </span>
             )}
             {_isHot && !_isNew && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">
-                🔥 오늘
+              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-red-500 text-white tracking-wide shrink-0">
+                🔥 HOT
               </span>
             )}
             <span
-              className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
               style={{ background: jobBadge.bg, color: jobBadge.text }}
             >
               {job.job}
             </span>
-            {job.weldTest === '가능' && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-800">
-                시험가능
+            {job.job === '용접' && job.weldSub && WELD_SUBS.includes(job.weldSub) && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 shrink-0">
+                {job.weldSub}
               </span>
             )}
-            {job.weldTest === '불가능' && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
-                시험없음
-              </span>
-            )}
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700">
-              📍 {job.region || '지역미상'}
-            </span>
+            <h2 className="text-[14px] font-bold text-gray-900 leading-snug min-w-0 break-words">
+              {job.title}
+            </h2>
+          </div>
+          <div className="text-[12px] text-gray-500 flex items-center gap-1 flex-wrap">
+            <span>📍 {job.region}</span>
+            {job.salary && <><span className="text-gray-300">|</span><span className="font-semibold text-[#1e3a5f]">💰 {job.salary}</span></>}
           </div>
         </div>
       </div>
 
-      <div className="px-[13px] py-2 flex-1">
-        <ul className="list-none">
-          <li className="flex items-start gap-1.5 py-[3px] text-xs border-b border-gray-50">
-            <span className="w-[15px] text-center shrink-0 mt-0.5">💰</span>
-            <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">급여</span>
-            <span className="flex-1 font-bold text-[#f97316] text-sm">{job.salary || '협의'}</span>
-          </li>
-          {job.weldSub && WELD_SUBS.includes(job.weldSub) && (
-            <li className="flex items-start gap-1.5 py-[3px] text-xs border-b border-gray-50">
-              <span className="w-[15px] text-center shrink-0 mt-0.5">⚙️</span>
-              <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">용접종류</span>
-              <span className="flex-1 font-semibold text-gray-800">{job.weldSub}</span>
-            </li>
-          )}
-          <li className="flex items-start gap-1.5 py-[3px] text-xs border-b border-gray-50">
-            <span className="w-[15px] text-center shrink-0 mt-0.5">🍚</span>
-            <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">식사</span>
-            <span className="flex-1 font-semibold">
-              <span className={mealCls}>{job.meal || '정보없음'}</span>
+      <ul className="px-[13px] pb-[10px] flex flex-col gap-0">
+        {(job.meal || job.lodging) && (
+          <li className="flex items-center gap-1.5 py-[3px] text-xs border-t border-gray-50">
+            <span className="w-[15px] text-center shrink-0">🍱</span>
+            <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">식사/숙박</span>
+            <span className="flex items-center gap-1 flex-wrap">
+              {job.meal && <span className={mealCls}>{job.meal}</span>}
+              {job.lodging && <span className={lodgCls}>{job.lodging}</span>}
             </span>
           </li>
-          <li className="flex items-start gap-1.5 py-[3px] text-xs border-b border-gray-50">
-            <span className="w-[15px] text-center shrink-0 mt-0.5">🏠</span>
-            <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">숙박</span>
-            <span className="flex-1 font-semibold">
-              <span className={lodgCls}>{job.lodging || '정보없음'}</span>
-            </span>
-          </li>
-          <li
-            className="flex items-center gap-1.5 py-[3px] text-xs"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <span className="w-[15px] text-center shrink-0">📞</span>
-            <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">연락처</span>
-            <span className="flex-1 flex items-center gap-1.5 min-w-0">
-              {revealed ? (
-                <span className="font-semibold text-gray-800 break-all">{job.contact || '문의'}</span>
-              ) : blocked ? (
-                <span className="text-[11px] text-red-500 font-bold">🚫 과도한 조회로 제한되었습니다</span>
-              ) : (
-                <>
-                  <span className="font-semibold text-gray-400 tracking-wide">{maskContact(job.contact || '')}</span>
+        )}
+        <li className="flex items-center gap-1.5 py-[3px] text-xs border-t border-gray-50">
+          <span className="w-[15px] text-center shrink-0">📞</span>
+          <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">연락처</span>
+          <span className="flex items-center gap-1.5 flex-wrap">
+            {!job.contact ? (
+              <span className="font-semibold text-red-400">번호없음</span>
+            ) : revealed ? (
+              <a
+                href={telHref}
+                className="font-bold text-[#1e3a5f] no-underline hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {job.contact}
+              </a>
+            ) : (
+              <span className="font-semibold text-gray-600">{maskContact(job.contact)}</span>
+            )}
+            {job.contact && !revealed && (
+              <>
+                {blocked ? (
+                  <span className="text-[10px] text-red-500 font-semibold">일일 한도 초과</span>
+                ) : (
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       if (isContactBlocked()) {
                         setBlocked(true);
                         return;
@@ -180,19 +191,19 @@ export default function JobCard({ job, isDupOld }: Props) {
                   >
                     👁 보기 ({getTodayContactCount()}/{getContactDailyLimit()})
                   </button>
-                </>
-              )}
-            </span>
+                )}
+              </>
+            )}
+          </span>
+        </li>
+        {job.detail && (
+          <li className="flex items-start gap-1.5 py-[3px] text-xs border-t border-gray-50">
+            <span className="w-[15px] text-center shrink-0 mt-0.5">📝</span>
+            <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">비고</span>
+            <span className="flex-1 font-semibold text-gray-700">{job.detail}</span>
           </li>
-          {job.detail && (
-            <li className="flex items-start gap-1.5 py-[3px] text-xs border-t border-gray-50">
-              <span className="w-[15px] text-center shrink-0 mt-0.5">📝</span>
-              <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">비고</span>
-              <span className="flex-1 font-semibold text-gray-700">{job.detail}</span>
-            </li>
-          )}
-        </ul>
-      </div>
+        )}
+      </ul>
 
       <div className="px-[13px] py-1 bg-[#f8fafc] flex items-center justify-between text-[11px] text-gray-400 border-t border-gray-100">
         <span className={timeColorClass()}>🕐 {formatDate(job.date)}</span>
@@ -209,6 +220,34 @@ export default function JobCard({ job, isDupOld }: Props) {
         </div>
       )}
 
+      {/* 삭제 확인 UI */}
+      {confirmDelete && (
+        <div
+          className="px-[13px] py-2.5 bg-red-50 border-t border-red-200 flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="text-[12px] text-red-700 font-semibold flex-1">
+            이 공고를 삭제하시겠습니까?
+          </span>
+          <button
+            type="button"
+            className="text-[11px] bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg font-semibold cursor-pointer hover:bg-gray-50 font-[inherit] whitespace-nowrap"
+            onClick={() => setConfirmDelete(false)}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            disabled={deleting}
+            className="text-[11px] bg-red-500 text-white border-none px-3 py-1.5 rounded-lg font-bold cursor-pointer hover:bg-red-600 font-[inherit] whitespace-nowrap disabled:opacity-50"
+            onClick={handleConfirmDelete}
+          >
+            {deleting ? '삭제 중…' : '삭제 확인'}
+          </button>
+        </div>
+      )}
+
+      {/* 하단 액션 버튼 */}
       <div
         className="px-[13px] py-2 border-t border-gray-100 flex items-center gap-1.5"
         onClick={(e) => e.stopPropagation()}
@@ -246,6 +285,21 @@ export default function JobCard({ job, isDupOld }: Props) {
         >
           상세 →
         </button>
+        {/* 관리자 전용 삭제 버튼 */}
+        {isAdmin && onDelete && (
+          <button
+            type="button"
+            className={`py-[7px] px-[9px] rounded-lg text-[11px] font-bold cursor-pointer border-none transition-colors whitespace-nowrap shrink-0 ${
+              confirmDelete
+                ? 'bg-red-100 text-red-500'
+                : 'bg-red-500 text-white hover:bg-red-600'
+            }`}
+            onClick={() => setConfirmDelete(!confirmDelete)}
+            title="공고 삭제"
+          >
+            🗑 삭제
+          </button>
+        )}
       </div>
     </article>
   );

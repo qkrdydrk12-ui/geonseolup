@@ -5,7 +5,9 @@ import {
   isTokenValid,
   refreshTokenExpiry,
   getTokenFromReq,
+  requireAdmin,
 } from "../lib/adminStore";
+import { updateDocument, addDocument } from "../lib/firestoreClient.js";
 
 const router = Router();
 
@@ -62,5 +64,54 @@ router.post("/admin/update-creds", (req: Request, res: Response) => {
   if (newPw && newPw.trim().length >= 6) adminStore.adminPw = newPw.trim();
   res.json({ ok: true });
 });
+
+// DELETE /api/admin/jobs/:id — 공고 소프트 삭제 (관리자 인증 필수)
+// 백엔드에서 관리자 권한 검증 후 deleted=true soft delete 처리 + 삭제 로그 저장
+router.delete(
+  "/admin/jobs/:id",
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const jobId = Array.isArray(req.params["id"]) ? req.params["id"][0] : req.params["id"];
+    if (!jobId) {
+      res.status(400).json({ ok: false, message: "공고 ID가 필요합니다" });
+      return;
+    }
+    const { reason, jobTitle } = req.body as {
+      reason?: string;
+      jobTitle?: string;
+    };
+    const now = new Date().toISOString();
+    const deletedBy = adminStore.adminId || "admin";
+
+    try {
+      // 소프트 삭제: hidden=true, _deleted=true, 삭제 메타 기록
+      await updateDocument("jobs", jobId, {
+        hidden: true,
+        _deleted: true,
+        deletedAt: now,
+        deletedBy,
+        deleteReason: reason || null,
+      });
+
+      // 삭제 로그 저장 (별도 컬렉션)
+      try {
+        await addDocument("deleteLogs", {
+          jobId,
+          jobTitle: jobTitle || null,
+          deletedAt: now,
+          deletedBy,
+          reason: reason || null,
+          _createdAt: now,
+        });
+      } catch {
+        // 로그 저장 실패는 삭제 성공을 취소하지 않음
+      }
+
+      res.json({ ok: true, jobId, deletedAt: now });
+    } catch (err) {
+      res.status(500).json({ ok: false, message: String(err) });
+    }
+  }
+);
 
 export default router;

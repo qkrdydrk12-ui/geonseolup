@@ -3,6 +3,7 @@ import type { Job } from '@/lib/firebase';
 import { fbOnJobs } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { isAutoHidden, WELD_SUBS, isWeld } from '@/lib/utils';
+import { getToken } from '@/lib/adminAuth';
 import JobCard from '@/components/JobCard';
 
 const DEFAULT_AUTO_HIDE = 0;
@@ -209,6 +210,8 @@ export default function Home() {
   const [loadMoreBusy, setLoadMoreBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [regionOpen, setRegionOpen] = useState(false);
+  // 관리자 로그인 상태 감지 (sessionStorage 기반)
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => !!getToken());
   const [jobOpen, setJobOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -226,6 +229,48 @@ export default function Home() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // 관리자 상태 실시간 감지 (같은 탭 내 로그인/아웃 반영)
+  useEffect(() => {
+    const check = () => setIsAdmin(!!getToken());
+    const timer = setInterval(check, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 공고 소프트 삭제 — 백엔드 API 통해 관리자 권한 검증 후 처리
+  async function handleDeleteJob(jobId: string, jobTitle: string) {
+    const token = getToken();
+    if (!token) {
+      showToast('⚠️ 관리자 로그인이 필요합니다', 'error');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jobTitle }),
+      });
+      const data = await res.json() as { ok: boolean; message?: string };
+      if (res.ok && data.ok) {
+        // 목록에서 즉시 제거 (페이지 새로고침 없이)
+        setState((prev) => {
+          const allJobs = prev.allJobs.filter((j) => j.id !== jobId);
+          const filtered = filterAndSort(allJobs, { ...prev, allJobs });
+          return { ...prev, allJobs, filtered };
+        });
+        showToast('🗑 공고가 삭제됐습니다', 'success');
+      } else if (res.status === 401 || res.status === 403) {
+        showToast('⚠️ 관리자 권한이 없습니다', 'error');
+      } else {
+        showToast(`❌ 삭제 실패: ${data.message ?? '오류'}`, 'error');
+      }
+    } catch (e) {
+      showToast(`❌ 네트워크 오류: ${String(e)}`, 'error');
+    }
+  }
 
   useEffect(() => {
     let resolved = false;
@@ -331,7 +376,14 @@ export default function Home() {
   function buildGridItems() {
     const items: React.ReactNode[] = [];
     pageItems.forEach((job, idx) => {
-      items.push(<JobCard key={job.id} job={job} />);
+      items.push(
+        <JobCard
+          key={job.id}
+          job={job}
+          isAdmin={isAdmin}
+          onDelete={isAdmin ? handleDeleteJob : undefined}
+        />
+      );
       const isLastItem = idx === pageItems.length - 1;
       const showInfeed = !isLastItem && (idx + 1) % INFEED_EVERY === 0;
       if (showInfeed && (infeedImgAd || infeedCode.trim())) {
