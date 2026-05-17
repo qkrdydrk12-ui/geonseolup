@@ -210,7 +210,8 @@ function formatSalary(num: number): string {
   return num.toLocaleString('ko-KR') + '원';
 }
 
-const SALARY_KW = '일당|단가|급여|임금|공임|일급|조공|기공|안전담당자|화기감시자|초보|팀원|팀장';
+// 출퇴근·숙소·식대포함 등 단가 컨텍스트 포함 — 명시적 원 단위 금액과 함께 나올 때 최우선 처리
+const SALARY_KW = '일당|단가|급여|임금|공임|일급|조공|기공|안전담당자|화기감시자|초보|팀원|팀장|출퇴근|숙소|숙박|식대';
 
 const NOISE_PATS: RegExp[] = [
   /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/g,  // 전화번호
@@ -224,6 +225,12 @@ const NOISE_PATS: RegExp[] = [
   /\d+\s*층/g,                                 // 층수 (건물/현장 층)
   /B\d+/gi,                                    // 지하층 (B1, B2 등)
   /\d+\s*호(?:기|실)?/g,                       // 호기/호실
+  // ── 나이·기간·근무일·제도 — 급여 오인식 방지 ──────────────────────────────
+  /\d+\s*세/g,                                 // 나이: 22세, 55세, ~55세
+  /[2-6]0\s*대/g,                              // 나이 세대: 20대, 30대, 40대, 50대, 60대
+  /주\s*[3-7]\s*일/g,                          // 근무일수: 주5일, 주6일
+  /4\s*대\s*보험/g,                             // 4대보험
+  /\d+\s*년/g,                                  // 기간: 2년, 3년
 ];
 
 /** 단일 숫자 문자열 → 원 단위 정수 정규화 */
@@ -270,55 +277,74 @@ function extractSalary(text: string): { text: string; num: number; score: number
     candidates.push({ raw, num, score, reason });
   }
 
+  const salDbg: string[] = [];
+  salDbg.push(`[salary:start] cleaned="${cleaned.slice(0, 120)}"`);
+
   let m: RegExpExecArray | null;
+
+  // ── 0순위 (최우선): 출퇴근|숙소|숙박 + 명시적 원 단위 금액 ─────────────────
+  // 예: "출퇴근 : 180,000원", "숙박 : 200,000원 (식대포함)"
+  // → 나이 키워드(초보)와 혼동 없는 명확한 일당 표현이므로 score 95
+  const reChk = /(출퇴근|숙소|숙박|식대)[\s\S]{0,10}?(\d{2,3}[,\.]\d{3})\s*원?/gi;
+  while ((m = reChk.exec(text)) !== null) {   // NOISE_PATS 전 원본 text 사용
+    const num = normalizeSalaryNum(m[2].replace('.', ','));
+    if (num) { add(m[0].trim(), num, 95, `"${m[1]}" + 원 단위 금액`); salDbg.push(`  ✓ [0순위] "${m[0].trim()}" → ${num}`); }
+  }
 
   // ── 1순위: 키워드 + 명시적 금액 ─────────────────────────────────────────
   // 예: "조공 15만", "안전담당자 170,000", "초보 140000"
+  // 단, "출퇴근|숙소|식대" 키워드에서는 만원 암묵 단위(10~49) 금지 (→ 2순위 제외)
+  const IMPLICIT_SKIP = new Set(['출퇴근', '숙소', '숙박', '식대']);
   const kwExplicit = new RegExp(
     `(${SALARY_KW})\\s*(?:[가-힣]{0,6}\\s*)?(\\d{1,3}(?:[.,]\\d{3})?(?:\\.\\d+)?\\s*만원?|\\d{5,6}|\\d{2,3}[.,]\\d{3})`,
     'gi'
   );
   while ((m = kwExplicit.exec(cleaned)) !== null) {
     const num = normalizeSalaryNum(m[2].trim());
-    if (num) add(m[0], num, 90, `키워드 "${m[1]}" + 금액`);
+    if (num) { add(m[0], num, 90, `키워드 "${m[1]}" + 금액`); salDbg.push(`  ✓ [1순위] "${m[0]}" → ${num}`); }
   }
 
   // ── 2순위: 키워드 + 만원단위 소수/정수 (일당 17, 팀원 단가 16.5) ──────────
+  // 출퇴근·숙소·숙박·식대는 제외 (나이 숫자와 혼동 가능성 차단)
   const kwImplicit = new RegExp(
-    `(${SALARY_KW})\\s*(?:[가-힣]{0,6}\\s*)?((?:1[0-9]|[2-4][0-9])(?:\\.\\d+)?)(?![0-9만천,\\.원])`,
+    `(${SALARY_KW})\\s*(?:[가-힣]{0,6}\\s*)?((?:1[0-9]|[2-4][0-9])(?:\\.\\d+)?)(?![0-9만천,\\.원세])`,
     'gi'
   );
   while ((m = kwImplicit.exec(cleaned)) !== null) {
+    if (IMPLICIT_SKIP.has(m[1].toLowerCase())) continue;
     const val = parseFloat(m[2]);
-    if (val >= 10 && val < 50) add(m[0], Math.round(val * 10000), 85, `키워드 "${m[1]}" + 만원단위`);
+    if (val >= 10 && val < 50) {
+      add(m[0], Math.round(val * 10000), 85, `키워드 "${m[1]}" + 만원단위`);
+      salDbg.push(`  ✓ [2순위] "${m[0]}" → ${Math.round(val * 10000)}`);
+    }
   }
 
   // ── 3순위: N만N천 / N.N만 / N만 표현 ─────────────────────────────────────
   const manPat = /(\d{1,3})\s*만\s*(\d)\s*천|([\d]{1,3}(?:\.\d+)?)\s*만원?/g;
   while ((m = manPat.exec(cleaned)) !== null) {
     const num = normalizeSalaryNum(m[0].replace(/\s/g, ''));
-    if (num) add(m[0], num, 70, '만원 표현');
+    if (num) { add(m[0], num, 70, '만원 표현'); salDbg.push(`  ✓ [3순위] "${m[0]}" → ${num}`); }
   }
 
   // ── 4순위: NNN,NNN / NNN.NNN (쉼표·점 천단위 구분자) ──────────────────────
   const sepPat = /\b(\d{2,3})[.,](\d{3})\b/g;
   while ((m = sepPat.exec(cleaned)) !== null) {
     const num = normalizeSalaryNum(m[0]);
-    if (num) add(m[0], num, 75, '구분자 금액');
+    if (num) { add(m[0], num, 75, '구분자 금액'); salDbg.push(`  ✓ [4순위] "${m[0]}" → ${num}`); }
   }
 
   // ── 5순위 (AI 휴리스틱): 순수 5~6자리 정수 (170000, 140000) ──────────────
   const intPat = /\b(\d{5,6})\b/g;
   while ((m = intPat.exec(cleaned)) !== null) {
     const num = parseInt(m[1]);
-    if (num >= 50000 && num <= 800000) add(m[1], num, 55, '숫자 직접 표기');
+    if (num >= 50000 && num <= 800000) { add(m[1], num, 55, '숫자 직접 표기'); salDbg.push(`  ✓ [5순위] "${m[1]}" → ${num}`); }
   }
 
   // ── 6순위: 기호 prefix 단가 (-, ~, •, >, * 등) ───────────────────────────
   // 예: "-17" → 170000, "~14.5" → 145000, "• 16.5" → 165000
   // 줄 시작 / 공백·구분자 다음에 오는 기호+숫자, 1~30 범위만 허용
   const prefixSymPat = new RegExp(
-    `(?:^|[\\s\\n,/|])${WAGE_PREFIX}\\s*(\\d+(?:\\.\\d+)?)(?:\\s*만원?)?(?![\\d\\-])`,
+    `(?:^|[\\s\\n,/|])${WAGE_PREFIX}\\s*(\\d+(?:\\.\\d+)?)(?:\\s*만원?)?(?![\\d\\-세])`,
     'gm'
   );
   while ((m = prefixSymPat.exec(cleaned)) !== null) {
@@ -326,8 +352,12 @@ function extractSalary(text: string): { text: string; num: number; score: number
     if (n >= 1 && n < 50) {
       const num = Math.round(n * 10000);
       add(m[0].trim(), num, 72, `기호 prefix "${m[0].trim()}"`);
+      salDbg.push(`  ✓ [6순위] "${m[0].trim()}" → ${num}`);
     }
   }
+
+  salDbg.push(`[salary:end] candidates=${candidates.length} best=${candidates[0]?.num ?? '없음'}`);
+  console.log(salDbg.join('\n'));
 
   if (candidates.length === 0) return null;
 
