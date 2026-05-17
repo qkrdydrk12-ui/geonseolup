@@ -2129,32 +2129,8 @@ export default function Admin() {
                 rows={4}
                 className="w-full py-3.5 px-3.5 border-2 border-gray-200 rounded-[10px] text-sm outline-none font-[inherit] focus:border-[#f97316] resize-y min-h-[120px]"
               />
+              {/* ── 빠른 예약 버튼: 붙여넣기 후 바로 클릭 ── */}
               <div className="mt-2 flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  className="bg-blue-600 text-white border-none py-2 px-4 rounded-lg text-sm font-bold cursor-pointer hover:bg-blue-700 transition-colors font-[inherit]"
-                  onClick={handleParse}
-                >
-                  🔍 자동 파싱
-                </button>
-                <button
-                  type="button"
-                  className="bg-violet-600 text-white border-none py-2 px-4 rounded-lg text-sm font-bold cursor-pointer hover:bg-violet-700 transition-colors font-[inherit]"
-                  onClick={() => {
-                    if (!form.title?.trim() || !form.region || !form.job) {
-                      showToast('⚠️ 먼저 공고 내용을 파싱하거나 입력해주세요 (제목·지역·직종 필수)');
-                      return;
-                    }
-                    const kstNow = new Date(Date.now() + 9 * 3600000);
-                    setReserveDate(nowKSTDate());
-                    const nextHour = new Date(kstNow.getTime() + 3600000);
-                    setReserveTime(nextHour.toISOString().slice(11, 16));
-                    setShowReserveModal(true);
-                  }}
-                >
-                  📅 예약 등록
-                </button>
-                {/* ── 빠른 예약 버튼 ── */}
                 <button
                   type="button"
                   disabled={submitting}
