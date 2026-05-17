@@ -2,7 +2,7 @@
 // 매 60초마다 Firebase Firestore를 직접 체크하여 예약 시간 도달 공고를 발행합니다.
 // 브라우저/클라이언트 세션과 완전히 독립적으로 동작합니다.
 
-import { runQuery, updateDocument, addDocument } from "./firestoreClient.js";
+import { runQuery, updateDocument, addDocument, isPermissionError } from "./firestoreClient.js";
 import { logger } from "./logger.js";
 
 const INTERVAL_MS = 60 * 1000; // 1분
@@ -150,12 +150,17 @@ export async function runSchedulerOnce(): Promise<{
         );
       } catch (err) {
         failed++;
-        const reason = String(err).slice(0, 200);
+        const errMsg = String(err);
+        // 권한 오류(403)는 재시도해도 해결 안 됨 → 즉시 영구 실패 처리
+        const perm = isPermissionError(0, errMsg) || errMsg.includes("403");
+        const reason = perm
+          ? `Firestore 권한 오류(403) — Firestore 보안 규칙에서 익명 쓰기 허용 필요 [sdk=REST/anonymous]`
+          : errMsg.slice(0, 200);
         const retryCount = Number(job.retryCount ?? 0);
 
         await updateDocument("jobs", job.id, {
           status: "failed",
-          retryCount: retryCount + 1,
+          retryCount: perm ? 99 : retryCount + 1, // 권한 오류는 99로 설정해 자동 재시도 차단
           lastRetryAt: new Date().toISOString(),
           failReason: reason,
         }).catch(() => {});
@@ -166,13 +171,22 @@ export async function runSchedulerOnce(): Promise<{
           scheduledAt: job.reservedAt ?? "",
           status: "failed",
           failReason: reason,
-          retryCount: retryCount + 1,
+          retryCount: perm ? 99 : retryCount + 1,
           createdAt: new Date().toISOString(),
         }).catch(() => {});
 
         logger.error(
-          { jobId: job.id, err, reason },
-          "서버 스케줄러: 예약 공고 발행 실패"
+          {
+            jobId: job.id,
+            errMsg,
+            reason,
+            isPermission: perm,
+            sdk: "REST/anonymous-auth",
+            collection: "jobs",
+          },
+          perm
+            ? "서버 스케줄러: Firestore 권한 오류(403) — 보안 규칙 확인 필요"
+            : "서버 스케줄러: 예약 공고 발행 실패"
         );
       }
     }
@@ -184,9 +198,10 @@ export async function runSchedulerOnce(): Promise<{
 
     const toRetry = failedJobs.filter(
       (j) =>
-        (j.retryCount ?? 0) < 3 &&
+        (j.retryCount ?? 0) < 3 &&   // 99는 권한 오류 영구 실패 — 재시도 차단
         j.lastRetryAt != null &&
-        now - new Date(j.lastRetryAt).getTime() >= 5 * 60000
+        now - new Date(j.lastRetryAt).getTime() >= 5 * 60000 &&
+        !(String(j.failReason ?? "").includes("403") || String(j.failReason ?? "").includes("권한 오류"))
     );
 
     for (const job of toRetry) {

@@ -1792,8 +1792,13 @@ export default function Admin() {
                         )}
                         {job.status === 'failed' && (
                           <span className="text-red-500 font-bold">
-                            ❌ 발행실패{(job.retryCount || 0) > 0 ? ` (${job.retryCount}회 시도)` : ''}
-                            {job.failReason ? ` · ${job.failReason.slice(0, 40)}` : ''}
+                            ❌ {(job.failReason || '').includes('403') || (job.failReason || '').includes('권한')
+                              ? 'Firestore 권한 오류(403)'
+                              : `발행실패${(job.retryCount || 0) > 0 && (job.retryCount || 0) < 99 ? ` (${job.retryCount}회 시도)` : ''}`
+                            }
+                            {job.failReason && !((job.failReason).includes('403') || (job.failReason).includes('권한'))
+                              ? ` · ${job.failReason.slice(0, 40)}`
+                              : ''}
                           </span>
                         )}
                         {job.hidden && <span className="text-amber-600 font-bold">🙈 숨김</span>}
