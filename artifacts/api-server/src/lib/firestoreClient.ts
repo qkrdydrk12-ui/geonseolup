@@ -1,6 +1,7 @@
 // Firestore REST API client
-// Write operations use Firebase Anonymous Auth to satisfy "request.auth != null" rules.
-// Read operations use the API key only (allows unauthenticated reads).
+// Write operations first try WITHOUT auth (works when Firestore rules allow unauthenticated writes).
+// If the response is 401/403, retries with a Firebase Anonymous Auth token.
+// Read operations always use the API key only (no auth needed).
 
 const PROJECT_ID = "geonseolup";
 const API_KEY = "AIzaSyDBV9vioVA_Avbd0CGH7fMzCVZEYbG3UQM";
@@ -17,8 +18,12 @@ interface AuthCache {
 }
 
 let _authCache: AuthCache | null = null;
+// Track whether anonymous auth is available (disabled = CONFIGURATION_NOT_FOUND)
+let _anonAuthDisabled = false;
 
-async function getAnonymousToken(): Promise<string> {
+async function getAnonymousToken(): Promise<string | null> {
+  if (_anonAuthDisabled) return null;
+
   const now = Date.now();
 
   // Return cached token if still valid (60 s buffer)
@@ -53,28 +58,40 @@ async function getAnonymousToken(): Promise<string> {
   }
 
   // Fresh anonymous sign-in
-  const res = await fetch(AUTH_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ returnSecureToken: true }),
-  });
+  try {
+    const res = await fetch(AUTH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ returnSecureToken: true }),
+    });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Firebase 익명 인증 실패 [${res.status}]: ${text}`);
+    if (!res.ok) {
+      const text = await res.text();
+      if (text.includes("CONFIGURATION_NOT_FOUND") || text.includes("ADMIN_ONLY_OPERATION")) {
+        // Anonymous Auth provider is disabled in this Firebase project.
+        // Mark as disabled so we stop trying — writes will work without auth
+        // if Firestore rules allow unauthenticated access.
+        _anonAuthDisabled = true;
+        return null;
+      }
+      throw new Error(`Firebase 익명 인증 실패 [${res.status}]: ${text}`);
+    }
+
+    const d = (await res.json()) as {
+      idToken: string;
+      refreshToken: string;
+      expiresIn: string;
+    };
+    _authCache = {
+      idToken: d.idToken,
+      refreshToken: d.refreshToken,
+      expiresAt: now + Number(d.expiresIn) * 1000,
+    };
+    return _authCache.idToken;
+  } catch (err) {
+    // Network error — don't mark as permanently disabled
+    throw err;
   }
-
-  const d = (await res.json()) as {
-    idToken: string;
-    refreshToken: string;
-    expiresIn: string;
-  };
-  _authCache = {
-    idToken: d.idToken,
-    refreshToken: d.refreshToken,
-    expiresAt: now + Number(d.expiresIn) * 1000,
-  };
-  return _authCache.idToken;
 }
 
 // ── Permission error detection ────────────────────────────────────────────────
@@ -165,6 +182,42 @@ function docToObject(doc: FsDoc): Record<string, unknown> & { id: string } {
   return { id, ...fromFsFields(doc.fields) };
 }
 
+// ── Internal helper: fetch with optional retry using anonymous auth ────────────
+
+async function fetchWithAuth(
+  url: string,
+  method: "PATCH" | "POST",
+  body: string
+): Promise<Response> {
+  // Attempt 1: no auth (works when Firestore rules allow unauthenticated writes)
+  const res1 = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+
+  // If not an auth error, return as-is (success or non-auth failure)
+  if (res1.status !== 401 && res1.status !== 403) {
+    return res1;
+  }
+
+  // Attempt 2: try with anonymous auth token
+  const token = await getAnonymousToken();
+  if (!token) {
+    // Anonymous auth unavailable — return original error response
+    return res1;
+  }
+
+  return fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body,
+  });
+}
+
 // ── Query (read — API key only, no auth required) ─────────────────────────────
 
 export interface FsFilter {
@@ -225,60 +278,46 @@ export async function runQuery(
     .map((r) => docToObject(r.document!));
 }
 
-// ── Update (PATCH with updateMask) — requires auth ────────────────────────────
+// ── Update (PATCH with updateMask) ────────────────────────────────────────────
 
 export async function updateDocument(
   collectionId: string,
   docId: string,
   updates: Record<string, unknown>
 ): Promise<void> {
-  const token = await getAnonymousToken();
   const fields = toFsFields(updates);
   const maskParams = Object.keys(updates)
     .map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`)
     .join("&");
   const url = `${BASE_URL}/${collectionId}/${encodeURIComponent(docId)}?${maskParams}&key=${API_KEY}`;
+  const body = JSON.stringify({ fields });
 
-  const res = await fetch(url, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({ fields }),
-  });
+  const res = await fetchWithAuth(url, "PATCH", body);
 
   if (!res.ok) {
     const text = await res.text();
     const kind = isPermissionError(res.status, text)
-      ? "Firestore 권한 오류(403) — 보안 규칙에서 익명 쓰기를 허용해야 합니다"
+      ? "Firestore 권한 오류 — 보안 규칙에서 쓰기를 허용해야 합니다"
       : `Firestore updateDocument 실패 [${res.status}]`;
     throw new Error(`${kind} collection=${collectionId} id=${docId}: ${text}`);
   }
 }
 
-// ── Add (POST) — requires auth ────────────────────────────────────────────────
+// ── Add (POST) ────────────────────────────────────────────────────────────────
 
 export async function addDocument(
   collectionId: string,
   data: Record<string, unknown>
 ): Promise<string> {
-  const token = await getAnonymousToken();
   const url = `${BASE_URL}/${collectionId}?key=${API_KEY}`;
+  const body = JSON.stringify({ fields: toFsFields(data) });
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({ fields: toFsFields(data) }),
-  });
+  const res = await fetchWithAuth(url, "POST", body);
 
   if (!res.ok) {
     const text = await res.text();
     const kind = isPermissionError(res.status, text)
-      ? "Firestore 권한 오류(403) — 보안 규칙에서 익명 쓰기를 허용해야 합니다"
+      ? "Firestore 권한 오류 — 보안 규칙에서 쓰기를 허용해야 합니다"
       : `Firestore addDocument 실패 [${res.status}]`;
     throw new Error(`${kind} collection=${collectionId}: ${text}`);
   }

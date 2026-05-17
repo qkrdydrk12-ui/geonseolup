@@ -1178,12 +1178,16 @@ export default function Admin() {
     isRunning?: boolean;
     totalPublished?: number;
     totalRetried?: number;
+    totalFailed?: number;
     lastPublished?: number;
     lastRetried?: number;
+    lastFailed?: number;
+    lastError?: string | null;
     nextRunInSeconds?: number;
     intervalSeconds?: number;
   }
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
+  const [triggerResult, setTriggerResult] = useState<{ published: number; failed: number } | null>(null);
 
   const fetchSchedulerStatus = useCallback(async () => {
     try {
@@ -1716,15 +1720,35 @@ export default function Admin() {
             </h2>
 
             {/* 서버 스케줄러 상태 */}
-            <div className={`mb-4 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs border ${
-              schedulerStatus?.ok
-                ? 'bg-green-50 border-green-200'
-                : 'bg-amber-50 border-amber-200'
+            <div className={`mb-4 rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs border ${
+              !schedulerStatus?.ok
+                ? 'bg-amber-50 border-amber-200'
+                : (schedulerStatus.totalFailed ?? 0) > 0
+                ? 'bg-red-50 border-red-200'
+                : 'bg-green-50 border-green-200'
             }`}>
               <div className="flex items-center gap-2">
-                <span className={`inline-block w-2 h-2 rounded-full ${schedulerStatus?.isRunning ? 'bg-blue-400 animate-pulse' : schedulerStatus?.ok ? 'bg-green-500' : 'bg-amber-400'}`} />
-                <span className={`font-bold ${schedulerStatus?.ok ? 'text-green-800' : 'text-amber-800'}`}>
-                  {schedulerStatus?.ok ? '🖥 서버 스케줄러 활성' : '⚠️ 서버 연결 확인 중'}
+                <span className={`inline-block w-2 h-2 rounded-full ${
+                  schedulerStatus?.isRunning
+                    ? 'bg-blue-400 animate-pulse'
+                    : !schedulerStatus?.ok
+                    ? 'bg-amber-400'
+                    : (schedulerStatus.totalFailed ?? 0) > 0
+                    ? 'bg-red-500'
+                    : 'bg-green-500'
+                }`} />
+                <span className={`font-bold ${
+                  !schedulerStatus?.ok ? 'text-amber-800'
+                  : (schedulerStatus.totalFailed ?? 0) > 0 ? 'text-red-700'
+                  : 'text-green-800'
+                }`}>
+                  {schedulerStatus?.isRunning
+                    ? '⚙️ 스케줄러 실행 중…'
+                    : !schedulerStatus?.ok
+                    ? '⚠️ 서버 연결 확인 중'
+                    : (schedulerStatus.totalFailed ?? 0) > 0
+                    ? '⚠️ 서버 스케줄러 (발행 실패 있음)'
+                    : '🖥 서버 스케줄러 활성'}
                 </span>
               </div>
               {schedulerStatus?.ok && (
@@ -1740,21 +1764,63 @@ export default function Admin() {
                   <span className="text-gray-500">
                     누적 발행: <span className="font-bold text-green-700">{schedulerStatus.totalPublished ?? 0}건</span>
                   </span>
+                  {(schedulerStatus.totalFailed ?? 0) > 0 && (
+                    <span className="text-red-600 font-bold">
+                      발행 실패: {schedulerStatus.totalFailed}건
+                      {schedulerStatus.lastFailed ? ` (마지막 ${schedulerStatus.lastFailed}건)` : ''}
+                    </span>
+                  )}
                   {(schedulerStatus.totalRetried ?? 0) > 0 && (
                     <span className="text-gray-500">재시도: <span className="font-semibold text-blue-600">{schedulerStatus.totalRetried}건</span></span>
                   )}
                   <span className="text-gray-400">다음 실행: {schedulerStatus.nextRunInSeconds ?? '?'}초 후</span>
+                  {triggerResult && (
+                    <span className={`font-semibold ${triggerResult.failed > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                      {triggerResult.failed > 0
+                        ? `❌ 발행 ${triggerResult.published}건 성공 / ${triggerResult.failed}건 실패`
+                        : triggerResult.published > 0
+                        ? `✅ ${triggerResult.published}건 발행 완료`
+                        : '✅ 실행 완료 (대상 없음)'}
+                    </span>
+                  )}
                   <button
                     type="button"
-                    className="ml-auto text-[11px] bg-white border border-green-300 text-green-700 px-2 py-0.5 rounded-lg font-bold cursor-pointer hover:bg-green-100 font-[inherit]"
+                    className="ml-auto text-[11px] bg-white border border-green-300 text-green-700 px-2.5 py-1 rounded-lg font-bold cursor-pointer hover:bg-green-100 font-[inherit] whitespace-nowrap"
                     onClick={async () => {
                       const token = getToken();
                       if (!token) { showToast('⚠️ 관리자 인증이 필요합니다'); return; }
-                      const res = await fetch('/api/scheduler/trigger', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-                      if (res.ok) { showToast('✅ 스케줄러 즉시 실행됐습니다'); fetchSchedulerStatus(); loadJobs(); }
+                      setTriggerResult(null);
+                      showToast('⚙️ 스케줄러 실행 중…');
+                      try {
+                        const res = await fetch('/api/scheduler/trigger', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                        const data = await res.json() as { ok: boolean; result?: { published: number; retried: number; failed: number }; message?: string };
+                        if (res.ok && data.ok) {
+                          const r = data.result ?? { published: 0, retried: 0, failed: 0 };
+                          setTriggerResult({ published: r.published, failed: r.failed });
+                          showToast(
+                            r.failed > 0
+                              ? `❌ ${r.published}건 발행 / ${r.failed}건 실패 — 아래 실패 공고 확인`
+                              : r.published > 0
+                              ? `✅ ${r.published}건 발행 완료`
+                              : '✅ 실행 완료 (발행 대기 공고 없음)'
+                          );
+                          fetchSchedulerStatus();
+                          loadJobs();
+                        } else {
+                          showToast(`❌ 실행 실패: ${data.message ?? '알 수 없는 오류'}`);
+                        }
+                      } catch (e) {
+                        showToast(`❌ 네트워크 오류: ${String(e)}`);
+                      }
                     }}
-                  >⚡ 즉시 실행</button>
+                  >⚡ 즉시 실행 테스트</button>
                 </>
+              )}
+              {/* 마지막 오류 표시 */}
+              {schedulerStatus?.ok && schedulerStatus.lastError && (
+                <div className="w-full mt-1 text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+                  <span className="font-bold">마지막 오류: </span>{schedulerStatus.lastError.slice(0, 120)}
+                </div>
               )}
             </div>
 
@@ -1792,12 +1858,16 @@ export default function Admin() {
                         )}
                         {job.status === 'failed' && (
                           <span className="text-red-500 font-bold">
-                            ❌ {(job.failReason || '').includes('403') || (job.failReason || '').includes('권한')
-                              ? 'Firestore 권한 오류(403)'
-                              : `발행실패${(job.retryCount || 0) > 0 && (job.retryCount || 0) < 99 ? ` (${job.retryCount}회 시도)` : ''}`
-                            }
-                            {job.failReason && !((job.failReason).includes('403') || (job.failReason).includes('권한'))
-                              ? ` · ${job.failReason.slice(0, 40)}`
+                            ❌ {(() => {
+                              const r = job.failReason || '';
+                              if (r.includes('권한') || r.includes('PERMISSION_DENIED')) return 'Firestore 권한 오류 — 보안 규칙 확인 필요';
+                              if (r.includes('CONFIGURATION_NOT_FOUND')) return '익명 인증 비활성화 — Firebase Console 확인';
+                              if (r.includes('401') || r.includes('UNAUTHENTICATED')) return '인증 오류 (401)';
+                              if ((job.retryCount || 0) === 99) return '영구 실패 (재시도 중단)';
+                              return `발행 실패${(job.retryCount || 0) > 0 && (job.retryCount || 0) < 99 ? ` (${job.retryCount}회 시도)` : ''}`;
+                            })()}
+                            {job.failReason && !['권한', 'PERMISSION_DENIED', 'CONFIGURATION_NOT_FOUND'].some((k) => (job.failReason || '').includes(k))
+                              ? ` · ${job.failReason.slice(0, 50)}`
                               : ''}
                           </span>
                         )}
