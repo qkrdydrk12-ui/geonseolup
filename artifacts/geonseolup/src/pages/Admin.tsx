@@ -1190,24 +1190,38 @@ export default function Admin() {
       return;
     }
     setSubmitting(true);
-    await fbAddJob({
-      ...form,
-      salaryNum: parseSalaryNum(form.salary || ''),
-      date: new Date().toISOString(),
-      hidden: false,
-    } as Omit<Job, 'id'>);
-    showToast('✅ 공고가 등록됐습니다!');
-    // 자동완성 기록 업데이트
-    const acCopy = { companies: [...acHistory.companies], sites: [...acHistory.sites], contacts: [...acHistory.contacts] };
-    let acChanged = false;
-    const co = form.company?.trim(); if (co && !acCopy.companies.includes(co)) { acCopy.companies = [co, ...acCopy.companies].slice(0, 20); acChanged = true; }
-    const si = form.site?.trim(); if (si && !acCopy.sites.includes(si)) { acCopy.sites = [si, ...acCopy.sites].slice(0, 20); acChanged = true; }
-    const ct = form.contact?.trim(); if (ct && !acCopy.contacts.includes(ct)) { acCopy.contacts = [ct, ...acCopy.contacts].slice(0, 20); acChanged = true; }
-    if (acChanged) { setAcHistory(acCopy); localStorage.setItem('cj_ac_history', JSON.stringify(acCopy)); }
-    applySmartClear(form);
-    if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
-    loadJobs(); // 백그라운드 업데이트
-    setSubmitting(false);
+    try {
+      console.log('[Admin] 공고 등록 시작:', form.title);
+      const savedId = await fbAddJob({
+        ...form,
+        salaryNum: parseSalaryNum(form.salary || ''),
+        date: new Date().toISOString(),
+        hidden: false,
+      } as Omit<Job, 'id'>);
+      console.log('[Admin] Firebase 저장 완료, id:', savedId);
+
+      // ── 저장 확인 후 자동완성 기록 업데이트 ──
+      const acCopy = { companies: [...acHistory.companies], sites: [...acHistory.sites], contacts: [...acHistory.contacts] };
+      let acChanged = false;
+      const co = form.company?.trim(); if (co && !acCopy.companies.includes(co)) { acCopy.companies = [co, ...acCopy.companies].slice(0, 20); acChanged = true; }
+      const si = form.site?.trim(); if (si && !acCopy.sites.includes(si)) { acCopy.sites = [si, ...acCopy.sites].slice(0, 20); acChanged = true; }
+      const ct = form.contact?.trim(); if (ct && !acCopy.contacts.includes(ct)) { acCopy.contacts = [ct, ...acCopy.contacts].slice(0, 20); acChanged = true; }
+      if (acChanged) { setAcHistory(acCopy); localStorage.setItem('cj_ac_history', JSON.stringify(acCopy)); }
+
+      // ── 목록 새로고침 (저장 확인 후) ──
+      await loadJobs();
+
+      // ── 성공 toast (DB 저장 완료 후에만 표시) ──
+      showToast('✅ 공고가 등록됐습니다!');
+      applySmartClear(form);
+      if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Admin] 공고 등록 실패:', msg, err);
+      showToast(`❌ 등록 실패: ${msg.slice(0, 60)}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function handleToggleHide(id: string, hidden: boolean) {
@@ -1238,26 +1252,32 @@ export default function Admin() {
   }
 
   async function handleApprovePending(item: PendingJob) {
-    await fbAddJob({
-      title: item.title || '',
-      region: item.region || '',
-      job: item.job || '',
-      weldSub: item.weldSub || '',
-      weldTest: item.weldTest || '',
-      salary: item.salary || '',
-      salaryNum: item.salaryNum || 0,
-      meal: item.meal || '',
-      lodging: item.lodging || '',
-      contact: item.contact || '',
-      detail: item.detail || '',
-      originalText: item.originalText || '',
-      date: item.date || new Date().toISOString(),
-      hidden: false,
-    });
-    await fbUpdatePending(item.id, { status: 'approved' });
-    showToast('✅ 승인 처리됐습니다');
-    await loadJobs();
-    await loadPending();
+    try {
+      await fbAddJob({
+        title: item.title || '',
+        region: item.region || '',
+        job: item.job || '',
+        weldSub: item.weldSub || '',
+        weldTest: item.weldTest || '',
+        salary: item.salary || '',
+        salaryNum: item.salaryNum || 0,
+        meal: item.meal || '',
+        lodging: item.lodging || '',
+        contact: item.contact || '',
+        detail: item.detail || '',
+        originalText: item.originalText || '',
+        date: item.date || new Date().toISOString(),
+        hidden: false,
+      });
+      await fbUpdatePending(item.id, { status: 'approved' });
+      showToast('✅ 승인 처리됐습니다');
+      await loadJobs();
+      await loadPending();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Admin] 승인 등록 실패:', msg, err);
+      showToast(`❌ 승인 실패: ${msg.slice(0, 60)}`);
+    }
   }
 
   async function handleRejectPending(item: PendingJob) {

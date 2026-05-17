@@ -168,15 +168,12 @@ export async function fbGetJob(id: string): Promise<Job | null> {
 }
 
 export async function fbAddJob(job: Omit<Job, 'id'>): Promise<string> {
-  try {
-    const ref = await addDoc(JOBS_COL, { ...job, _createdAt: serverTimestamp() });
-    return ref.id;
-  } catch (e) {
-    console.warn('[Firebase] fbAddJob failed:', e);
-    const id = Date.now().toString();
-    localSaveJob({ id, ...job });
-    return id;
-  }
+  // undefined 필드 제거 (Firestore는 undefined 값을 거부함)
+  const clean = Object.fromEntries(
+    Object.entries({ ...job, _createdAt: serverTimestamp() }).filter(([, v]) => v !== undefined)
+  );
+  const ref = await addDoc(JOBS_COL, clean);
+  return ref.id;
 }
 
 export async function fbSetJob(id: string, job: Partial<Job>): Promise<void> {
