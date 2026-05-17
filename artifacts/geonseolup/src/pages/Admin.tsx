@@ -516,8 +516,53 @@ function makeNote(text: string): string {
   return sentences.join(' ').slice(0, 60);
 }
 
-function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult } {
-  const r: Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult } = { originalText: text };
+/** 전화번호 추출 — 이모지/특수문자 제거, 구분자 유무 무관, 문맥 추론 */
+function extractPhones(rawText: string): { main: string | null; candidates: string[] } {
+  const found = new Set<string>();
+
+  function normalizeDigits(raw: string): string | null {
+    const d = raw.replace(/\D/g, '');
+    if (!/^01[016789]/.test(d)) return null;
+    if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+    return null;
+  }
+
+  // 이모지·유니코드 특수문자를 공백으로 치환한 클린 텍스트
+  const clean = rawText
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')  // surrogate pair 이모지
+    .replace(/[\u2600-\u27FF\u1F300-\u1FFFF]/gu, ' ')  // 기호/이모지 유니코드 블록
+    .replace(/\s+/g, ' ');
+
+  // 패턴 1: 구분자 있음/없음 모두 (-, ., space 또는 없음)
+  const re1 = /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re1.exec(clean)) !== null) {
+    const n = normalizeDigits(m[0]); if (n) found.add(n);
+  }
+
+  // 패턴 2: 연속 숫자 (이모지 바로 뒤 숫자 포함: 📲📲📲 01057954982)
+  const re2 = /01[016789]\d{7,8}/g;
+  while ((m = re2.exec(rawText)) !== null) {
+    // 오인식 방지: 앞뒤 문맥에 단가/금액 단위 있으면 제외
+    const before = rawText.slice(Math.max(0, m.index - 4), m.index);
+    const after = rawText.slice(m.index + m[0].length, m.index + m[0].length + 4);
+    if (/[만천억]/.test(before) || /[만천억원]/.test(after)) continue;
+    const n = normalizeDigits(m[0]); if (n) found.add(n);
+  }
+
+  // 패턴 3: 문맥 기반 추론 ("연락처", "문의", "전화", "문자" 근처)
+  const re3 = /(?:연락처|연락|문의|전화|문자|연락주|연락바|contact)\s*[:：]?\s*(01[016789][\d\s.\-]{8,12})/gi;
+  while ((m = re3.exec(rawText)) !== null) {
+    const n = normalizeDigits(m[1]); if (n) found.add(n);
+  }
+
+  const list = [...found];
+  return { main: list[0] ?? null, candidates: list };
+}
+
+function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult; _phoneCandidates?: string[] } {
+  const r: Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult; _phoneCandidates?: string[] } = { originalText: text };
 
   // ── 제목: 첫 줄 이모지·특수문자 제거 ──
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -574,9 +619,22 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
     }
   }
 
-  // ── 전화번호 (-·. 구분자 모두 지원) ──
-  const phoneM = text.match(/(\d{2,4})[.\-\s](\d{3,4})[.\-\s](\d{4})/);
-  if (phoneM) r.contact = `${phoneM[1]}-${phoneM[2]}-${phoneM[3]}`;
+  // ── 전화번호 (이모지/특수문자 제거, 구분자 유무·연속 숫자·문맥 추론 모두 지원) ──
+  const phoneResult = extractPhones(text);
+  if (phoneResult.main) {
+    r.contact = phoneResult.main;
+    // 여러 번호 감지 시 나머지도 후보로 기록
+    if (phoneResult.candidates.length > 1) {
+      r._phoneCandidates = phoneResult.candidates;
+    }
+  } else {
+    // 파싱 실패 시 관리자 검수용 후보 숫자 수집
+    const raw = [...(text.matchAll(/01[016789]\d{7,8}/g))].map((m) => {
+      const d = m[0];
+      return d.length === 11 ? `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}` : `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;
+    });
+    if (raw.length > 0) r._phoneCandidates = [...new Set(raw)].slice(0, 5);
+  }
 
   // ── 담당자 ──
   const mgrM = text.match(/담당자\s*[:：]\s*(.+)/);
@@ -696,7 +754,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Partial<Job>>(emptyForm());
   const [parseText, setParseText] = useState('');
-  const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult }) | null>(null);
+  const [parseResult, setParseResult] = useState<(Partial<Job> & { _salaryCalc?: string; _salaryCandidates?: SalaryCandidate[]; _complexSalary?: ComplexSalaryResult; _phoneCandidates?: string[] }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState('');
   const [showReserveModal, setShowReserveModal] = useState(false);
@@ -1904,7 +1962,7 @@ export default function Admin() {
                   site: '🏭 현장', line: '🔢 라인',
                 };
                 const SKIP = new Set([
-                  'originalText', '_salaryCalc', '_salaryCandidates', '_complexSalary',
+                  'originalText', '_salaryCalc', '_salaryCandidates', '_complexSalary', '_phoneCandidates',
                   'salaryNum', 'dailyWage', 'extraPay', 'totalExpectedPay', 'wageBreakdowns', 'needsReview',
                 ]);
                 const entries = Object.entries(parseResult).filter(([k, v]) => !SKIP.has(k) && v && String(v) !== '0');
@@ -1992,6 +2050,54 @@ export default function Admin() {
                       </div>
                     )}
 
+                    {/* ── 전화번호 파싱 결과 카드 ── */}
+                    {(parseResult.contact || (parseResult._phoneCandidates && parseResult._phoneCandidates.length > 0)) && (
+                      <div className={`rounded-lg border px-3 py-2.5 ${parseResult.contact ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-green-800">
+                            📞 전화번호 파싱
+                          </span>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${parseResult.contact ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                            {parseResult.contact ? '✅ 자동 인식' : '⚠️ 검수 필요'}
+                          </span>
+                        </div>
+                        {parseResult.contact && (
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="text-sm font-bold text-green-900">{parseResult.contact}</span>
+                            <a href={`tel:${parseResult.contact.replace(/-/g, '')}`}
+                              className="text-[11px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold hover:bg-green-700">
+                              📲 전화
+                            </a>
+                          </div>
+                        )}
+                        {parseResult._phoneCandidates && parseResult._phoneCandidates.length > 0 && (
+                          <>
+                            <p className="text-[11px] text-gray-600 mb-1.5">
+                              {parseResult.contact ? '감지된 전화번호 목록:' : '⚠️ 자동 인식 실패 — 아래 후보 중 선택하세요:'}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {parseResult._phoneCandidates.map((num, i) => (
+                                <button key={i} type="button"
+                                  className={`text-xs px-2.5 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer font-[inherit] ${
+                                    num === parseResult.contact
+                                      ? 'bg-green-400 border-green-500 text-green-900'
+                                      : 'bg-white border-blue-300 text-blue-700 hover:bg-blue-50'
+                                  }`}
+                                  onClick={() => {
+                                    setField('contact', num);
+                                    showToast(`✅ 연락처가 ${num}으로 설정됐습니다`);
+                                  }}
+                                >
+                                  {num}{num === parseResult.contact ? ' ★' : ''}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[11px] text-blue-600 mt-1.5">★ 번호를 클릭하면 연락처 값이 변경됩니다</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     {/* 계산 요약 */}
                     {parseResult._salaryCalc && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs font-bold text-orange-700">
@@ -2066,12 +2172,37 @@ export default function Admin() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">연락처</label>
-                  <input type="tel" list="cj-ac-contacts" value={form.contact || ''} onChange={(e) => setField('contact', e.target.value)} placeholder="예: 010-1234-5678" className={`w-full py-2.5 px-3.5 border-2 rounded-lg text-sm outline-none font-[inherit] transition-colors ${dupWarning ? 'border-amber-400 bg-amber-50 focus:border-amber-500' : 'border-gray-200 focus:border-[#f97316]'}`} />
+                  <div className="flex gap-2 items-center">
+                    <input type="tel" list="cj-ac-contacts" value={form.contact || ''} onChange={(e) => setField('contact', e.target.value)} placeholder="예: 010-1234-5678" className={`flex-1 py-2.5 px-3.5 border-2 rounded-lg text-sm outline-none font-[inherit] transition-colors ${dupWarning ? 'border-amber-400 bg-amber-50 focus:border-amber-500' : 'border-gray-200 focus:border-[#f97316]'}`} />
+                    {form.contact && /^01[016789]/.test(form.contact.replace(/-/g, '')) && (
+                      <a href={`tel:${form.contact.replace(/-/g, '')}`}
+                        className="shrink-0 py-2.5 px-3 bg-green-500 text-white text-sm font-bold rounded-lg hover:bg-green-600 transition-colors">
+                        📲
+                      </a>
+                    )}
+                  </div>
                   <datalist id="cj-ac-contacts">{acHistory.contacts.map((c) => <option key={c} value={c} />)}</datalist>
                   {dupWarning && (
                     <p className="mt-1 text-[11px] font-bold text-amber-600 flex items-center gap-1">
                       {dupWarning}
                     </p>
+                  )}
+                  {/* 파싱 후보 번호 — 연락처가 비었거나 여러 개 감지된 경우 */}
+                  {parseResult?._phoneCandidates && parseResult._phoneCandidates.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {parseResult._phoneCandidates.map((num, i) => (
+                        <button key={i} type="button"
+                          onClick={() => { setField('contact', num); showToast(`✅ ${num} 설정됨`); }}
+                          className={`text-[11px] px-2 py-1 rounded-md font-bold border cursor-pointer font-[inherit] transition-colors ${
+                            form.contact === num
+                              ? 'bg-green-500 border-green-600 text-white'
+                              : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-green-50 hover:border-green-400'
+                          }`}>
+                          {num}
+                        </button>
+                      ))}
+                      <span className="text-[10px] text-gray-400 self-center">후보 클릭으로 선택</span>
+                    </div>
                   )}
                 </div>
                 {/* ── 추가 필드 ── */}
