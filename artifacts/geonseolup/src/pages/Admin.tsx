@@ -1148,6 +1148,82 @@ export default function Admin() {
     }
   }
 
+  // ── 빠른 예약: 새벽 05:30 / 정오 12:00 / 저녁 20:00 ────────────────────────
+  // 스마트 날짜 계산: 목표 시각이 현재 KST 이전이면 다음날, 이후면 오늘
+  async function handleQuickReserve(
+    hour: number,
+    minute: number,
+    label: '새벽' | '정오' | '저녁',
+    emoji: string,
+    shortcutUsed = false
+  ) {
+    if (!form.title?.trim() || !form.region || !form.job) {
+      showToast('⚠️ 필수 항목을 입력해주세요 (제목·지역·직종)');
+      return;
+    }
+    const nowKST = new Date(Date.now() + 9 * 3600000);
+    const todayKST = nowKST.toISOString().slice(0, 10);
+    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    let reservedAt = toKSTIso(todayKST, timeStr);
+    // 이미 지난 시각이면 → 다음날 예약
+    if (new Date(reservedAt).getTime() <= Date.now()) {
+      const tomorrowKST = new Date(nowKST.getTime() + 86400000);
+      reservedAt = toKSTIso(tomorrowKST.toISOString().slice(0, 10), timeStr);
+    }
+    // 랜덤 분산 ±5~15분 적용
+    if (useRandomSpread) {
+      const spread = Math.floor(Math.random() * 11) + 5;
+      reservedAt = new Date(new Date(reservedAt).getTime() + spread * 60000).toISOString();
+    }
+    // 충돌 방지: 10분 이내 예약 있으면 뒤로 밀기
+    const reserved = jobs.filter((j) => j.status === 'reserved' && j.reservedAt);
+    const targetMs = new Date(reservedAt).getTime();
+    const conflicting = reserved.filter(
+      (j) => Math.abs(new Date(j.reservedAt!).getTime() - targetMs) < 10 * 60000
+    );
+    if (conflicting.length > 0) {
+      const latestMs = Math.max(...conflicting.map((j) => new Date(j.reservedAt!).getTime()));
+      const gap = Math.floor(Math.random() * 8) + 3;
+      reservedAt = new Date(latestMs + gap * 60000).toISOString();
+      showToast(`⚡ 동시간대 분산: ${formatKST(reservedAt)}으로 조정됩니다`);
+    }
+    setSubmitting(true);
+    try {
+      const jobData: Omit<Job, 'id'> = {
+        ...(form as Omit<Job, 'id'>),
+        salaryNum: parseSalaryNum(form.salary || ''),
+        date: new Date().toISOString(),
+        hidden: false,
+        repeatDays,
+        retryCount: 0,
+        dispatchMode: 'manual' as const,
+      };
+      const savedId = await fbAddReservedJob(jobData, reservedAt);
+      await fbSaveReservationLog({
+        jobId: savedId,
+        jobTitle: form.title || '',
+        scheduledAt: reservedAt,
+        status: 'published',
+        repeatDays: repeatDays || undefined,
+        isRepeat: false,
+        createdAt: new Date().toISOString(),
+        quickReserveType: label,
+        shortcutUsed,
+      });
+      const repeatLabel = repeatDays > 0 ? ` · ${repeatDays}일 반복` : '';
+      const shortcutLabel = shortcutUsed ? ' [⌨️ 단축키]' : '';
+      showToast(`${emoji} ${label} ${formatKST(reservedAt)} 예약됐습니다${repeatLabel}${shortcutLabel}`);
+      applySmartClear(form);
+      if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+      await loadJobs();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`❌ 예약 실패: ${msg.slice(0, 60)}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   // 예약 취소
   async function handleCancelReservation(id: string) {
     if (!confirm('예약을 취소하시겠습니까?')) return;
@@ -1220,12 +1296,32 @@ export default function Admin() {
     return () => clearTimeout(timer);
   }, [form, authed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 단축키: Ctrl+Enter 즉시 등록 / Ctrl+Shift+Enter 예약 등록 ───────────────
+  // ── 단축키: Ctrl+Enter / Ctrl+Shift+Enter / Ctrl+D / Ctrl+F / Ctrl+G ────────
   useEffect(() => {
     if (!authed || tab !== 'add') return;
     const onKey = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || e.key !== 'Enter') return;
+      if (!e.ctrlKey) return;
+      // Ctrl+D → 🌅 새벽 05:30
+      if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        void handleQuickReserve(5, 30, '새벽', '🌅', true);
+        return;
+      }
+      // Ctrl+F → ☀️ 정오 12:00
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        void handleQuickReserve(12, 0, '정오', '☀️', true);
+        return;
+      }
+      // Ctrl+G → 🌙 저녁 20:00
+      if (e.key === 'g' || e.key === 'G') {
+        e.preventDefault();
+        void handleQuickReserve(20, 0, '저녁', '🌙', true);
+        return;
+      }
+      if (e.key !== 'Enter') return;
       e.preventDefault();
+      // Ctrl+Shift+Enter → 예약 모달 열기
       if (e.shiftKey) {
         if (!form.title?.trim() || !form.region || !form.job) {
           showToast('⚠️ 필수 항목을 입력해주세요 (제목·지역·직종)');
@@ -1236,6 +1332,7 @@ export default function Admin() {
         setReserveTime(nh.toISOString().slice(11, 16));
         setShowReserveModal(true);
       } else {
+        // Ctrl+Enter → 즉시 등록
         if (formRef.current) formRef.current.requestSubmit();
       }
     };
@@ -2057,6 +2154,42 @@ export default function Admin() {
                 >
                   📅 예약 등록
                 </button>
+                {/* ── 빠른 예약 버튼 ── */}
+                <button
+                  type="button"
+                  disabled={submitting}
+                  title="새벽 05:30 예약 (단축키: Ctrl+D)"
+                  className="bg-indigo-500 text-white border-none py-2 px-3 rounded-lg text-sm font-bold cursor-pointer hover:bg-indigo-600 active:scale-95 transition-all font-[inherit] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  onClick={() => void handleQuickReserve(5, 30, '새벽', '🌅')}
+                >
+                  🌅 새벽 05:30
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  title="정오 12:00 예약 (단축키: Ctrl+F)"
+                  className="bg-amber-500 text-white border-none py-2 px-3 rounded-lg text-sm font-bold cursor-pointer hover:bg-amber-600 active:scale-95 transition-all font-[inherit] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  onClick={() => void handleQuickReserve(12, 0, '정오', '☀️')}
+                >
+                  ☀️ 정오 12:00
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  title="저녁 20:00 예약 (단축키: Ctrl+G)"
+                  className="bg-slate-600 text-white border-none py-2 px-3 rounded-lg text-sm font-bold cursor-pointer hover:bg-slate-700 active:scale-95 transition-all font-[inherit] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  onClick={() => void handleQuickReserve(20, 0, '저녁', '🌙')}
+                >
+                  🌙 저녁 20:00
+                </button>
+              </div>
+              {/* 단축키 안내 */}
+              <div className="mt-1.5 flex gap-3 flex-wrap">
+                <span className="text-[10px] text-gray-400">⌨️ <kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+D</kbd> 새벽</span>
+                <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+F</kbd> 정오</span>
+                <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+G</kbd> 저녁</span>
+                <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+Enter</kbd> 즉시등록</span>
+                <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+⇧+Enter</kbd> 예약모달</span>
               </div>
               {parseResult && (() => {
                 const LABEL: Record<string, string> = {

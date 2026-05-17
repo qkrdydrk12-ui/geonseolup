@@ -46,6 +46,9 @@ export interface ReservationLog {
   isRepeat?: boolean;
   repeatDays?: number;
   createdAt: string;
+  // 빠른 예약 메타
+  quickReserveType?: '새벽' | '정오' | '저녁';
+  shortcutUsed?: boolean;
 }
 
 export interface Job {
