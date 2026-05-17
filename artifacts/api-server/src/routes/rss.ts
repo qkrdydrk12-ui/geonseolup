@@ -135,7 +135,7 @@ router.get("/rss", async (_req: Request, res: Response) => {
       })
       .join("\n");
 
-    const itemsXml = items.length > 0 ? items.join("\n") : DUMMY_ITEM;
+    const itemsXml = items.length > 0 ? items : DUMMY_ITEM;
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">

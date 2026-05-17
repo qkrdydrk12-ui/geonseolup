@@ -13,7 +13,6 @@ import {
   fbPurgeOldHiddenJobs,
   fbAddReservedJob,
   fbCancelReservation,
-  fbCheckAndPublishReserved,
   fbRetryReservation,
   fbSaveReservationLog,
   fbLoadReservationLogs,
@@ -1058,25 +1057,34 @@ export default function Admin() {
     setShowLogsModal(true);
   }
 
-  // 예약 자동 게시 스케줄러 (1분마다 체크)
+  // ── 서버 스케줄러 상태 폴링 ────────────────────────────────────────────────
+  interface SchedulerStatus {
+    ok: boolean;
+    startedAt?: string;
+    lastRunAt?: string | null;
+    isRunning?: boolean;
+    totalPublished?: number;
+    totalRetried?: number;
+    lastPublished?: number;
+    lastRetried?: number;
+    nextRunInSeconds?: number;
+    intervalSeconds?: number;
+  }
+  const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
+
+  const fetchSchedulerStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/scheduler/status');
+      if (res.ok) setSchedulerStatus(await res.json());
+    } catch { /* 서버 미응답 시 무시 */ }
+  }, []);
+
   useEffect(() => {
     if (!authed) return;
-    const check = async () => {
-      const all = await fbLoadJobs();
-      const { published, retried } = await fbCheckAndPublishReserved(all);
-      if (published > 0 || retried > 0) {
-        const parts: string[] = [];
-        if (published > 0) parts.push(`${published}건 게시`);
-        if (retried > 0) parts.push(`${retried}건 재시도`);
-        showToast(`📢 예약 공고 ${parts.join(' · ')}됐습니다`);
-        await loadJobs();
-      }
-    };
-    check();
-    const timer = setInterval(check, 60000);
+    fetchSchedulerStatus();
+    const timer = setInterval(fetchSchedulerStatus, 30000);
     return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed]);
+  }, [authed, fetchSchedulerStatus]);
 
   function setField(key: string, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -1459,6 +1467,50 @@ export default function Admin() {
                 </button>
               </div>
             </h2>
+
+            {/* 서버 스케줄러 상태 */}
+            <div className={`mb-4 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs border ${
+              schedulerStatus?.ok
+                ? 'bg-green-50 border-green-200'
+                : 'bg-amber-50 border-amber-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className={`inline-block w-2 h-2 rounded-full ${schedulerStatus?.isRunning ? 'bg-blue-400 animate-pulse' : schedulerStatus?.ok ? 'bg-green-500' : 'bg-amber-400'}`} />
+                <span className={`font-bold ${schedulerStatus?.ok ? 'text-green-800' : 'text-amber-800'}`}>
+                  {schedulerStatus?.ok ? '🖥 서버 스케줄러 활성' : '⚠️ 서버 연결 확인 중'}
+                </span>
+              </div>
+              {schedulerStatus?.ok && (
+                <>
+                  <span className="text-gray-500">
+                    마지막 실행:{' '}
+                    <span className="font-semibold text-gray-700">
+                      {schedulerStatus.lastRunAt
+                        ? new Date(schedulerStatus.lastRunAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        : '대기 중'}
+                    </span>
+                  </span>
+                  <span className="text-gray-500">
+                    누적 발행: <span className="font-bold text-green-700">{schedulerStatus.totalPublished ?? 0}건</span>
+                  </span>
+                  {(schedulerStatus.totalRetried ?? 0) > 0 && (
+                    <span className="text-gray-500">재시도: <span className="font-semibold text-blue-600">{schedulerStatus.totalRetried}건</span></span>
+                  )}
+                  <span className="text-gray-400">다음 실행: {schedulerStatus.nextRunInSeconds ?? '?'}초 후</span>
+                  <button
+                    type="button"
+                    className="ml-auto text-[11px] bg-white border border-green-300 text-green-700 px-2 py-0.5 rounded-lg font-bold cursor-pointer hover:bg-green-100 font-[inherit]"
+                    onClick={async () => {
+                      const token = getToken();
+                      if (!token) { showToast('⚠️ 관리자 인증이 필요합니다'); return; }
+                      const res = await fetch('/api/scheduler/trigger', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                      if (res.ok) { showToast('✅ 스케줄러 즉시 실행됐습니다'); fetchSchedulerStatus(); loadJobs(); }
+                    }}
+                  >⚡ 즉시 실행</button>
+                </>
+              )}
+            </div>
+
             {loading ? (
               <div className="flex justify-center py-10">
                 <span className="text-2xl animate-spin">⚙️</span>
