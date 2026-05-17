@@ -276,6 +276,9 @@ export async function fbRetryReservation(id: string): Promise<void> {
   try {
     await updateDoc(doc(_db, 'jobs', id), {
       status: 'reserved',
+      // 30초 후 발행 예약 (즉시 발행 가능하도록)
+      reservedAt: new Date(Date.now() + 30000).toISOString(),
+      retryCount: 0,     // 재시도 카운트 초기화 (99 영구실패 해제)
       failReason: null,
       lastRetryAt: null,
     });

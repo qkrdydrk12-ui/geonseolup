@@ -1783,37 +1783,65 @@ export default function Admin() {
                         : '✅ 실행 완료 (대상 없음)'}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    className="ml-auto text-[11px] bg-white border border-green-300 text-green-700 px-2.5 py-1 rounded-lg font-bold cursor-pointer hover:bg-green-100 font-[inherit] whitespace-nowrap"
-                    onClick={async () => {
-                      const token = getToken();
-                      if (!token) { showToast('⚠️ 관리자 인증이 필요합니다'); return; }
-                      setTriggerResult(null);
-                      showToast('⚙️ 스케줄러 실행 중…');
-                      try {
-                        const res = await fetch('/api/scheduler/trigger', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-                        const data = await res.json() as { ok: boolean; result?: { published: number; retried: number; failed: number }; message?: string };
-                        if (res.ok && data.ok) {
-                          const r = data.result ?? { published: 0, retried: 0, failed: 0 };
-                          setTriggerResult({ published: r.published, failed: r.failed });
-                          showToast(
-                            r.failed > 0
-                              ? `❌ ${r.published}건 발행 / ${r.failed}건 실패 — 아래 실패 공고 확인`
-                              : r.published > 0
-                              ? `✅ ${r.published}건 발행 완료`
-                              : '✅ 실행 완료 (발행 대기 공고 없음)'
-                          );
-                          fetchSchedulerStatus();
-                          loadJobs();
-                        } else {
-                          showToast(`❌ 실행 실패: ${data.message ?? '알 수 없는 오류'}`);
+                  <div className="ml-auto flex gap-1.5">
+                    {/* 실패 공고 일괄 초기화 — retryCount=99 영구실패 복구 */}
+                    {(schedulerStatus.totalFailed ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        className="text-[11px] bg-white border border-red-300 text-red-600 px-2.5 py-1 rounded-lg font-bold cursor-pointer hover:bg-red-50 font-[inherit] whitespace-nowrap"
+                        onClick={async () => {
+                          const token = getToken();
+                          if (!token) { showToast('⚠️ 관리자 인증이 필요합니다'); return; }
+                          showToast('🔄 실패 공고 초기화 중…');
+                          try {
+                            const res = await fetch('/api/scheduler/reset-failed', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                            const data = await res.json() as { ok: boolean; reset?: number; total?: number; message?: string };
+                            if (res.ok && data.ok) {
+                              showToast(`✅ ${data.reset}/${data.total}건 초기화 완료 — 30초 후 자동 발행 예정`);
+                              fetchSchedulerStatus();
+                              loadJobs();
+                            } else {
+                              showToast(`❌ 초기화 실패: ${data.message ?? '오류'}`);
+                            }
+                          } catch (e) {
+                            showToast(`❌ 네트워크 오류: ${String(e)}`);
+                          }
+                        }}
+                      >🔄 실패 {schedulerStatus.totalFailed}건 초기화</button>
+                    )}
+                    {/* 스케줄러 즉시 실행 테스트 */}
+                    <button
+                      type="button"
+                      className="text-[11px] bg-white border border-green-300 text-green-700 px-2.5 py-1 rounded-lg font-bold cursor-pointer hover:bg-green-100 font-[inherit] whitespace-nowrap"
+                      onClick={async () => {
+                        const token = getToken();
+                        if (!token) { showToast('⚠️ 관리자 인증이 필요합니다'); return; }
+                        setTriggerResult(null);
+                        showToast('⚙️ 스케줄러 실행 중…');
+                        try {
+                          const res = await fetch('/api/scheduler/trigger', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                          const data = await res.json() as { ok: boolean; result?: { published: number; retried: number; failed: number }; message?: string };
+                          if (res.ok && data.ok) {
+                            const r = data.result ?? { published: 0, retried: 0, failed: 0 };
+                            setTriggerResult({ published: r.published, failed: r.failed });
+                            showToast(
+                              r.failed > 0
+                                ? `❌ ${r.published}건 발행 / ${r.failed}건 실패`
+                                : r.published > 0
+                                ? `✅ ${r.published}건 발행 완료`
+                                : '✅ 실행 완료 (대기 없음)'
+                            );
+                            fetchSchedulerStatus();
+                            loadJobs();
+                          } else {
+                            showToast(`❌ 실행 실패: ${data.message ?? '알 수 없는 오류'}`);
+                          }
+                        } catch (e) {
+                          showToast(`❌ 네트워크 오류: ${String(e)}`);
                         }
-                      } catch (e) {
-                        showToast(`❌ 네트워크 오류: ${String(e)}`);
-                      }
-                    }}
-                  >⚡ 즉시 실행 테스트</button>
+                      }}
+                    >⚡ 즉시 실행</button>
+                  </div>
                 </>
               )}
               {/* 마지막 오류 표시 */}

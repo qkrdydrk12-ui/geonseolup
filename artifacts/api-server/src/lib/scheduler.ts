@@ -299,6 +299,37 @@ export async function runSchedulerOnce(): Promise<{
   return { published, retried, failed };
 }
 
+// ── 실패 공고 일괄 초기화 (권한 오류 등으로 retryCount=99 영구 실패된 공고 복구) ──────
+export async function bulkResetFailed(): Promise<{ reset: number; total: number }> {
+  const failedJobs = (await runQuery("jobs", [
+    { field: "status", op: "EQUAL", value: "failed" },
+  ])) as Job[];
+
+  const nowPlus30s = new Date(Date.now() + 30000).toISOString();
+  let reset = 0;
+
+  for (const job of failedJobs) {
+    try {
+      await updateDocument("jobs", job.id, {
+        status: "reserved",
+        reservedAt: nowPlus30s,
+        retryCount: 0,
+        failReason: null,
+        lastRetryAt: null,
+      });
+      reset++;
+    } catch (err) {
+      logger.error({ jobId: job.id, err: String(err) }, "bulkResetFailed: 개별 초기화 실패");
+    }
+  }
+
+  logger.info(
+    { reset, total: failedJobs.length },
+    "bulkResetFailed: 실패 공고 일괄 초기화 완료"
+  );
+  return { reset, total: failedJobs.length };
+}
+
 export function startScheduler(): void {
   if (_intervalHandle != null) return;
   logger.info(
