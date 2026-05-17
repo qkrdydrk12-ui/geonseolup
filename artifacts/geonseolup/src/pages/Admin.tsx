@@ -2022,32 +2022,48 @@ export default function Admin() {
                         {/* 단가 후보 클릭 버튼 */}
                         {cs.candidates.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
-                            {cs.candidates.map((c, i) => (
-                              <button key={i} type="button"
-                                title={`출처: "${c.raw}" · ${c.reason}`}
-                                className={`text-xs px-2.5 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer font-[inherit] ${
-                                  i === 0 ? 'bg-amber-400 border-amber-500 text-amber-900' : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'
-                                }`}
-                                onClick={() => {
-                                  const bd = cs.wageBreakdowns[i] ?? cs.wageBreakdowns[0];
-                                  const displayText = bd ? buildWageDisplayText([bd]) : c.num.toLocaleString('ko-KR') + '원';
-                                  setField('salary', displayText);
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    salaryNum: c.num,
-                                    dailyWage: bd?.wage,
-                                    extraPay: bd?.extraPay || undefined,
-                                    totalExpectedPay: bd?.total,
-                                  }));
-                                  showToast(`✅ ${toManStr(c.num)}원으로 변경됐습니다`);
-                                }}
-                              >
-                                {toManStr(c.num)}원{i === 0 ? ' ★' : ''} <span className="opacity-60">({c.score}점)</span>
-                              </button>
-                            ))}
+                            {cs.candidates.map((c, i) => {
+                              // 인덱스 불일치 버그 수정: 인덱스 대신 금액 기준으로 매칭
+                              const matchBd = cs.wageBreakdowns.find(
+                                (bd) => bd.wage === c.num || bd.total === c.num
+                              );
+                              // 현재 form에 이 후보가 선택돼 있는지 (금액 기준)
+                              const isSelected = form.salaryNum === c.num;
+                              return (
+                                <button key={i} type="button"
+                                  title={`출처: "${c.raw}" · ${c.reason}`}
+                                  className={`text-xs px-2.5 py-1.5 rounded-lg font-bold border transition-colors cursor-pointer font-[inherit] ${
+                                    isSelected
+                                      ? 'bg-amber-400 border-amber-500 text-amber-900'
+                                      : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'
+                                  }`}
+                                  onClick={() => {
+                                    // 클릭한 후보의 금액을 직접 displayText로 사용
+                                    const displayText = matchBd
+                                      ? buildWageDisplayText([matchBd])
+                                      : c.num.toLocaleString('ko-KR') + '원';
+                                    console.debug('[급여 후보 선택]', {
+                                      후보: c.raw, 금액: c.num, 표시값: displayText, 신뢰도: c.score,
+                                    });
+                                    // 단일 setForm으로 salary + 숫자값 동시 업데이트 (상태 충돌 방지)
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      salary: displayText,
+                                      salaryNum: c.num,
+                                      dailyWage: matchBd?.wage ?? c.num,
+                                      extraPay: matchBd?.extraPay || undefined,
+                                      totalExpectedPay: matchBd?.total || undefined,
+                                    }));
+                                    showToast(`✅ ${toManStr(c.num)}원으로 변경됐습니다`);
+                                  }}
+                                >
+                                  {toManStr(c.num)}원{isSelected ? ' ✓' : i === 0 ? ' ★' : ''} <span className="opacity-60">({c.score}점)</span>
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
-                        <p className="text-[11px] text-amber-600 mt-1.5">★ 후보를 클릭하면 급여 값이 변경됩니다</p>
+                        <p className="text-[11px] text-amber-600 mt-1.5">★ 후보를 클릭하면 급여 값이 즉시 변경됩니다</p>
 
                         {/* 검수 필요 경고 */}
                         {cs.needsReview && (
