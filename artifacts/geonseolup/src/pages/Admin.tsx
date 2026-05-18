@@ -2207,7 +2207,7 @@ export default function Admin() {
                 onChange={(e) => setParseText(e.target.value)}
                 onPaste={(e) => {
                   const text = e.clipboardData.getData('text');
-                  if (text.trim().length > 15) {
+                  if (text.trim().length > 9) {
                     if (autoReplacePaste) {
                       e.preventDefault();
                       setParseText(text);
@@ -2501,7 +2501,7 @@ export default function Admin() {
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">연락처</label>
                   <div className="flex gap-2 items-center">
-                    <input type="tel" list="cj-ac-contacts" value={form.contact || ''} onChange={(e) => setField('contact', e.target.value)} placeholder="예: 010-1234-5678" className={`flex-1 py-2.5 px-3.5 border-2 rounded-lg text-sm outline-none font-[inherit] transition-colors ${dupWarning ? 'border-amber-400 bg-amber-50 focus:border-amber-500' : 'border-gray-200 focus:border-[#f97316]'}`} />
+                    <input type="tel" autoComplete="off" value={form.contact || ''} onChange={(e) => setField('contact', e.target.value)} placeholder="예: 010-1234-5678" className={`flex-1 py-2.5 px-3.5 border-2 rounded-lg text-sm outline-none font-[inherit] transition-colors ${dupWarning ? 'border-amber-400 bg-amber-50 focus:border-amber-500' : 'border-gray-200 focus:border-[#f97316]'}`} />
                     {form.contact && /^01[016789]/.test(form.contact.replace(/-/g, '')) && (
                       <a href={`tel:${form.contact.replace(/-/g, '')}`}
                         className="shrink-0 py-2.5 px-3 bg-green-500 text-white text-sm font-bold rounded-lg hover:bg-green-600 transition-colors">
@@ -2509,7 +2509,6 @@ export default function Admin() {
                       </a>
                     )}
                   </div>
-                  <datalist id="cj-ac-contacts">{acHistory.contacts.map((c) => <option key={c} value={c} />)}</datalist>
                   {dupWarning && (
                     <p className="mt-1 text-[11px] font-bold text-amber-600 flex items-center gap-1">
                       {dupWarning}
