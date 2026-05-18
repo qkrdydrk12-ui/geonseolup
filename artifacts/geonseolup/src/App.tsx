@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter } from 'wouter';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import Home from '@/pages/Home';
 import Detail from '@/pages/Detail';
@@ -11,6 +11,7 @@ import Contact from '@/pages/Contact';
 import Info from '@/pages/Info';
 import InfoDetail from '@/pages/InfoDetail';
 import VisitorWidget from '@/components/VisitorWidget';
+import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 
 // ── 관리자가 저장한 head 코드를 <head>에 동적으로 주입 ──────────────────────
 function injectHeadCode(raw: string) {
@@ -68,6 +69,40 @@ function useHeadInjection() {
     return () => {
       window.removeEventListener('head-inject-updated', apply);
       window.removeEventListener('google-verify-updated', apply);
+    };
+  }, []);
+}
+
+// ── 예약 공고 자동 발행 스케줄러 ────────────────────────────────────────────
+// 전체 앱에서 1개만 실행 (App에 마운트). 1분마다 예약 시간이 지난 공고를 active로 전환.
+function useReservationScheduler() {
+  const jobsRef = useRef<Job[]>([]);
+
+  useEffect(() => {
+    // Firestore 실시간 구독 → 최신 jobs 항상 보유
+    const unsub = fbOnJobs((jobs) => { jobsRef.current = jobs; });
+
+    async function tick() {
+      const reserved = jobsRef.current.filter((j) => j.status === 'reserved');
+      if (reserved.length === 0) return;
+      try {
+        const { published, retried } = await fbCheckAndPublishReserved(jobsRef.current);
+        if (published > 0) console.log(`[Scheduler] ${published}개 공고 발행 완료`);
+        if (retried  > 0) console.log(`[Scheduler] ${retried}개 공고 재시도`);
+      } catch (e) {
+        console.warn('[Scheduler] 예약 발행 오류:', e);
+      }
+    }
+
+    // 마운트 즉시 1회 실행 (이미 시간 지난 예약 즉시 처리)
+    const initTimer = setTimeout(tick, 3000);
+    // 이후 60초마다 반복
+    const interval = setInterval(tick, 60000);
+
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(interval);
+      unsub();
     };
   }, []);
 }
@@ -158,6 +193,7 @@ function DetailHeader() {
 
 function App() {
   useHeadInjection();
+  useReservationScheduler();
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <Router />
