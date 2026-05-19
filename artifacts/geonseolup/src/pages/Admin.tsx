@@ -297,7 +297,7 @@ function extractSalary(text: string): { text: string; num: number; score: number
   // 단, "출퇴근|숙소|식대" 키워드에서는 만원 암묵 단위(10~49) 금지 (→ 2순위 제외)
   const IMPLICIT_SKIP = new Set(['출퇴근', '숙소', '숙박', '식대']);
   const kwExplicit = new RegExp(
-    `(${SALARY_KW})\\s*(?:[가-힣]{0,6}\\s*)?(\\d{1,3}(?:[.,]\\d{3})?(?:\\.\\d+)?\\s*만원?|\\d{5,6}|\\d{2,3}[.,]\\d{3})`,
+    `(${SALARY_KW})\\s*[:：]?\\s*(?:[가-힣]{0,6}\\s*)?(\\d{1,3}(?:[.,]\\d{3})?(?:\\.\\d+)?\\s*만원?|\\d{5,6}|\\d{2,3}[.,]\\d{3})`,
     'gi'
   );
   while ((m = kwExplicit.exec(cleaned)) !== null) {
@@ -308,7 +308,7 @@ function extractSalary(text: string): { text: string; num: number; score: number
   // ── 2순위: 키워드 + 만원단위 소수/정수 (일당 17, 팀원 단가 16.5) ──────────
   // 출퇴근·숙소·숙박·식대는 제외 (나이 숫자와 혼동 가능성 차단)
   const kwImplicit = new RegExp(
-    `(${SALARY_KW})\\s*(?:[가-힣]{0,6}\\s*)?((?:1[0-9]|[2-4][0-9])(?:\\.\\d+)?)(?![0-9만천,\\.원세])`,
+    `(${SALARY_KW})\\s*[:：]?\\s*(?:[가-힣]{0,6}\\s*)?((?:1[0-9]|[2-4][0-9])(?:\\.\\d+)?)(?![0-9만천,\\.원세])`,
     'gi'
   );
   while ((m = kwImplicit.exec(cleaned)) !== null) {
