@@ -571,12 +571,16 @@ function extractPhones(rawText: string): { main: string | null; candidates: stri
     return null;
   }
 
-  /** 이모지·변형선택자·비표준공백 제거 (개행 유지) */
+  /** 이모지·변형선택자·비표준공백 제거 (개행 유지)
+   *  ⚠ 과거 버그: /[\u2600-\u27FF\u1F300-\u1FFFF]/gu 는 \u 4자리 제한 때문에
+   *     실제로 [0-\u1FFF] 범위로 해석되어 숫자 0~9가 전부 지워져 전화번호 파싱이
+   *     완전히 망가졌었음. surrogate pair 규칙으로 이미 이모지가 처리되므로,
+   *     BMP 심볼 범위만 명시적으로 남긴다. */
   function stripEmojis(s: string): string {
     return s
       .replace(/\uFE0F/g, '')
-      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')
-      .replace(/[\u2600-\u27FF\u1F300-\u1FFFF]/gu, ' ')
+      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')   // 모든 astral plane 이모지 (👉 📞 🧯 등)
+      .replace(/[\u2600-\u27FF\u2B00-\u2BFF]/g, ' ')      // BMP 심볼 (✔ ✖ ♦ ➕ ⭐ 등)
       .replace(/[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000\uFEFF]/g, ' ');
   }
 
