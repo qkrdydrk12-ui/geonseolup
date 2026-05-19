@@ -523,6 +523,16 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
 function makeNote(text: string): string {
   const sentences: string[] = [];
 
+  // ── 0순위: 인용 인사말 (예: "훅업 카톡 보고 연락드립니다"로 문자,전화주세요!) ──
+  // "..." 또는 「...」 안의 문구 + 로/라고 + 문자/전화/연락 패턴
+  // 일반 따옴표(", "), 한글 따옴표(", "), 직각 따옴표(「」) 모두 지원
+  // 따옴표 안 문구 → 조사(로/라고) → 문자/전화/연락 키워드 → 줄/문장 끝까지 모두 포함
+  const greetRe = /["“"「']([^"”"」'\n]{3,40})["”"」']\s*(?:로|라고|이라고|으로)[^\n!?]*?(?:문자|연락|전화|콜)[^\n!?]*[!?]?/;
+  const greetM = text.match(greetRe);
+  if (greetM) {
+    sentences.push(greetM[0].trim());
+  }
+
   // 근무일 + 연장 → 한 문장으로
   const wdM = text.match(/주\s*([5-7])\s*일/);
   const hasExt = /연장/.test(text);
@@ -544,7 +554,7 @@ function makeNote(text: string): string {
   if (/근태/.test(text)) conds.push('근태 중요');
   if (conds.length > 0) sentences.push(conds.join(', ') + '합니다.');
 
-  return sentences.join(' ').slice(0, 60);
+  return sentences.join(' ').slice(0, 120);
 }
 
 /** ─────────────────────────────────────────────────────────────────────────
