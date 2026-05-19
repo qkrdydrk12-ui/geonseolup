@@ -734,11 +734,21 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   }
 
   // ── 직종 ──
+  // 1) 명확한 직종 키워드(JOBS, 용접 종류) 우선 매칭 — 본문 등장 순으로 가장 먼저 잡힌 것
+  let firstJob: { job: string; idx: number } | null = null;
   for (const job of [...JOBS, ...WELD_SUBS]) {
-    if (text.includes(job)) { r.job = job; break; }
+    const idx = text.indexOf(job);
+    if (idx >= 0 && (firstJob === null || idx < firstJob.idx)) firstJob = { job, idx };
   }
-  // 화재/화기/감시 키워드가 있으면 화기감시자로 통합
-  if (/화재|화기|감시/.test(text)) r.job = '화기감시자';
+  if (firstJob) r.job = firstJob.job;
+
+  // 2) 화기감시자 변형 표현 통합 — 단일 글자 "화기/화재/감시"는 절대 트리거 금지
+  //    반드시 "화기감시"·"화재감시"·"감시자" 같은 직종 명사가 들어있어야 함
+  //    (예전 `/화재|화기|감시/` 는 본문에 우연히 "감시"만 있어도 잘못 덮어써서 버그)
+  //    그리고 JOBS 매칭이 이미 다른 직종(배관·조공 등)을 잡았으면 덮어쓰지 않음
+  if (!r.job && /화기\s*감시(?:자)?|화재\s*감시(?:자)?|감시자/.test(text)) {
+    r.job = '화기감시자';
+  }
   // 안전시설반 변형 표현 정규화 (공백 포함, 다양한 접미사 모두 "안전시설반"으로 통합)
   // 인식 표현: 안전시설반, 안전 시설반, 안전시설팀, 안전시설작업자, 시설반
   if (/안전\s*시설(반|팀|작업자?)?|시설반/.test(text)) r.job = '안전시설반';
