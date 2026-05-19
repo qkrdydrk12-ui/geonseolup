@@ -282,13 +282,14 @@ function extractSalary(text: string): { text: string; num: number; score: number
 
   let m: RegExpExecArray | null;
 
-  // ── 0순위 (최우선): 출퇴근|숙소|숙박 + 명시적 원 단위 금액 ─────────────────
-  // 예: "출퇴근 : 180,000원", "숙박 : 200,000원 (식대포함)"
-  // → 나이 키워드(초보)와 혼동 없는 명확한 일당 표현이므로 score 95
-  const reChk = /(출퇴근|숙소|숙박|식대)[\s\S]{0,10}?(\d{2,3}[,\.]\d{3})\s*원?/gi;
+  // ── 0순위: 출퇴근|숙소|숙박 + 명시적 원 단위 금액 ───────────────────────────
+  // score 60으로 낮게 유지 → 일급·단가 키워드(score 90)가 항상 우선
+  // "숙소비 200,000원" 같은 비용성 항목이 급여로 오인되지 않도록 제한
+  // 숙소비·숙박비(비용)는 제외, 출퇴근·식대 인접 금액만 허용
+  const reChk = /(출퇴근|숙소(?!비)|숙박(?!비)|식대)[\s\S]{0,10}?(\d{2,3}[,\.]\d{3})\s*원?/gi;
   while ((m = reChk.exec(text)) !== null) {   // NOISE_PATS 전 원본 text 사용
     const num = normalizeSalaryNum(m[2].replace('.', ','));
-    if (num) { add(m[0].trim(), num, 95, `"${m[1]}" + 원 단위 금액`); salDbg.push(`  ✓ [0순위] "${m[0].trim()}" → ${num}`); }
+    if (num) { add(m[0].trim(), num, 60, `"${m[1]}" + 원 단위 금액`); salDbg.push(`  ✓ [0순위] "${m[0].trim()}" → ${num}`); }
   }
 
   // ── 1순위: 키워드 + 명시적 금액 ─────────────────────────────────────────
