@@ -2227,17 +2227,8 @@ export default function Admin() {
                 rows={4}
                 className="w-full py-3.5 px-3.5 border-2 border-gray-200 rounded-[10px] text-sm outline-none font-[inherit] focus:border-[#f97316] resize-y min-h-[120px]"
               />
-              {/* ── 자동 파싱 + 빠른 예약 버튼 ── */}
+              {/* ── 빠른 예약 버튼: 붙여넣기 후 바로 클릭 ── */}
               <div className="mt-2 flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  disabled={submitting || !parseText.trim()}
-                  title="원문 텍스트를 분석해 각 필드에 자동 입력"
-                  className="bg-[#f97316] text-white border-none py-2 px-4 rounded-lg text-sm font-bold cursor-pointer hover:bg-orange-600 active:scale-95 transition-all font-[inherit] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                  onClick={() => { handleParse(); showToast('✨ 자동 파싱 완료!'); }}
-                >
-                  ✨ 자동 파싱
-                </button>
                 <button
                   type="button"
                   disabled={submitting}
