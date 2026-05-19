@@ -520,41 +520,71 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
   };
 }
 
+/**
+ * 본문을 요약해 비고(detail) 칸에 자동 입력.
+ * 다른 필드(지역·직종·단가·나이·전화 등)에 이미 들어가는 정보는 제외하고,
+ * 비고에 적기 좋은 보조 정보만 모아 2~4문장으로 정리한다.
+ */
 function makeNote(text: string): string {
   const sentences: string[] = [];
 
-  // ── 0순위: 인용 인사말 (예: "훅업 카톡 보고 연락드립니다"로 문자,전화주세요!) ──
-  // "..." 또는 「...」 안의 문구 + 로/라고 + 문자/전화/연락 패턴
-  // 일반 따옴표(", "), 한글 따옴표(", "), 직각 따옴표(「」) 모두 지원
-  // 따옴표 안 문구 → 조사(로/라고) → 문자/전화/연락 키워드 → 줄/문장 끝까지 모두 포함
+  // ── ① 인용 인사말 (예: "훅업 카톡 보고 연락드립니다"로 문자,전화주세요!) ─────
+  //   "..."/「...」 안 문구 + 조사(로/라고/으로) + 문자/연락/전화 → 줄 끝까지
   const greetRe = /["“"「']([^"”"」'\n]{3,40})["”"」']\s*(?:로|라고|이라고|으로)[^\n!?]*?(?:문자|연락|전화|콜)[^\n!?]*[!?]?/;
   const greetM = text.match(greetRe);
-  if (greetM) {
-    sentences.push(greetM[0].trim());
+  if (greetM) sentences.push(greetM[0].trim());
+
+  // ── ② 작업명/현장명 (👉 작업명 : OOO, ▶ 업체 : OOO) ──────────────────────
+  const jobNameM = text.match(/(?:작업명|현장명|업체|공사명)\s*[:：]\s*([^\n▶👉☎■◆◇★⭐]{2,30})/);
+  if (jobNameM) {
+    const v = jobNameM[1].trim().replace(/[,.]$/, '');
+    if (v) sentences.push(`작업: ${v}.`);
   }
 
-  // 근무일 + 연장 → 한 문장으로
+  // ── ③ 모집 직종 종류 (👉 기량 : 기공,조공,안담) ──────────────────────────
+  const skillM = text.match(/(?:기량|모집|직종|구함)\s*[:：]\s*([가-힣,·\s/]{2,30})/);
+  if (skillM) {
+    const v = skillM[1].trim().replace(/\s+/g, ' ').replace(/[,.]$/, '');
+    // 너무 일반적 단어만이거나 1글자뿐이면 스킵
+    if (v && v.length >= 2 && !/^(인원|모집|구함)$/.test(v)) sentences.push(`모집: ${v}.`);
+  }
+
+  // ── ④ 근무일 + 연장 ─────────────────────────────────────────────────────
   const wdM = text.match(/주\s*([5-7])\s*일/);
   const hasExt = /연장/.test(text);
   const extM = text.match(/연장\s*주?\s*(\d+[~\-]\d+|\d+)\s*회/);
   if (wdM && hasExt) {
-    const extStr = extM ? ` 연장 ${extM[1]}회` : ' 연장 있음';
-    sentences.push(`주${wdM[1]}일 근무,${extStr}입니다.`);
+    sentences.push(`주${wdM[1]}일 근무, ${extM ? `연장 ${extM[1]}회` : '연장 있음'}.`);
   } else if (wdM) {
-    sentences.push(`주${wdM[1]}일 근무입니다.`);
+    sentences.push(`주${wdM[1]}일 근무.`);
   } else if (hasExt) {
-    sentences.push(extM ? `연장 ${extM[1]}회 있습니다.` : '연장 있습니다.');
+    sentences.push(extM ? `연장 ${extM[1]}회 있음.` : '연장 있음.');
   }
 
-  // 우대/조건 → 두 번째 문장으로
+  // ── ⑤ 급여일 ────────────────────────────────────────────────────────────
+  const payDayM = text.match(/급여일\s*[:：]?\s*(매월\s*\d{1,2}일|\d{1,2}일|매주\s*\S{1,5})/);
+  if (payDayM) sentences.push(`급여일 ${payDayM[1].trim()}.`);
+
+  // ── ⑥ 구비서류 ──────────────────────────────────────────────────────────
+  if (/구비서류|준비물|지참/.test(text)) {
+    const docKws: string[] = [];
+    if (/이수증|기초안전/.test(text)) docKws.push('이수증');
+    if (/신분증/.test(text)) docKws.push('신분증');
+    if (/통장(?:사본)?/.test(text)) docKws.push('통장사본');
+    if (/경력증명/.test(text)) docKws.push('경력증명서');
+    if (docKws.length > 0) sentences.push(`구비서류: ${docKws.join(', ')}.`);
+  }
+
+  // ── ⑦ 우대/조건 ─────────────────────────────────────────────────────────
   const conds: string[] = [];
-  if (/초보\s*(?:가능|환영|ok|OK)/i.test(text)) conds.push('초보도 가능');
-  if (/장기\s*(?:근무|가능|우대)/.test(text)) conds.push('장기 근무 가능하신 분 환영');
+  if (/초보\s*(?:가능|환영|ok|OK)/i.test(text)) conds.push('초보 가능');
+  if (/장기\s*(?:근무|가능|우대)/.test(text)) conds.push('장기근무 환영');
+  if (/동반\s*(?:입사|가능)/.test(text)) conds.push('동반입사 가능');
   if (/성실/.test(text)) conds.push('성실하신 분 우대');
   if (/근태/.test(text)) conds.push('근태 중요');
-  if (conds.length > 0) sentences.push(conds.join(', ') + '합니다.');
+  if (conds.length > 0) sentences.push(conds.join(', ') + '.');
 
-  return sentences.join(' ').slice(0, 120);
+  return sentences.join(' ').slice(0, 200);
 }
 
 /** ─────────────────────────────────────────────────────────────────────────
