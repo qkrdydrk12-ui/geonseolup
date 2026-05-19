@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { fbAddPending, fbAddJob } from '@/lib/firebase';
 import { WELD_SUBS, parseSalaryNum } from '@/lib/utils';
 
-const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '전국'];
+const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '해외', '전국'];
 const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '안전담당자', '안전시설반', '품질담당자', '공사담당자', '기타'];
 const WELD_TEST_OPTIONS = ['가능', '불가능'];
 
