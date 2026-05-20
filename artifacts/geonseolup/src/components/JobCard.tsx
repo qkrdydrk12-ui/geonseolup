@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbAddReport } from '@/lib/firebase';
@@ -315,14 +316,14 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
         )}
       </div>
 
-      {/* 신고 모달 */}
-      {reportOpen && (
+      {/* 신고 모달 — body에 portal 렌더링 (부모 transform 회피) */}
+      {reportOpen && createPortal(
         <div
-          className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
           onClick={(e) => { e.stopPropagation(); setReportOpen(false); }}
         >
           <div
-            className="bg-white rounded-2xl w-full max-w-[420px] p-5 shadow-2xl"
+            className="bg-white rounded-2xl w-full max-w-[420px] p-5 shadow-2xl my-auto max-h-[calc(100vh-2rem)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {reportDone ? (
@@ -417,7 +418,8 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </article>
   );
