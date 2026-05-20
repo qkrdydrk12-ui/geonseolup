@@ -109,47 +109,52 @@ export default function Header() {
         className="sticky top-0 z-[200] text-white shadow-lg"
         style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5282 100%)' }}
       >
-        <div className="max-w-[1100px] mx-auto px-4 py-[9px] flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-[7px] no-underline text-white">
+        <div className="max-w-[1100px] mx-auto px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          {/* 상단: 로고 (모바일 첫 줄) */}
+          <Link href="/" className="flex items-center gap-[7px] no-underline text-white shrink-0">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center text-base font-black shrink-0"
               style={{ background: '#f97316' }}
             >
               건
             </div>
-            <div>
-              <span className="text-[17px] font-bold tracking-tight block">{siteName}</span>
-              <span className="text-[10px] opacity-70 block leading-none">{siteSubtitle}</span>
+            <div className="leading-tight">
+              <span className="text-[16px] font-bold tracking-tight block">{siteName}</span>
+              <span className="text-[10px] opacity-70 block">{siteSubtitle}</span>
             </div>
           </Link>
 
-          <div className="flex items-center gap-2 shrink-0">
+          {/* 하단: 버튼 그리드 (모바일 둘째 줄) — 5칸 균등, 네모 모양 */}
+          <div className="grid grid-cols-5 gap-1.5 sm:flex sm:items-center sm:gap-2 sm:shrink-0">
             <Link
               href="/info"
-              className="px-[11px] py-[5px] rounded-[7px] text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 hidden sm:block whitespace-nowrap"
+              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
             >
-              📚 정보/꿀팁
+              <span>📚</span>
+              <span className="whitespace-nowrap">정보/꿀팁</span>
             </Link>
             <Link
               href="/post"
-              className="inline-flex items-center justify-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-extrabold text-white no-underline transition-all hover:-translate-y-px whitespace-nowrap shrink-0 leading-none"
+              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-extrabold text-white no-underline transition-all hover:-translate-y-px whitespace-nowrap leading-tight"
               style={{
                 background: '#f97316',
                 boxShadow: '0 2px 8px rgba(249,115,22,0.30)',
               }}
             >
-              <span className="whitespace-nowrap">✏️ 구인등록</span>
+              <span>✏️</span>
+              <span className="whitespace-nowrap">구인등록</span>
             </Link>
 
             <button
-              className="inline-flex items-center justify-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-bold text-white border border-white/35 bg-white/18 cursor-pointer transition-all hover:bg-white/30 hover:-translate-y-px whitespace-nowrap shrink-0 leading-none"
+              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-bold text-white border border-white/35 bg-white/18 cursor-pointer transition-all hover:bg-white/30 hover:-translate-y-px whitespace-nowrap leading-tight"
               onClick={() => setContactOpen(true)}
             >
-              <span className="whitespace-nowrap">📩 문의</span>
+              <span>📩</span>
+              <span className="whitespace-nowrap">문의</span>
             </button>
 
             <button
-              className="inline-flex items-center justify-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px whitespace-nowrap shrink-0 leading-none"
+              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px whitespace-nowrap leading-tight"
               style={{ background: '#fee500', color: '#3c1e1e' }}
               onClick={doKakaoShare}
             >
@@ -161,9 +166,10 @@ export default function Header() {
 
             <Link
               href="/admin"
-              className="inline-flex items-center justify-center px-[11px] py-[5px] rounded-[7px] text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap shrink-0 leading-none"
+              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
             >
-              ⚙️<span className="hidden sm:inline whitespace-nowrap"> 관리자</span>
+              <span>⚙️</span>
+              <span className="whitespace-nowrap">관리자</span>
             </Link>
           </div>
         </div>
