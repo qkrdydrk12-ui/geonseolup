@@ -351,7 +351,6 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
                     '이미 마감된 공고',
                     '잘못된 전화번호',
                     '허위/과장 정보',
-                    '중복 게시',
                     '기타',
                   ].map((r) => (
                     <label
