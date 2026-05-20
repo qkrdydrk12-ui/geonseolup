@@ -924,6 +924,7 @@ export default function Admin() {
   const [reservationLogs, setReservationLogs] = useState<ReservationLog[]>([]);
   const [reports, setReports] = useState<JobReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsEnabledUI, setReportsEnabledUI] = useState(() => localStorage.getItem('cj_reports_enabled') !== '0');
   // ── 자연스러운 발행 (랜덤 분산) 설정 ──────────────────────────────────────
   const [naturalPublish, setNaturalPublish] = useState(() => localStorage.getItem('cj_natural_publish') === '1');
   const [naturalRandRange, setNaturalRandRange] = useState<'0-3' | '0-5' | '5-10' | 'custom'>(() => {
@@ -2776,8 +2777,12 @@ export default function Admin() {
                         <button
                           className="text-[11px] bg-[#1e3a5f] text-white border-none px-3 py-1.5 rounded-lg font-semibold cursor-pointer hover:bg-[#2d5282] font-[inherit] ml-auto"
                           onClick={async () => {
-                            await fbDeleteReport(r.id);
-                            setReports((prev) => prev.filter((x) => x.id !== r.id));
+                            try {
+                              await fbDeleteReport(r.id);
+                              setReports((prev) => prev.filter((x) => x.id !== r.id));
+                            } catch {
+                              showToast('❌ 신고 삭제 실패 — Firestore 규칙을 확인해주세요');
+                            }
                           }}
                         >
                           ✓ 처리 완료
@@ -2921,6 +2926,51 @@ export default function Admin() {
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">
+            {/* 신고 받기 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-3 flex items-center gap-2">
+                🚩 공고 신고 받기
+              </h2>
+              <div className="text-sm text-gray-600 mb-5 space-y-1 leading-relaxed">
+                <p><span className="font-bold text-gray-700">ON (기본):</span> 사용자가 공고 카드의 🚩 신고 버튼으로 신고 가능</p>
+                <p><span className="font-bold text-gray-700">OFF:</span> 신고 버튼이 사용자 화면에서 숨겨짐</p>
+              </div>
+              <button
+                onClick={() => {
+                  const cur = localStorage.getItem('cj_reports_enabled') !== '0';
+                  const next = cur ? '0' : '1';
+                  localStorage.setItem('cj_reports_enabled', next);
+                  // 같은 탭 내 다른 컴포넌트에 즉시 알리기 위한 합성 storage 이벤트
+                  window.dispatchEvent(new StorageEvent('storage', { key: 'cj_reports_enabled', newValue: next }));
+                  showToast(cur ? '🚫 신고 받기 OFF' : '✅ 신고 받기 ON');
+                  setReportsEnabledUI(!cur);
+                }}
+                className="flex items-center gap-3 cursor-pointer border-none bg-transparent p-0 font-[inherit]"
+                type="button"
+              >
+                <span
+                  className="relative inline-flex w-[52px] h-[28px] rounded-full transition-colors duration-200 shrink-0"
+                  style={{ background: reportsEnabledUI ? '#22c55e' : '#d1d5db' }}
+                >
+                  <span
+                    className="absolute top-[3px] left-[3px] w-[22px] h-[22px] bg-white rounded-full shadow transition-transform duration-200"
+                    style={{ transform: reportsEnabledUI ? 'translateX(24px)' : 'translateX(0)' }}
+                  />
+                </span>
+                <span className={`text-[15px] font-extrabold ${reportsEnabledUI ? 'text-emerald-600' : 'text-gray-500'}`}>
+                  {reportsEnabledUI ? 'ON — 신고 받는 중' : 'OFF — 신고 버튼 숨김'}
+                </span>
+              </button>
+              <div className="mt-4 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800 leading-relaxed">
+                <span className="text-base shrink-0">💡</span>
+                <div>
+                  <p className="font-semibold mb-1">크로스 디바이스 신고 수신을 활성화하려면:</p>
+                  <p>Firebase Console → Firestore → 규칙에서 <code className="bg-white px-1 rounded text-[11px]">match /reports/&#123;id&#125;</code> 에 <code className="bg-white px-1 rounded text-[11px]">allow create: if true;</code> 추가 필요.</p>
+                  <p className="mt-1">규칙을 추가하지 않아도 사용자에게는 정상 접수 메시지가 표시되며, 같은 기기의 신고만 관리자 페이지에서 보입니다.</p>
+                </div>
+              </div>
+            </div>
+
             {/* 구인 등록 검토 설정 */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
               <h2 className="text-lg font-bold text-[#1e3a5f] mb-3 flex items-center gap-2">

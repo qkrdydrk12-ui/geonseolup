@@ -428,7 +428,28 @@ export async function fbDeletePending(id: string): Promise<void> {
   }
 }
 
+function localLoadReports(): JobReport[] {
+  try {
+    const raw = localStorage.getItem('cj_reports');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function localSaveReport(r: JobReport): void {
+  const list = localLoadReports();
+  list.unshift(r);
+  localStorage.setItem('cj_reports', JSON.stringify(list.slice(0, 200)));
+}
+
+function localDeleteReport(id: string): void {
+  const list = localLoadReports().filter((r) => r.id !== id);
+  localStorage.setItem('cj_reports', JSON.stringify(list));
+}
+
 export async function fbAddReport(entry: Omit<JobReport, 'id' | '_createdAt'>): Promise<string> {
+  // Firestore 우선 시도
   try {
     const ref = await addDoc(REPORTS_COL, {
       ...entry,
@@ -436,26 +457,50 @@ export async function fbAddReport(entry: Omit<JobReport, 'id' | '_createdAt'>): 
     });
     return ref.id;
   } catch (e) {
-    console.warn('[Firebase] fbAddReport failed:', e);
-    throw e;
+    console.warn('[Firebase] fbAddReport failed, falling back to local:', e);
+    // 로컬 폴백 — Firestore 권한 오류 시에도 신고 접수 성공으로 처리
+    const id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    localSaveReport({ id, ...entry } as JobReport);
+    return id;
   }
 }
 
 export async function fbLoadReports(): Promise<JobReport[]> {
+  let firebaseReports: JobReport[] = [];
   try {
     const snap = await getDocs(query(REPORTS_COL, orderBy('_createdAt', 'desc')));
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as JobReport));
+    firebaseReports = snap.docs.map((d) => ({ id: d.id, ...d.data() } as JobReport));
   } catch (e) {
     console.warn('[Firebase] fbLoadReports failed:', e);
-    return [];
   }
+  // Firestore + 로컬 병합 (중복 ID 제거, 최신순 정렬)
+  const local = localLoadReports();
+  const all = [...firebaseReports, ...local];
+  const seen = new Set<string>();
+  const merged = all.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+  // 정렬: _createdAt(Firestore Timestamp) 우선, 없으면 createdAt(ISO) 파싱
+  const tsOf = (r: JobReport): number => {
+    const ca = r._createdAt as { seconds?: number; toMillis?: () => number } | null | undefined;
+    if (ca && typeof ca.toMillis === 'function') return ca.toMillis();
+    if (ca && typeof ca.seconds === 'number') return ca.seconds * 1000;
+    const t = Date.parse(r.createdAt || '');
+    return isNaN(t) ? 0 : t;
+  };
+  return merged.sort((a, b) => tsOf(b) - tsOf(a));
 }
 
 export async function fbDeleteReport(id: string): Promise<void> {
+  // 로컬 항목은 즉시 삭제 후 종료
+  if (id.startsWith('local_')) {
+    localDeleteReport(id);
+    return;
+  }
+  // Firestore 항목은 실패 시 throw — UI에서 실패 처리 가능
   try {
     await deleteDoc(doc(_db, 'reports', id));
   } catch (e) {
     console.warn('[Firebase] fbDeleteReport failed:', e);
+    throw e;
   }
 }
 

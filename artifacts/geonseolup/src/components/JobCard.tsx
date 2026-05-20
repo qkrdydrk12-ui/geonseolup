@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
@@ -47,6 +47,18 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
   const [reporting, setReporting] = useState(false);
   const [reportDone, setReportDone] = useState(false);
 
+  const [reportsEnabled, setReportsEnabled] = useState(
+    () => typeof window === 'undefined' || localStorage.getItem('cj_reports_enabled') !== '0'
+  );
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'cj_reports_enabled') {
+        setReportsEnabled(e.newValue !== '0');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
   const _isHot = isHot(job.date);
@@ -283,13 +295,15 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
         >
           {detailOpen ? '📋 닫기' : '📋 원문'}
         </button>
-        <button
-          className="bg-white border-[1.5px] border-gray-200 text-gray-400 py-[7px] px-[9px] rounded-lg text-[11px] font-semibold cursor-pointer hover:border-red-400 hover:text-red-500 transition-all whitespace-nowrap shrink-0"
-          onClick={() => { setReportOpen(true); setReportDone(false); setReportReason(''); setReportNote(''); }}
-          title="이 공고 신고"
-        >
-          🚩 신고
-        </button>
+        {reportsEnabled && (
+          <button
+            className="bg-white border-[1.5px] border-gray-200 text-gray-400 py-[7px] px-[9px] rounded-lg text-[11px] font-semibold cursor-pointer hover:border-red-400 hover:text-red-500 transition-all whitespace-nowrap shrink-0"
+            onClick={() => { setReportOpen(true); setReportDone(false); setReportReason(''); setReportNote(''); }}
+            title="이 공고 신고"
+          >
+            🚩 신고
+          </button>
+        )}
         <button
           className="bg-[#1e3a5f] text-white border-none py-[7px] px-[9px] rounded-lg text-[11px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors whitespace-nowrap shrink-0"
           onClick={() => {
