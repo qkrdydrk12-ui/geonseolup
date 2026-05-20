@@ -2124,7 +2124,7 @@ export default function Admin() {
                 {visibleJobs.map((job) => (
                   <div
                     key={job.id}
-                    className={`bg-white border rounded-[10px] p-4 flex items-center gap-3 flex-wrap ${
+                    className={`bg-white border rounded-[10px] p-4 flex flex-col sm:flex-row sm:items-center gap-3 ${
                       job.status === 'reserved'
                         ? 'border-violet-300 bg-violet-50'
                         : job.hidden
@@ -2132,7 +2132,7 @@ export default function Admin() {
                         : 'border-gray-200'
                     }`}
                   >
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 w-full">
                       <div className="text-[15px] font-bold mb-1 text-gray-900 truncate">{job.title}</div>
                       <div className="text-xs text-gray-500 flex flex-wrap gap-2">
                         <span>📍 {job.region}</span>
@@ -2163,7 +2163,7 @@ export default function Admin() {
                         {job.hidden && <span className="text-amber-600 font-bold">🙈 숨김</span>}
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-2 shrink-0 w-full sm:w-auto justify-end flex-wrap">
                       {job.status === 'reserved' ? (
                         <button
                           className="bg-white border-2 border-violet-400 text-violet-600 py-[7px] px-3.5 rounded-lg text-[13px] font-bold cursor-pointer hover:bg-violet-50 transition-colors font-[inherit] whitespace-nowrap"
