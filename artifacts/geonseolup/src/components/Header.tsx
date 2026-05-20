@@ -123,47 +123,47 @@ export default function Header() {
             </div>
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               href="/info"
-              className="px-[11px] py-[5px] rounded-[7px] text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 hidden sm:block"
+              className="px-[11px] py-[5px] rounded-[7px] text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 hidden sm:block whitespace-nowrap"
             >
               📚 정보/꿀팁
             </Link>
             <Link
               href="/post"
-              className="flex items-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-extrabold text-white no-underline transition-all hover:-translate-y-px"
+              className="inline-flex items-center justify-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-extrabold text-white no-underline transition-all hover:-translate-y-px whitespace-nowrap shrink-0 leading-none"
               style={{
                 background: '#f97316',
                 boxShadow: '0 2px 8px rgba(249,115,22,0.30)',
               }}
             >
-              ✏️ 구인 등록
+              <span className="whitespace-nowrap">✏️ 구인등록</span>
             </Link>
 
             <button
-              className="flex items-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-bold text-white border border-white/35 bg-white/18 cursor-pointer transition-all hover:bg-white/30 hover:-translate-y-px"
+              className="inline-flex items-center justify-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-bold text-white border border-white/35 bg-white/18 cursor-pointer transition-all hover:bg-white/30 hover:-translate-y-px whitespace-nowrap shrink-0 leading-none"
               onClick={() => setContactOpen(true)}
             >
-              📩 문의
+              <span className="whitespace-nowrap">📩 문의</span>
             </button>
 
             <button
-              className="flex items-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px"
+              className="inline-flex items-center justify-center gap-1 px-[11px] py-[5px] rounded-[7px] text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px whitespace-nowrap shrink-0 leading-none"
               style={{ background: '#fee500', color: '#3c1e1e' }}
               onClick={doKakaoShare}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#3c1e1e">
                 <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.632 5.08 4.1 6.52l-1.05 3.9 4.52-2.97A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" />
               </svg>
-              공유
+              <span className="whitespace-nowrap">공유</span>
             </button>
 
             <Link
               href="/admin"
-              className="px-[11px] py-[5px] rounded-[7px] text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28"
+              className="inline-flex items-center justify-center px-[11px] py-[5px] rounded-[7px] text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap shrink-0 leading-none"
             >
-              ⚙️<span className="hidden sm:inline"> 관리자</span>
+              ⚙️<span className="hidden sm:inline whitespace-nowrap"> 관리자</span>
             </Link>
           </div>
         </div>

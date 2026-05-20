@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
-import type { Job, PendingJob } from '@/lib/firebase';
+import type { Job, PendingJob, JobReport } from '@/lib/firebase';
 import {
   fbLoadJobs,
   fbAddJob,
@@ -16,6 +16,8 @@ import {
   fbRetryReservation,
   fbSaveReservationLog,
   fbLoadReservationLogs,
+  fbLoadReports,
+  fbDeleteReport,
   type ReservationLog,
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
@@ -885,7 +887,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'settings' | 'stats';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'settings' | 'stats';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -920,6 +922,8 @@ export default function Admin() {
   const [repeatDays, setRepeatDays] = useState<number>(0);
   const [useRandomSpread, setUseRandomSpread] = useState(false);
   const [reservationLogs, setReservationLogs] = useState<ReservationLog[]>([]);
+  const [reports, setReports] = useState<JobReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
   // ── 자연스러운 발행 (랜덤 분산) 설정 ──────────────────────────────────────
   const [naturalPublish, setNaturalPublish] = useState(() => localStorage.getItem('cj_natural_publish') === '1');
   const [naturalRandRange, setNaturalRandRange] = useState<'0-3' | '0-5' | '5-10' | 'custom'>(() => {
@@ -1206,6 +1210,13 @@ export default function Admin() {
   }, [authed]);
 
   useEffect(() => {
+    if (authed && tab === 'reports') {
+      (async () => {
+        setReportsLoading(true);
+        setReports(await fbLoadReports());
+        setReportsLoading(false);
+      })();
+    }
     if (authed && tab === 'stats') {
       loadHourlyStats(statsDate);
     }
@@ -1931,6 +1942,7 @@ export default function Admin() {
               { key: 'jobs', label: `📋 공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 📅${reservedJobs.length}` : ''}` },
               { key: 'add', label: '➕ 공고 등록' },
               { key: 'pending', label: `📥 신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
+              { key: 'reports', label: `🚩 신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
               { key: 'stats', label: '📊 방문 통계' },
               { key: 'settings', label: '⚙️ 설정' },
             ] as { key: Tab; label: string }[]
@@ -2693,6 +2705,92 @@ export default function Admin() {
         )}
 
         {/* 신청 관리 */}
+        {tab === 'reports' && (
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100 flex items-center justify-between">
+              🚩 신고된 공고
+              <button
+                className="text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 py-1.5 px-3 rounded-lg cursor-pointer font-[inherit]"
+                onClick={async () => { setReportsLoading(true); setReports(await fbLoadReports()); setReportsLoading(false); }}
+              >
+                🔄 새로고침
+              </button>
+            </h2>
+            {reportsLoading ? (
+              <div className="text-center py-12 text-gray-400">불러오는 중…</div>
+            ) : reports.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">접수된 신고가 없습니다</div>
+            ) : (
+              <div className="grid gap-3">
+                {reports.map((r) => {
+                  const targetJob = jobs.find((j) => j.id === r.jobId);
+                  return (
+                    <div key={r.id} className="border border-red-200 bg-red-50/40 rounded-xl p-4">
+                      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                        <span className="text-[11px] font-bold bg-red-500 text-white px-2 py-0.5 rounded">
+                          {r.reason}
+                        </span>
+                        <span className="text-[11px] text-gray-500">
+                          {new Date(r.createdAt).toLocaleString('ko-KR')}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-[#1e3a5f] mb-1 break-words">
+                        {r.jobTitle || '(제목 없음)'}
+                      </div>
+                      <div className="text-xs text-gray-600 mb-2">
+                        📞 {r.jobContact || '-'} · ID: {r.jobId}
+                        {!targetJob && <span className="ml-2 text-orange-500 font-semibold">⚠ 공고 삭제됨</span>}
+                      </div>
+                      {r.note && (
+                        <div className="text-[13px] text-gray-700 bg-white border border-gray-200 rounded-lg p-2 mb-2 whitespace-pre-wrap break-words">
+                          {r.note}
+                        </div>
+                      )}
+                      <div className="flex gap-2 flex-wrap">
+                        {targetJob && (
+                          <>
+                            <button
+                              className="text-[11px] bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg font-semibold cursor-pointer hover:bg-gray-50 font-[inherit]"
+                              onClick={async () => {
+                                if (!confirm('이 공고를 숨김 처리하시겠습니까?')) return;
+                                await fbToggleHide(r.jobId, true);
+                                showToast('✅ 공고를 숨겼습니다');
+                                loadJobs();
+                              }}
+                            >
+                              👁 공고 숨김
+                            </button>
+                            <button
+                              className="text-[11px] bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg font-semibold cursor-pointer hover:bg-red-200 font-[inherit]"
+                              onClick={async () => {
+                                if (!confirm('이 공고를 완전히 삭제하시겠습니까?')) return;
+                                await fbDeleteJob(r.jobId);
+                                showToast('✅ 공고를 삭제했습니다');
+                                loadJobs();
+                              }}
+                            >
+                              🗑 공고 삭제
+                            </button>
+                          </>
+                        )}
+                        <button
+                          className="text-[11px] bg-[#1e3a5f] text-white border-none px-3 py-1.5 rounded-lg font-semibold cursor-pointer hover:bg-[#2d5282] font-[inherit] ml-auto"
+                          onClick={async () => {
+                            await fbDeleteReport(r.id);
+                            setReports((prev) => prev.filter((x) => x.id !== r.id));
+                          }}
+                        >
+                          ✓ 처리 완료
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'pending' && (
           <div className="bg-white rounded-xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100 flex items-center justify-between">

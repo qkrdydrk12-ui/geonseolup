@@ -33,6 +33,18 @@ const JOBS_COL = collection(_db, 'jobs');
 const PENDING_COL = collection(_db, 'pending');
 const SETTINGS_COL = collection(_db, 'settings');
 const LOGS_COL = collection(_db, 'reservationLogs');
+const REPORTS_COL = collection(_db, 'reports');
+
+export interface JobReport {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  jobContact?: string;
+  reason: string;
+  note?: string;
+  createdAt: string;
+  _createdAt?: unknown;
+}
 
 export interface ReservationLog {
   id: string;
@@ -413,6 +425,37 @@ export async function fbDeletePending(id: string): Promise<void> {
     await deleteDoc(doc(_db, 'pending', id));
   } catch (e) {
     console.warn('[Firebase] fbDeletePending failed:', e);
+  }
+}
+
+export async function fbAddReport(entry: Omit<JobReport, 'id' | '_createdAt'>): Promise<string> {
+  try {
+    const ref = await addDoc(REPORTS_COL, {
+      ...entry,
+      _createdAt: serverTimestamp(),
+    });
+    return ref.id;
+  } catch (e) {
+    console.warn('[Firebase] fbAddReport failed:', e);
+    throw e;
+  }
+}
+
+export async function fbLoadReports(): Promise<JobReport[]> {
+  try {
+    const snap = await getDocs(query(REPORTS_COL, orderBy('_createdAt', 'desc')));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as JobReport));
+  } catch (e) {
+    console.warn('[Firebase] fbLoadReports failed:', e);
+    return [];
+  }
+}
+
+export async function fbDeleteReport(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(_db, 'reports', id));
+  } catch (e) {
+    console.warn('[Firebase] fbDeleteReport failed:', e);
   }
 }
 

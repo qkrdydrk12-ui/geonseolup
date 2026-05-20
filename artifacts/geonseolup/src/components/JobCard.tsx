@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
+import { fbAddReport } from '@/lib/firebase';
 import {
   formatDate,
   getJobIcon,
@@ -39,6 +40,11 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
   const [blocked, setBlocked] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportNote, setReportNote] = useState('');
+  const [reporting, setReporting] = useState(false);
+  const [reportDone, setReportDone] = useState(false);
 
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
@@ -277,6 +283,13 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
           {detailOpen ? '📋 닫기' : '📋 원문'}
         </button>
         <button
+          className="bg-white border-[1.5px] border-gray-200 text-gray-400 py-[7px] px-[9px] rounded-lg text-[11px] font-semibold cursor-pointer hover:border-red-400 hover:text-red-500 transition-all whitespace-nowrap shrink-0"
+          onClick={() => { setReportOpen(true); setReportDone(false); setReportReason(''); setReportNote(''); }}
+          title="이 공고 신고"
+        >
+          🚩 신고
+        </button>
+        <button
           className="bg-[#1e3a5f] text-white border-none py-[7px] px-[9px] rounded-lg text-[11px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors whitespace-nowrap shrink-0"
           onClick={() => {
             markViewed(job.id);
@@ -301,6 +314,112 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
           </button>
         )}
       </div>
+
+      {/* 신고 모달 */}
+      {reportOpen && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4"
+          onClick={(e) => { e.stopPropagation(); setReportOpen(false); }}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-[420px] p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {reportDone ? (
+              <>
+                <div className="text-center py-4">
+                  <div className="text-4xl mb-2">✅</div>
+                  <h3 className="text-base font-bold text-[#1e3a5f] mb-1">신고가 접수되었습니다</h3>
+                  <p className="text-xs text-gray-500">관리자가 확인 후 조치하겠습니다. 감사합니다.</p>
+                </div>
+                <button
+                  className="w-full bg-[#1e3a5f] text-white border-none py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#2d5282] font-[inherit]"
+                  onClick={() => setReportOpen(false)}
+                >
+                  닫기
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-bold text-[#1e3a5f] mb-1 flex items-center gap-1.5">
+                  🚩 공고 신고하기
+                </h3>
+                <p className="text-[11px] text-gray-500 mb-3 line-clamp-1">{job.title}</p>
+                <div className="space-y-1.5 mb-3">
+                  {[
+                    '연락이 안 됨',
+                    '이미 마감된 공고',
+                    '잘못된 전화번호',
+                    '허위/과장 정보',
+                    '중복 게시',
+                    '기타',
+                  ].map((r) => (
+                    <label
+                      key={r}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-[13px] font-medium transition-colors ${
+                        reportReason === r
+                          ? 'bg-red-50 border-red-300 text-red-700'
+                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="reportReason"
+                        value={r}
+                        checked={reportReason === r}
+                        onChange={() => setReportReason(r)}
+                        className="accent-red-500"
+                      />
+                      {r}
+                    </label>
+                  ))}
+                </div>
+                <textarea
+                  className="w-full border border-gray-200 rounded-lg p-2 text-[13px] resize-none focus:outline-none focus:border-[#1e3a5f] font-[inherit]"
+                  rows={2}
+                  placeholder="추가 내용 (선택)"
+                  value={reportNote}
+                  onChange={(e) => setReportNote(e.target.value)}
+                  maxLength={300}
+                />
+                <div className="flex gap-2 mt-3">
+                  <button
+                    className="flex-1 bg-white border border-gray-300 text-gray-600 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-gray-50 font-[inherit]"
+                    onClick={() => setReportOpen(false)}
+                  >
+                    취소
+                  </button>
+                  <button
+                    disabled={!reportReason || reporting}
+                    className="flex-1 bg-red-500 text-white border-none py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed font-[inherit]"
+                    onClick={async () => {
+                      if (!reportReason || reporting) return;
+                      setReporting(true);
+                      try {
+                        await fbAddReport({
+                          jobId: job.id,
+                          jobTitle: job.title || '',
+                          jobContact: job.contact || '',
+                          reason: reportReason,
+                          note: reportNote.trim(),
+                          createdAt: new Date().toISOString(),
+                        });
+                        setReportDone(true);
+                      } catch {
+                        alert('신고 접수에 실패했습니다. 잠시 후 다시 시도해주세요.');
+                      } finally {
+                        setReporting(false);
+                      }
+                    }}
+                  >
+                    {reporting ? '접수 중…' : '신고하기'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </article>
   );
 }
