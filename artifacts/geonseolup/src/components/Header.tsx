@@ -209,15 +209,19 @@ export default function Header() {
                     className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left"
                     onClick={handleOpenChat}
                   >
-                    <span>💛</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#3c1e1e" className="shrink-0">
+                      <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.632 5.08 4.1 6.52l-1.05 3.9 4.52-2.97A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" />
+                    </svg>
                     <span>오픈채팅 입장</span>
                   </button>
                   <div className="h-px bg-gray-100" />
                   <button
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-orange-50 border-none bg-transparent cursor-pointer text-left"
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left"
                     onClick={handleShare}
                   >
-                    <span>📤</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#3c1e1e" className="shrink-0">
+                      <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.632 5.08 4.1 6.52l-1.05 3.9 4.52-2.97A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" />
+                    </svg>
                     <span>링크 공유</span>
                   </button>
                 </div>
