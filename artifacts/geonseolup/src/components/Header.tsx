@@ -83,18 +83,24 @@ export default function Header() {
   const siteName = localStorage.getItem('cj_site_name') || '건설UP';
   const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
 
-  // 오픈채팅 링크 — 관리자 설정의 카카오 값을 사용 (URL이면 그대로, 아니면 open.kakao.com/o/<코드>)
-  const kakaoRaw = (localStorage.getItem('cj_contact_kakao') || '').trim();
-  const openChatHref = kakaoRaw
-    ? (kakaoRaw.startsWith('http') ? kakaoRaw : `https://open.kakao.com/o/${kakaoRaw}`)
-    : '';
+  // 오픈채팅 링크 — 1순위: cj_openchat_url, 2순위(하위호환): cj_contact_kakao
+  function getOpenChatHref(): string {
+    const dedicated = (localStorage.getItem('cj_openchat_url') || '').trim();
+    if (dedicated) {
+      return dedicated.startsWith('http') ? dedicated : `https://${dedicated}`;
+    }
+    const kakao = (localStorage.getItem('cj_contact_kakao') || '').trim();
+    if (kakao && kakao.startsWith('http')) return kakao;
+    return '';
+  }
 
   function handleOpenChat() {
-    if (!openChatHref) {
-      alert('오픈채팅 주소가 설정되지 않았습니다.\n관리자 → 설정에서 카카오 오픈채팅 URL을 등록해주세요.');
+    const href = getOpenChatHref();
+    if (!href) {
+      alert('오픈채팅 주소가 설정되지 않았습니다.\n관리자 → 설정 → 카카오 오픈채팅 URL 설정에서 등록해주세요.');
       return;
     }
-    window.open(openChatHref, '_blank', 'noopener');
+    window.open(href, '_blank', 'noopener');
   }
 
   return (

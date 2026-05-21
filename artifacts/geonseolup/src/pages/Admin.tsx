@@ -994,6 +994,7 @@ export default function Admin() {
     contactLabel: localStorage.getItem('cj_contact_label') || '',
     autoHideHours: '',
     shareUrl: localStorage.getItem('cj_share_url') || '',
+    openChatUrl: localStorage.getItem('cj_openchat_url') || '',
   });
   const [siteText, setSiteText] = useState({
     siteName: localStorage.getItem('cj_site_name') || '',
@@ -1758,6 +1759,7 @@ export default function Admin() {
     localStorage.setItem('cj_contact_kakao', settings.contactKakao);
     localStorage.setItem('cj_contact_label', settings.contactLabel);
     localStorage.setItem('cj_share_url', settings.shareUrl);
+    localStorage.setItem('cj_openchat_url', settings.openChatUrl);
     if (settings.autoHideHours) {
       const prev = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
       localStorage.setItem('cj_dup_settings', JSON.stringify({ ...prev, autoHideHours: parseInt(settings.autoHideHours) }));
@@ -3349,6 +3351,47 @@ export default function Admin() {
                   <p><span className="mr-1">📧</span> 이메일: <strong className="text-gray-800">{settings.contactEmail || '설정 없음'}</strong></p>
                   <p className="mt-1"><span className="mr-1">💛</span> 카톡 ID: <strong className="text-gray-800">{settings.contactKakao || '설정 없음'}</strong></p>
                   <p className="mt-1"><span className="mr-1">💬</span> 안내 문구: <strong className="text-gray-800">{settings.contactLabel || '설정 없음'}</strong></p>
+                </div>
+              </div>
+            </div>
+
+            {/* 오픈채팅 URL 설정 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-2 flex items-center gap-2">
+                💛 카카오 오픈채팅 URL 설정
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                메인 페이지 우측 상단 <strong>오픈채팅</strong> 버튼 클릭 시 열릴 카카오 오픈채팅 주소를 입력하세요.<br />
+                예: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">https://open.kakao.com/o/xxxxxxxx</code>
+              </p>
+              <div className="max-w-[680px]">
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">오픈채팅 URL</label>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={settings.openChatUrl}
+                    onChange={(e) => setSettings((p) => ({ ...p, openChatUrl: e.target.value }))}
+                    placeholder="예: https://open.kakao.com/o/xxxxxxxx"
+                    className="flex-1 py-2.5 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                  />
+                  <button
+                    className="bg-[#f97316] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit] whitespace-nowrap"
+                    onClick={() => {
+                      const v = settings.openChatUrl.trim();
+                      if (v && !v.startsWith('http')) {
+                        showToast('⚠️ http:// 또는 https:// 로 시작해야 합니다');
+                        return;
+                      }
+                      localStorage.setItem('cj_openchat_url', v);
+                      setSettings((p) => ({ ...p, openChatUrl: v }));
+                      showToast('✅ 오픈채팅 URL이 저장됐습니다');
+                    }}
+                  >
+                    저장
+                  </button>
+                </div>
+                <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 break-all">
+                  현재 오픈채팅: <strong className="text-gray-800">{settings.openChatUrl || '설정 없음 (오픈채팅 버튼 클릭 시 안내 알림)'}</strong>
                 </div>
               </div>
             </div>
