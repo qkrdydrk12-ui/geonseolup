@@ -357,7 +357,31 @@ export default function Home() {
         return { ...prev, keyword: '', region: '전체', job: '전체', weldSub: '전체', sort: 'newest', page: 1, filtered: list };
       });
       showToast('🆕 오늘 올라온 공고를 표시합니다');
+    } else if (preset === 'share') {
+      void doShare();
     }
+  }
+
+  async function doShare() {
+    const url = localStorage.getItem('cj_share_url') || location.href;
+    const siteName = localStorage.getItem('cj_site_name') || '건설UP';
+    const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
+    const title = `${siteName} - ${siteSubtitle}`;
+    const desc = localStorage.getItem('cj_footer_text') || '배관·용접·조공·화기감시자 등 전국 건설 현장 구인 공고';
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text: desc, url });
+        showToast('📤 공유를 시작합니다');
+        return;
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === 'AbortError') return;
+      }
+    }
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(url).catch(() => {});
+    }
+    showToast('📋 링크가 복사됐습니다! 카카오톡에 붙여넣기 하세요');
   }
 
   function resetAll() {
@@ -446,6 +470,7 @@ export default function Home() {
               { preset: 'meal_lodging', emoji: '🏠', title: '숙식 제공', desc: '숙박+식사 제공' },
               { preset: 'new_today', emoji: '🆕', title: '오늘 공고', desc: '24시간 이내' },
               { preset: 'fire_guard', emoji: '🧯', title: '화기감시자', desc: '전체 공고' },
+              { preset: 'share', emoji: '📤', title: '공유하기', desc: '친구에게 추천' },
             ].map((c) => (
               <button
                 key={c.preset}

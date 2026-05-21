@@ -83,24 +83,18 @@ export default function Header() {
   const siteName = localStorage.getItem('cj_site_name') || '건설UP';
   const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
 
-  async function doKakaoShare() {
-    const url = location.href;
-    const title = `${siteName} - ${siteSubtitle}`;
-    const desc = localStorage.getItem('cj_footer_text') || '배관·용접·조공·화기감시자 등 전국 건설 현장 구인 공고';
+  // 오픈채팅 링크 — 관리자 설정의 카카오 값을 사용 (URL이면 그대로, 아니면 open.kakao.com/o/<코드>)
+  const kakaoRaw = (localStorage.getItem('cj_contact_kakao') || '').trim();
+  const openChatHref = kakaoRaw
+    ? (kakaoRaw.startsWith('http') ? kakaoRaw : `https://open.kakao.com/o/${kakaoRaw}`)
+    : '';
 
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, text: desc, url });
-        return;
-      } catch (e: unknown) {
-        if (e instanceof Error && e.name === 'AbortError') return;
-      }
+  function handleOpenChat() {
+    if (!openChatHref) {
+      alert('오픈채팅 주소가 설정되지 않았습니다.\n관리자 → 설정에서 카카오 오픈채팅 URL을 등록해주세요.');
+      return;
     }
-
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(url).catch(() => {});
-    }
-    alert('링크가 복사됐습니다! 카카오톡에 붙여넣기 하세요.');
+    window.open(openChatHref, '_blank', 'noopener');
   }
 
   return (
@@ -156,12 +150,13 @@ export default function Header() {
             <button
               className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px whitespace-nowrap leading-tight"
               style={{ background: '#fee500', color: '#3c1e1e' }}
-              onClick={doKakaoShare}
+              onClick={handleOpenChat}
+              title="카카오 오픈채팅 바로가기"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#3c1e1e">
                 <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.632 5.08 4.1 6.52l-1.05 3.9 4.52-2.97A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" />
               </svg>
-              <span className="whitespace-nowrap">공유</span>
+              <span className="whitespace-nowrap">오픈채팅</span>
             </button>
 
             <Link
