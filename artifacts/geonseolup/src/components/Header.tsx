@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 
 interface ContactModalProps {
@@ -80,6 +80,7 @@ function ContactModal({ isOpen, onClose }: ContactModalProps) {
 
 export default function Header() {
   const [contactOpen, setContactOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const siteName = localStorage.getItem('cj_site_name') || '건설UP';
   const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
 
@@ -95,6 +96,7 @@ export default function Header() {
   }
 
   function handleOpenChat() {
+    setMenuOpen(false);
     const href = getOpenChatHref();
     if (!href) {
       alert('오픈채팅 주소가 설정되지 않았습니다.\n관리자 → 설정 → 카카오 오픈채팅 URL 설정에서 등록해주세요.');
@@ -102,6 +104,37 @@ export default function Header() {
     }
     window.open(href, '_blank', 'noopener');
   }
+
+  async function handleShare() {
+    setMenuOpen(false);
+    const url = localStorage.getItem('cj_share_url') || location.href;
+    const title = `${siteName} - ${siteSubtitle}`;
+    const desc = localStorage.getItem('cj_footer_text') || '배관·용접·조공·화기감시자 등 전국 건설 현장 구인 공고';
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text: desc, url });
+        return;
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === 'AbortError') return;
+      }
+    }
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(url).catch(() => {});
+    }
+    alert('링크가 복사됐습니다! 카카오톡에 붙여넣기 하세요.');
+  }
+
+  // 외부 클릭 시 메뉴 닫기
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-openchat-menu]')) setMenuOpen(false);
+    }
+    window.addEventListener('click', onClick);
+    return () => window.removeEventListener('click', onClick);
+  }, [menuOpen]);
 
   return (
     <>
@@ -153,17 +186,43 @@ export default function Header() {
               <span className="whitespace-nowrap">문의</span>
             </button>
 
-            <button
-              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px whitespace-nowrap leading-tight"
-              style={{ background: '#fee500', color: '#3c1e1e' }}
-              onClick={handleOpenChat}
-              title="카카오 오픈채팅 바로가기"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="#3c1e1e">
-                <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.632 5.08 4.1 6.52l-1.05 3.9 4.52-2.97A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" />
-              </svg>
-              <span className="whitespace-nowrap">오픈채팅</span>
-            </button>
+            <div className="relative" data-openchat-menu>
+              <button
+                className="w-full flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px whitespace-nowrap leading-tight"
+                style={{ background: '#fee500', color: '#3c1e1e' }}
+                onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+                title="오픈채팅 / 공유 메뉴"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#3c1e1e">
+                  <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.632 5.08 4.1 6.52l-1.05 3.9 4.52-2.97A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" />
+                </svg>
+                <span className="whitespace-nowrap flex items-center gap-0.5">
+                  오픈채팅<span className="text-[8px] opacity-70">▼</span>
+                </span>
+              </button>
+              {menuOpen && (
+                <div
+                  className="absolute right-0 sm:right-0 left-0 sm:left-auto top-[calc(100%+4px)] z-[300] min-w-full sm:min-w-[140px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left"
+                    onClick={handleOpenChat}
+                  >
+                    <span>💛</span>
+                    <span>오픈채팅 입장</span>
+                  </button>
+                  <div className="h-px bg-gray-100" />
+                  <button
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-orange-50 border-none bg-transparent cursor-pointer text-left"
+                    onClick={handleShare}
+                  >
+                    <span>📤</span>
+                    <span>링크 공유</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
           </div>
         </div>
