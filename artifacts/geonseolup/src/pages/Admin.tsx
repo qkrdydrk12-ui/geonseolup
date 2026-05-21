@@ -18,6 +18,7 @@ import {
   fbLoadReservationLogs,
   fbLoadReports,
   fbDeleteReport,
+  fbSetSetting,
   type ReservationLog,
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
@@ -3376,7 +3377,7 @@ export default function Admin() {
                   />
                   <button
                     className="bg-[#f97316] text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit] whitespace-nowrap"
-                    onClick={() => {
+                    onClick={async () => {
                       const v = settings.openChatUrl.trim();
                       if (v && !v.startsWith('http')) {
                         showToast('⚠️ http:// 또는 https:// 로 시작해야 합니다');
@@ -3384,7 +3385,12 @@ export default function Admin() {
                       }
                       localStorage.setItem('cj_openchat_url', v);
                       setSettings((p) => ({ ...p, openChatUrl: v }));
-                      showToast('✅ 오픈채팅 URL이 저장됐습니다');
+                      try {
+                        await fbSetSetting('openchat_url', v);
+                        showToast('✅ 오픈채팅 URL이 저장됐습니다 (모든 기기 동기화)');
+                      } catch {
+                        showToast('✅ 저장됐지만 서버 동기화 실패 — 이 기기에서만 적용');
+                      }
                     }}
                   >
                     저장

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
+import { fbGetSetting } from '@/lib/firebase';
 
 interface ContactModalProps {
   isOpen: boolean;
@@ -83,6 +84,15 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const siteName = localStorage.getItem('cj_site_name') || '건설UP';
   const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
+
+  // Firestore에서 오픈채팅 URL 동기화 (모든 기기에서 공유)
+  useEffect(() => {
+    fbGetSetting('openchat_url').then((v) => {
+      if (typeof v === 'string' && v.trim()) {
+        localStorage.setItem('cj_openchat_url', v.trim());
+      }
+    }).catch(() => {});
+  }, []);
 
   // 오픈채팅 링크 — 1순위: cj_openchat_url, 2순위(하위호환): cj_contact_kakao
   function getOpenChatHref(): string {
