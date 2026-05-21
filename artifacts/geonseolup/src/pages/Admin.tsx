@@ -213,7 +213,7 @@ function formatSalary(num: number): string {
 }
 
 // 출퇴근·숙소·식대포함 등 단가 컨텍스트 포함 — 명시적 원 단위 금액과 함께 나올 때 최우선 처리
-const SALARY_KW = '일당|단가|급여|임금|공임|일급|조공|기공|안전담당자|화기감시자|초보|팀원|팀장|출퇴근|숙소|숙박|식대';
+const SALARY_KW = '일당|단가|급여|임금|공임|일급|공수|조공|기공|안전담당자|화기감시자|초보|팀원|팀장|출퇴근|숙소|숙박|식대';
 
 const NOISE_PATS: RegExp[] = [
   /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/g,  // 전화번호
@@ -272,6 +272,7 @@ function extractSalary(text: string): { text: string; num: number; score: number
     [/급\s+여(?!일)/g, '급여'],
     [/임\s+금/g, '임금'],
     [/공\s+임/g, '공임'],
+    [/공\s+수/g, '공수'],
     [/조\s+공/g, '조공'],
     [/기\s+공/g, '기공'],
     [/팀\s+원/g, '팀원'],
@@ -449,6 +450,22 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
       addCand(m[0], wage, 85, `역할 "${role}"`);
       if (bestScore < 85) bestScore = 85;
     }
+  }
+
+  // ── C-0: 공수 키워드 + 기본 + (선택) +추가 (라벨 없는 + 허용) ──────────────
+  // 예: "공수 24", "공수 : 24 + 1.5", "공수:25+2", "공 수 24+1"
+  // "공수"는 건설 현장에서 "일당/단가"와 동의어로 자주 쓰임
+  const gongsooPat = /공수\s*[:：]?\s*(\d+(?:\.\d+)?)(?:\s*\+\s*(\d+(?:\.\d+)?))?/g;
+  while ((m = gongsooPat.exec(cleaned)) !== null) {
+    const wage = parseManValue(m[1]);
+    if (wage <= 0) continue;
+    const extra = m[2] ? parseExtraManValue(m[2]) : 0;
+    const total = wage + extra;
+    if (wageBreakdowns.length === 0) {
+      wageBreakdowns.push({ role: '', wage, extraPay: extra, extraLabel: extra > 0 ? '추가' : '', total });
+    }
+    addCand(m[0], total || wage, 92, extra > 0 ? '공수 + 추가' : '공수');
+    if (bestScore < 92) bestScore = 92;
   }
 
   // ── C: 단순 기본단가 + '+' + 일비/숙식비 (기호 prefix 허용, 역할 없음) ────
@@ -763,14 +780,15 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
     const idx = text.indexOf(job);
     if (idx >= 0 && (firstJob === null || idx < firstJob.idx)) firstJob = { job, idx };
   }
-  // "자동용접" / "자동 용접" / "용접 자동" / "용접:자동" / "용접종류 자동" 패턴만 자동용접으로 인식
-  if (/자동\s*용접|용접(?:\s*종류)?\s*[:：]?\s*자동/.test(text)) {
-    const idx = text.search(/자동\s*용접|용접(?:\s*종류)?\s*[:：]?\s*자동/);
-    if (firstJob === null || idx < firstJob.idx || firstJob.job === '용접') {
-      firstJob = { job: '자동', idx };
-    }
-  }
   if (firstJob) r.job = firstJob.job;
+
+  // "자동용접" / "자동 용접" / "용접 자동" / "용접:자동" / "용접종류 자동" / "자동용접사" 감지
+  // → 직종 드롭다운은 '용접'으로 두고 weldSub만 '자동'으로 설정
+  //   (관리자 폼 JOBS 옵션에 '자동'이 없어서 드롭다운이 비어 보이는 버그 회피)
+  if (/자동\s*용접|용접(?:\s*종류)?\s*[:：]?\s*자동/.test(text)) {
+    r.job = '용접';
+    r.weldSub = '자동';
+  }
 
   // 2) 화기감시자 변형 표현 통합 — 단일 글자 "화기/화재/감시"는 절대 트리거 금지
   //    반드시 "화기감시"·"화재감시"·"안전감시"·"감시자" 같은 직종 명사가 들어있어야 함
