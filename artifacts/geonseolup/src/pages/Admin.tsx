@@ -263,6 +263,25 @@ function normalizeSalaryNum(s: string): number | null {
 /** 텍스트에서 단가(일당) 후보 배열과 최선 결과 반환 */
 function extractSalary(text: string): { text: string; num: number; score: number; candidates: SalaryCandidate[] } | null {
   let cleaned = text;
+  // ── 한글 자간 공백 정규화: "단   가" → "단가", "일 당" → "일당" 등 ────────
+  // 카카오톡 강조 표기에서 자주 보이는 패턴
+  const SPACED_KW_NORM: Array<[RegExp, string]> = [
+    [/단\s+가/g, '단가'],
+    [/일\s+당/g, '일당'],
+    [/일\s+급/g, '일급'],
+    [/급\s+여(?!일)/g, '급여'],
+    [/임\s+금/g, '임금'],
+    [/공\s+임/g, '공임'],
+    [/조\s+공/g, '조공'],
+    [/기\s+공/g, '기공'],
+    [/팀\s+원/g, '팀원'],
+    [/팀\s+장/g, '팀장'],
+    [/숙\s+소/g, '숙소'],
+    [/숙\s+박/g, '숙박'],
+    [/식\s+대/g, '식대'],
+    [/출\s*퇴\s*근/g, '출퇴근'],
+  ];
+  for (const [pat, rep] of SPACED_KW_NORM) cleaned = cleaned.replace(pat, rep);
   for (const pat of NOISE_PATS) cleaned = cleaned.replace(new RegExp(pat.source, pat.flags), ' ');
 
   const candidates: SalaryCandidate[] = [];
