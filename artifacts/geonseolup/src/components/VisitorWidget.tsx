@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'wouter';
 import { getToken } from '@/lib/adminAuth';
 
 interface VisitorStats {
@@ -144,7 +145,13 @@ export default function VisitorWidget() {
               </div>
             ))}
           </div>
-          <div className="px-4 pb-3">
+          <div className="px-4 pb-3 grid gap-1.5">
+            <Link
+              href="/admin"
+              className="w-full text-center text-xs font-bold text-white bg-[#f97316] rounded-lg py-2 no-underline hover:bg-[#ea580c] transition-colors block"
+            >
+              ⚙️ 관리자 페이지
+            </Link>
             <button
               onClick={handleReset}
               className="w-full text-xs text-gray-400 border border-gray-200 rounded-lg py-1.5 cursor-pointer hover:bg-gray-50 hover:text-gray-600 transition-colors bg-white font-[inherit]"

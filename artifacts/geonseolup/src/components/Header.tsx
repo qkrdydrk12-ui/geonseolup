@@ -124,8 +124,8 @@ export default function Header() {
             </div>
           </Link>
 
-          {/* 하단: 버튼 그리드 (모바일 둘째 줄) — 5칸 균등, 네모 모양 */}
-          <div className="grid grid-cols-5 gap-1.5 sm:flex sm:items-center sm:gap-2 sm:shrink-0">
+          {/* 하단: 버튼 그리드 (모바일 둘째 줄) — 4칸 균등, 네모 모양 */}
+          <div className="grid grid-cols-4 gap-1.5 sm:flex sm:items-center sm:gap-2 sm:shrink-0">
             <Link
               href="/info"
               className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
@@ -165,13 +165,6 @@ export default function Header() {
               <span className="whitespace-nowrap">오픈채팅</span>
             </button>
 
-            <Link
-              href="/admin"
-              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
-            >
-              <span>⚙️</span>
-              <span className="whitespace-nowrap">관리자</span>
-            </Link>
           </div>
         </div>
       </header>
