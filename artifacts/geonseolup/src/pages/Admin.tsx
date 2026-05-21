@@ -756,10 +756,19 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
 
   // ── 직종 ──
   // 1) 명확한 직종 키워드(JOBS, 용접 종류) 우선 매칭 — 본문 등장 순으로 가장 먼저 잡힌 것
+  //    "자동"은 너무 일반적이므로 용접 컨텍스트가 있을 때만 매칭에 포함
+  const WELD_SUBS_SAFE = WELD_SUBS.filter((w) => w !== '자동');
   let firstJob: { job: string; idx: number } | null = null;
-  for (const job of [...JOBS, ...WELD_SUBS]) {
+  for (const job of [...JOBS, ...WELD_SUBS_SAFE]) {
     const idx = text.indexOf(job);
     if (idx >= 0 && (firstJob === null || idx < firstJob.idx)) firstJob = { job, idx };
+  }
+  // "자동용접" / "자동 용접" / "용접 자동" / "용접:자동" / "용접종류 자동" 패턴만 자동용접으로 인식
+  if (/자동\s*용접|용접(?:\s*종류)?\s*[:：]?\s*자동/.test(text)) {
+    const idx = text.search(/자동\s*용접|용접(?:\s*종류)?\s*[:：]?\s*자동/);
+    if (firstJob === null || idx < firstJob.idx || firstJob.job === '용접') {
+      firstJob = { job: '자동', idx };
+    }
   }
   if (firstJob) r.job = firstJob.job;
 
@@ -1058,7 +1067,7 @@ export default function Admin() {
 
   const [footerText, setFooterText] = useState({
     title: localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보',
-    jobs: localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장',
+    jobs: localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC/자동) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장',
     notice: localStorage.getItem('cj_footer_notice') || '※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.',
   });
 

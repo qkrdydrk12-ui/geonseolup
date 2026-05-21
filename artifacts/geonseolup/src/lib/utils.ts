@@ -47,6 +47,7 @@ export const JOB_ICONS: Record<string, string> = {
   아크: '🔩',
   CO2: '🔩',
   PVC: '🔩',
+  자동: '🤖',
   형틀: '📐',
   철근: '⛓️',
   미장: '🪣',
@@ -66,7 +67,7 @@ export const JOB_ICONS: Record<string, string> = {
   기타: '📌',
 };
 
-export const WELD_SUBS = ['TIG', '아크', 'CO2', 'PVC'];
+export const WELD_SUBS = ['TIG', '아크', 'CO2', 'PVC', '자동'];
 
 export function isWeld(job: string): boolean {
   return job === '용접' || WELD_SUBS.includes(job);
@@ -84,6 +85,7 @@ export const JOB_ICON_BG: Record<string, string> = {
   아크: '#fef3c7',
   CO2: '#fee2e2',
   PVC: '#ecfdf5',
+  자동: '#dbeafe',
   형틀: '#fff7ed',
   철근: '#f1f5f9',
   미장: '#fdf4ff',
@@ -111,6 +113,7 @@ export const JOB_BADGE_COLOR: Record<string, { bg: string; text: string }> = {
   아크: { bg: '#fef3c7', text: '#92400e' },
   CO2: { bg: '#fee2e2', text: '#991b1b' },
   PVC: { bg: '#d1fae5', text: '#065f46' },
+  자동: { bg: '#dbeafe', text: '#1e40af' },
   형틀: { bg: '#fff7ed', text: '#9a3412' },
   철근: { bg: '#f1f5f9', text: '#334155' },
   미장: { bg: '#fdf4ff', text: '#7e22ce' },

@@ -643,7 +643,7 @@ export default function Home() {
                   ⚙️ 용접 세부종류
                 </div>
                 <div className="flex flex-wrap gap-1 mb-[7px]">
-                  {['전체 용접', 'TIG', '아크', 'CO2', 'PVC'].map((w) => {
+                  {['전체 용접', 'TIG', '아크', 'CO2', 'PVC', '자동'].map((w) => {
                     const val = w === '전체 용접' ? '전체' : w;
                     return (
                       <button
@@ -656,7 +656,7 @@ export default function Home() {
                         style={state.weldSub === val ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}
                         onClick={() => applyFilter({ weldSub: val, job: val === '전체' ? '용접' : val })}
                       >
-                        {w === '전체 용접' ? '⚡ 전체 용접' : w === 'TIG' ? '⚡ TIG' : w === '아크' ? '🌟 아크' : w === 'CO2' ? '💨 CO2' : '🟢 PVC'}
+                        {w === '전체 용접' ? '⚡ 전체 용접' : w === 'TIG' ? '⚡ TIG' : w === '아크' ? '🌟 아크' : w === 'CO2' ? '💨 CO2' : w === 'PVC' ? '🟢 PVC' : '🤖 자동'}
                       </button>
                     );
                   })}
@@ -762,7 +762,7 @@ export default function Home() {
           {localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보'}
         </p>
         <p className="text-xs text-white/70 mb-2">
-          {localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장'}
+          {localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC/자동) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장'}
         </p>
         <p className="text-[11px] text-white/45">
           {localStorage.getItem('cj_footer_notice') || '※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.'}
