@@ -23,6 +23,12 @@ export function timeClass(iso: string): string {
 
 export function parseSalaryNum(text: string): number {
   if (!text) return 0;
+  // 월급/월 표기 (예: "월 3,660,000", "월급 3,660,000원")
+  const mMonth = text.match(/월\s*급?\s*([\d,]+)/);
+  if (mMonth) {
+    const n = parseInt(mMonth[1].replace(/,/g, ''));
+    if (n >= 1_000_000) return n;
+  }
   // N만M천 (예: 18만5천, 18만 5천)
   const mMC = text.match(/(\d+)\s*만\s*(\d+)\s*천/);
   if (mMC) return parseInt(mMC[1]) * 10000 + parseInt(mMC[2]) * 1000;

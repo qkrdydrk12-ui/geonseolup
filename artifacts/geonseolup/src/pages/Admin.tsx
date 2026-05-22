@@ -392,8 +392,62 @@ function extractSalary(text: string): { text: string; num: number; score: number
   return { text: formatSalary(best.num), num: best.num, score: best.score, candidates };
 }
 
+/** 월급 패턴 (≥1,000,000원) 우선 추출
+ *  예: "급여 : 3,660,000원(주간주52시간)" → { text: "월 3,660,000", num: 3660000 }
+ *  키워드(급여/월급/월/임금/연봉) 인접 또는 "원" 단위 + (시간/주/시급 같은 비월급 컨텍스트 제외)
+ */
+function extractMonthlySalary(text: string): { text: string; num: number; score: number } | null {
+  // 노이즈 제거 (전화번호, 날짜 등)
+  let cleaned = text;
+  for (const pat of NOISE_PATS) cleaned = cleaned.replace(new RegExp(pat.source, pat.flags), ' ');
+  cleaned = cleaned.replace(/\d{3,4}-\d{4}\b/g, ' ');
+
+  // 키워드 + 쉼표 포함 7자리 이상 금액 + (선택)원
+  // "급여 : 3,660,000원" / "월급 3,800,000" / "월 4,200,000원"
+  const monthlyKwPat = /(월\s*급여?|월급|급여|임금|연봉|월)\s*[:：]?\s*([1-9]\d{0,2}(?:,\d{3}){1,3})\s*원?/g;
+  let best: { num: number; raw: string; score: number } | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = monthlyKwPat.exec(cleaned)) !== null) {
+    const num = parseInt(m[2].replace(/,/g, ''), 10);
+    // "연봉"이면 12로 나눠 월급 환산 (연봉 36,000,000 → 월 3,000,000)
+    const isYearly = /연봉/.test(m[1]);
+    // 연봉은 1200만~3억, 월급은 100만~2000만 범위 허용 후 변환
+    const minRaw = isYearly ? 12_000_000 : 1_000_000;
+    const maxRaw = isYearly ? 300_000_000 : 20_000_000;
+    if (num < minRaw || num > maxRaw) continue;
+    const monthlyNum = isYearly ? Math.round(num / 12) : num;
+    if (monthlyNum < 1_000_000 || monthlyNum > 25_000_000) continue;
+    // "급여일"·"급여 매월 10일"처럼 금액이 아닌 매칭 회피 — 이미 \d{1,3},\d{3}+ 강제라 안전
+    const score = isYearly ? 88 : 95;
+    if (!best || score > best.score || (score === best.score && monthlyNum > best.num)) {
+      best = { num: monthlyNum, raw: m[0], score };
+    }
+  }
+  if (best) {
+    return { text: `월 ${best.num.toLocaleString('ko-KR')}`, num: best.num, score: best.score };
+  }
+  return null;
+}
+
 /** 건설 구인글 복합 단가 추출 (기본단가 + 일비/숙식비 분리, 역할별 단가) */
 function extractComplexSalary(text: string): ComplexSalaryResult | null {
+  // ── 0순위: 월급(100만원 이상) 키워드 + 쉼표 금액 ── 단가 파싱보다 우선 ──
+  const monthly = extractMonthlySalary(text);
+  if (monthly) {
+    return {
+      text: monthly.text,
+      num: monthly.num,
+      score: monthly.score,
+      dailyWage: 0,
+      extraPay: 0,
+      extraLabel: '',
+      totalPay: monthly.num,
+      wageBreakdowns: [{ role: '월급', wage: monthly.num, extraPay: 0, extraLabel: '', total: monthly.num }],
+      needsReview: false,
+      candidates: [{ raw: monthly.text, num: monthly.num, score: monthly.score, reason: '월급 (100만원 이상)' }],
+    };
+  }
+
   let cleaned = text;
   for (const pat of NOISE_PATS) cleaned = cleaned.replace(new RegExp(pat.source, pat.flags), ' ');
   // 전화번호 패턴에서 빠진 하이픈 연속 숫자 제거 (예: 010-1234-5678 잔여)

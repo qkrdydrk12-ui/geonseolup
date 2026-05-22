@@ -239,10 +239,15 @@ export async function fbPurgeOldHiddenJobs(jobs: Job[]): Promise<number> {
 
 // date 기준으로 autoDeleteHours 초과 공고를 Firestore에서 완전 삭제 (데이터 포함)
 // hidden 여부와 무관하게 적용 — "자동 삭제" 정책
+// 단, 예약 공고(status='reserved')와 실패 공고(status='failed')는 보호 —
+// 발행 전 사라지면 안 되므로 명시적으로 제외
 export async function fbAutoDeleteOldJobs(jobs: Job[], autoDeleteHours: number): Promise<number> {
   if (!autoDeleteHours) return 0;
   const cutoff = Date.now() - autoDeleteHours * 3600000;
-  const toDelete = jobs.filter((j) => new Date(j.date).getTime() < cutoff);
+  const toDelete = jobs.filter((j) => {
+    if (j.status === 'reserved' || j.status === 'failed') return false;
+    return new Date(j.date).getTime() < cutoff;
+  });
   await Promise.all(toDelete.map((j) => deleteDoc(doc(_db, 'jobs', j.id))));
   return toDelete.length;
 }
