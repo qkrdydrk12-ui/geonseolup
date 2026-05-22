@@ -1360,7 +1360,7 @@ export default function Admin() {
     }
   }
 
-  // ── 빠른 예약: 새벽 05:30 / 정오 12:00 / 저녁 20:00 ────────────────────────
+  // ── 빠른 예약: 새벽 05:30 / 정오 11:00 / 저녁 20:00 ────────────────────────
   // 스마트 날짜 계산: 목표 시각이 현재 KST 이전이면 다음날, 이후면 오늘
   async function handleQuickReserve(
     hour: number,
@@ -1519,10 +1519,10 @@ export default function Admin() {
         void handleQuickReserve(5, 30, '새벽', '🌅', true);
         return;
       }
-      // Ctrl+F → ☀️ 정오 12:00
+      // Ctrl+F → ☀️ 정오 11:00
       if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
-        void handleQuickReserve(12, 0, '정오', '☀️', true);
+        void handleQuickReserve(11, 0, '정오', '☀️', true);
         return;
       }
       // Ctrl+G → 🌙 저녁 20:00
@@ -2357,11 +2357,11 @@ export default function Admin() {
                 <button
                   type="button"
                   disabled={submitting}
-                  title="정오 12:00 예약 (단축키: Ctrl+F)"
+                  title="정오 11:00 예약 (단축키: Ctrl+F)"
                   className="bg-amber-500 text-white border-none py-2 px-3 rounded-lg text-sm font-bold cursor-pointer hover:bg-amber-600 active:scale-95 transition-all font-[inherit] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                  onClick={() => void handleQuickReserve(12, 0, '정오', '☀️')}
+                  onClick={() => void handleQuickReserve(11, 0, '정오', '☀️')}
                 >
-                  ☀️ 정오 12:00
+                  ☀️ 정오 11:00
                 </button>
                 <button
                   type="button"
@@ -4217,7 +4217,7 @@ export default function Admin() {
         const previewLabel = previewMs > nowKST ? formatKST(new Date(previewMs).toISOString()) : '';
         const OPTIMAL = [
           { label: '🌅 새벽 05:30', h: 5, m: 30 },
-          { label: '☀️ 정오 12:00', h: 12, m: 0 },
+          { label: '☀️ 정오 11:00', h: 11, m: 0 },
           { label: '🌙 저녁 20:00', h: 20, m: 0 },
         ];
         return (
