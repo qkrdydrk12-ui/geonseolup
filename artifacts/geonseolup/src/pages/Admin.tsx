@@ -20,6 +20,7 @@ import {
   fbLoadReports,
   fbDeleteReport,
   fbSetSetting,
+  fbGetSetting,
   type ReservationLog,
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
@@ -1260,15 +1261,18 @@ export default function Admin() {
     setPending(data);
   }
 
-  function saveAutoHide() {
+  async function saveAutoHide() {
     const h = parseInt(autoHideHours) || 0;
     const prev = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
-    localStorage.setItem('cj_dup_settings', JSON.stringify({ ...prev, autoHideHours: h }));
+    const next = { ...prev, autoHideHours: h };
+    localStorage.setItem('cj_dup_settings', JSON.stringify(next));
+    // 서버 스케줄러가 30분마다 읽도록 Firestore에도 동기화 (관리자 미접속 시에도 정리 동작)
+    await fbSetSetting('dup_settings', next);
     computeDupStats(jobs, autoHideHours);
-    showToast('✅ 자동숨김 설정이 저장됐습니다');
+    showToast('✅ 자동숨김 설정이 저장됐습니다 (서버 동기화 완료)');
   }
 
-  function saveAutoDelete() {
+  async function saveAutoDelete() {
     const h = parseInt(autoDeleteHours) || 0;
     const hide = parseInt(autoHideHours) || 0;
     if (h > 0 && hide > 0 && h <= hide) {
@@ -1276,11 +1280,14 @@ export default function Admin() {
       return;
     }
     const prev = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
-    localStorage.setItem('cj_dup_settings', JSON.stringify({ ...prev, autoDeleteHours: h }));
+    const next = { ...prev, autoDeleteHours: h };
+    localStorage.setItem('cj_dup_settings', JSON.stringify(next));
+    // 서버 스케줄러가 30분마다 읽도록 Firestore에도 동기화 (관리자 미접속 시에도 자동삭제 동작)
+    await fbSetSetting('dup_settings', next);
     if (h === 0) {
-      showToast('✅ 자동삭제가 비활성화됐습니다');
+      showToast('✅ 자동삭제가 비활성화됐습니다 (서버 동기화 완료)');
     } else {
-      showToast('✅ 자동삭제 설정이 저장됐습니다 (데이터 영구 삭제)');
+      showToast('✅ 자동삭제 설정이 저장됐습니다 (서버 자동 실행 / 데이터 영구 삭제)');
     }
   }
 
@@ -1310,6 +1317,21 @@ export default function Admin() {
     if (authed) {
       loadJobs();
       loadPending();
+      // 서버에 저장된 dup_settings(자동숨김/자동삭제 시간)을 가져와 로컬에 동기화 (크로스 디바이스)
+      (async () => {
+        try {
+          const remote = (await fbGetSetting('dup_settings')) as { autoHideHours?: number; autoDeleteHours?: number } | null;
+          if (remote && typeof remote === 'object') {
+            const prev = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
+            const merged = { ...prev, ...remote };
+            localStorage.setItem('cj_dup_settings', JSON.stringify(merged));
+            if (typeof remote.autoHideHours === 'number') setAutoHideHours(String(remote.autoHideHours));
+            if (typeof remote.autoDeleteHours === 'number') setAutoDeleteHours(String(remote.autoDeleteHours));
+          }
+        } catch (e) {
+          console.warn('[Admin] dup_settings 원격 동기화 실패', e);
+        }
+      })();
     }
   }, [authed]);
 

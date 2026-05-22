@@ -2,10 +2,132 @@
 // 매 60초마다 Firebase Firestore를 직접 체크하여 예약 시간 도달 공고를 발행합니다.
 // 브라우저/클라이언트 세션과 완전히 독립적으로 동작합니다.
 
-import { runQuery, updateDocument, addDocument, isPermissionError } from "./firestoreClient.js";
+import {
+  runQuery,
+  updateDocument,
+  addDocument,
+  deleteDocument,
+  getDocument,
+  isPermissionError,
+} from "./firestoreClient.js";
 import { logger } from "./logger.js";
 
 const INTERVAL_MS = 60 * 1000; // 1분
+
+// 정리(자동숨김/자동삭제) 루틴은 매 분 실행하면 과해서 30분마다 1번만 실행
+const CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
+let _lastCleanupMs = 0;
+
+interface DupSettings {
+  autoHideHours?: number;
+  autoDeleteHours?: number;
+}
+
+// settings/dup_settings 문서 형태: { value: { autoHideHours, autoDeleteHours } }
+async function loadDupSettings(): Promise<DupSettings> {
+  try {
+    const doc = await getDocument("settings", "dup_settings");
+    if (!doc) return { autoHideHours: 48, autoDeleteHours: 0 };
+    const v = (doc as { value?: DupSettings }).value;
+    if (!v || typeof v !== "object") return { autoHideHours: 48, autoDeleteHours: 0 };
+    return {
+      autoHideHours: typeof v.autoHideHours === "number" ? v.autoHideHours : 48,
+      autoDeleteHours: typeof v.autoDeleteHours === "number" ? v.autoDeleteHours : 0,
+    };
+  } catch (e) {
+    logger.warn({ err: String(e) }, "정리 루틴: dup_settings 조회 실패 — 기본값 사용");
+    return { autoHideHours: 48, autoDeleteHours: 0 };
+  }
+}
+
+// 자동숨김 + 자동삭제 정리 실행
+async function runCleanup(): Promise<{ hidden: number; purged: number; deleted: number }> {
+  const settings = await loadDupSettings();
+  const autoHideHours = settings.autoHideHours ?? 48;
+  const autoDeleteHours = settings.autoDeleteHours ?? 0;
+  const now = Date.now();
+
+  // 모든 jobs를 한 번에 조회하기 어려우므로 status 필터로 published + (status 없음 기본값) 조회
+  // 안전을 위해 status='reserved'와 'failed'는 자동삭제에서 제외 (예약 발행 보호)
+  // 자동숨김은 일반 공고(status==='published' 또는 미지정)에만 적용
+
+  // 모든 jobs (status 필터 없이) — runQuery는 필터 1개 이상 요구해서 hidden=false 와 hidden=true 분리 조회
+  const visibleJobs = (await runQuery("jobs", [
+    { field: "hidden", op: "EQUAL", value: false },
+  ])) as Job[];
+  const hiddenJobs = (await runQuery("jobs", [
+    { field: "hidden", op: "EQUAL", value: true },
+  ])) as Job[];
+
+  let hidden = 0;
+  let purged = 0;
+  let deleted = 0;
+
+  // ── 1. 자동숨김: date 기준 autoHideHours 초과한 노출 공고 → hidden=true ──
+  if (autoHideHours > 0) {
+    const cutoff = now - autoHideHours * 3600000;
+    const toHide = visibleJobs.filter(
+      (j) =>
+        j.status !== "reserved" &&
+        j.status !== "failed" &&
+        j.date != null &&
+        new Date(j.date).getTime() < cutoff
+    );
+    for (const j of toHide) {
+      try {
+        await updateDocument("jobs", j.id, { hidden: true, hiddenAt: now });
+        hidden++;
+      } catch (err) {
+        logger.warn({ jobId: j.id, err: String(err) }, "정리 루틴: 자동숨김 실패");
+      }
+    }
+  }
+
+  // ── 2. 24시간 이상 숨김 상태인 공고 하드삭제 (기존 fbPurgeOldHiddenJobs 동작과 동일) ──
+  {
+    const cutoff = now - 24 * 3600000;
+    const toPurge = hiddenJobs.filter(
+      (j) => typeof j.hiddenAt === "number" && (j.hiddenAt as number) < cutoff
+    );
+    for (const j of toPurge) {
+      try {
+        await deleteDocument("jobs", j.id);
+        purged++;
+      } catch (err) {
+        logger.warn({ jobId: j.id, err: String(err) }, "정리 루틴: 숨김 공고 하드삭제 실패");
+      }
+    }
+  }
+
+  // ── 3. 자동삭제: date 기준 autoDeleteHours 초과 → 완전 삭제 (예약/실패 제외) ──
+  if (autoDeleteHours > 0) {
+    const cutoff = now - autoDeleteHours * 3600000;
+    const all = [...visibleJobs, ...hiddenJobs];
+    const toDelete = all.filter(
+      (j) =>
+        j.status !== "reserved" &&
+        j.status !== "failed" &&
+        j.date != null &&
+        new Date(j.date).getTime() < cutoff
+    );
+    for (const j of toDelete) {
+      try {
+        await deleteDocument("jobs", j.id);
+        deleted++;
+      } catch (err) {
+        logger.warn({ jobId: j.id, err: String(err) }, "정리 루틴: 자동삭제 실패");
+      }
+    }
+  }
+
+  if (hidden > 0 || purged > 0 || deleted > 0) {
+    logger.info(
+      { hidden, purged, deleted, autoHideHours, autoDeleteHours },
+      "정리 루틴: 자동숨김/삭제 완료"
+    );
+  }
+  return { hidden, purged, deleted };
+}
 
 interface Job {
   id: string;
@@ -276,6 +398,15 @@ export async function runSchedulerOnce(): Promise<{
         );
       } catch (err) {
         logger.error({ jobId: job.id, err }, "서버 스케줄러: 재시도 예약 실패");
+      }
+    }
+    // ── 3. 자동숨김/자동삭제 정리 (30분마다 1회만 실행) ───────────────────────
+    if (Date.now() - _lastCleanupMs >= CLEANUP_INTERVAL_MS) {
+      _lastCleanupMs = Date.now();
+      try {
+        await runCleanup();
+      } catch (cleanupErr) {
+        logger.error({ err: String(cleanupErr) }, "서버 스케줄러: 정리 루틴 실행 실패");
       }
     }
   } catch (err) {

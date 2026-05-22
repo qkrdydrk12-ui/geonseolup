@@ -303,6 +303,56 @@ export async function updateDocument(
   }
 }
 
+// ── Get single document (read — API key only) ─────────────────────────────────
+
+export async function getDocument(
+  collectionId: string,
+  docId: string
+): Promise<(Record<string, unknown> & { id: string }) | null> {
+  const url = `${BASE_URL}/${collectionId}/${encodeURIComponent(docId)}?key=${API_KEY}`;
+  const res = await fetch(url);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Firestore getDocument 실패 [${res.status}] collection=${collectionId} id=${docId}: ${text}`
+    );
+  }
+  const doc = (await res.json()) as FsDoc;
+  return docToObject(doc);
+}
+
+// ── Delete (DELETE) ───────────────────────────────────────────────────────────
+
+export async function deleteDocument(
+  collectionId: string,
+  docId: string
+): Promise<void> {
+  const url = `${BASE_URL}/${collectionId}/${encodeURIComponent(docId)}?key=${API_KEY}`;
+
+  // 1차: 인증 없이 시도
+  let res = await fetch(url, { method: "DELETE" });
+
+  // 401/403이면 익명 인증 토큰으로 재시도
+  if (res.status === 401 || res.status === 403) {
+    const token = await getAnonymousToken();
+    if (token) {
+      res = await fetch(url, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+  }
+
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    const kind = isPermissionError(res.status, text)
+      ? "Firestore 권한 오류 — 보안 규칙에서 삭제를 허용해야 합니다"
+      : `Firestore deleteDocument 실패 [${res.status}]`;
+    throw new Error(`${kind} collection=${collectionId} id=${docId}: ${text}`);
+  }
+}
+
 // ── Add (POST) ────────────────────────────────────────────────────────────────
 
 export async function addDocument(
