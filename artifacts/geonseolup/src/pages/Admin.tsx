@@ -11,6 +11,7 @@ import {
   fbDeletePending,
   fbAutoHideOldJobs,
   fbPurgeOldHiddenJobs,
+  fbAutoDeleteOldJobs,
   fbAddReservedJob,
   fbCancelReservation,
   fbRetryReservation,
@@ -1021,6 +1022,10 @@ export default function Admin() {
     const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
     return stored.autoHideHours != null ? String(stored.autoHideHours) : '48';
   });
+  const [autoDeleteHours, setAutoDeleteHours] = useState<string>(() => {
+    const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
+    return stored.autoDeleteHours != null ? String(stored.autoDeleteHours) : '0';
+  });
   const [dupStats, setDupStats] = useState({ visible: 0, autoHidden: 0, manualHidden: 0, similarPairs: 0 });
   const [adPageTab, setAdPageTab] = useState<'main' | 'detail'>('main');
   const [adCodes, setAdCodes] = useState({
@@ -1209,6 +1214,22 @@ export default function Admin() {
     showToast('✅ 자동숨김 설정이 저장됐습니다');
   }
 
+  function saveAutoDelete() {
+    const h = parseInt(autoDeleteHours) || 0;
+    const hide = parseInt(autoHideHours) || 0;
+    if (h > 0 && hide > 0 && h <= hide) {
+      showToast('⚠️ 자동삭제 시간은 자동숨김 시간보다 길어야 합니다');
+      return;
+    }
+    const prev = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
+    localStorage.setItem('cj_dup_settings', JSON.stringify({ ...prev, autoDeleteHours: h }));
+    if (h === 0) {
+      showToast('✅ 자동삭제가 비활성화됐습니다');
+    } else {
+      showToast('✅ 자동삭제 설정이 저장됐습니다 (데이터 영구 삭제)');
+    }
+  }
+
   // 페이지 로드 시 기존 세션 토큰 검증
   useEffect(() => {
     async function checkSession() {
@@ -1245,10 +1266,12 @@ export default function Admin() {
     async function runCleanup() {
       const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
       const autoHideHours: number = stored.autoHideHours ?? 48;
+      const autoDeleteHours: number = stored.autoDeleteHours ?? 0;
       const all = await fbLoadJobs();
       await fbAutoHideOldJobs(all, autoHideHours);
       const purged = await fbPurgeOldHiddenJobs(all);
-      if (purged > 0) {
+      const deleted = await fbAutoDeleteOldJobs(all, autoDeleteHours);
+      if (purged > 0 || deleted > 0) {
         loadJobs();
       }
     }
@@ -3099,6 +3122,35 @@ export default function Admin() {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mb-6">설정한 시간이 지난 공고는 메인 목록에서 자동으로 사라집니다. (데이터 유지)</p>
+
+              {/* 자동 삭제 시간 (데이터까지 영구 삭제) */}
+              <p className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">
+                <span>🗑️</span> 공고 자동삭제 시간 <span className="text-[10px] font-normal text-red-500 bg-red-50 px-1.5 py-0.5 rounded">데이터 영구 삭제</span>
+              </p>
+              <div className="flex items-center gap-3 mb-2">
+                <select
+                  value={autoDeleteHours}
+                  onChange={(e) => setAutoDeleteHours(e.target.value)}
+                  className="py-2.5 px-3.5 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none bg-white font-[inherit] focus:border-[#ef4444] appearance-none cursor-pointer min-w-[220px]"
+                >
+                  <option value="0">비활성화 (자동삭제 안함)</option>
+                  <option value="72">72시간 후 자동삭제 (3일)</option>
+                  <option value="168">7일 후 자동삭제</option>
+                  <option value="336">14일 후 자동삭제</option>
+                  <option value="720">30일 후 자동삭제</option>
+                  <option value="2160">90일 후 자동삭제</option>
+                </select>
+                <button
+                  onClick={saveAutoDelete}
+                  className="bg-red-500 text-white border-none py-2.5 px-5 rounded-xl text-sm font-bold cursor-pointer hover:bg-red-600 transition-colors font-[inherit] whitespace-nowrap"
+                >
+                  저장
+                </button>
+              </div>
+              <p className="text-xs text-red-500 mb-6 leading-relaxed">
+                ⚠️ 설정한 시간이 지난 공고는 <strong>Firestore에서 완전히 삭제됩니다</strong>. 신고 내역 등 연결된 데이터도 함께 사라지며 복구할 수 없습니다.<br />
+                자동숨김 시간보다 반드시 더 길게 설정하세요. (예: 자동숨김 48시간 → 자동삭제 7일)
+              </p>
 
               {/* 공고 현황 요약 */}
               <div className="flex items-center justify-between mb-3">

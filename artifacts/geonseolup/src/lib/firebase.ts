@@ -237,6 +237,16 @@ export async function fbPurgeOldHiddenJobs(jobs: Job[]): Promise<number> {
   return toPurge.length;
 }
 
+// date 기준으로 autoDeleteHours 초과 공고를 Firestore에서 완전 삭제 (데이터 포함)
+// hidden 여부와 무관하게 적용 — "자동 삭제" 정책
+export async function fbAutoDeleteOldJobs(jobs: Job[], autoDeleteHours: number): Promise<number> {
+  if (!autoDeleteHours) return 0;
+  const cutoff = Date.now() - autoDeleteHours * 3600000;
+  const toDelete = jobs.filter((j) => new Date(j.date).getTime() < cutoff);
+  await Promise.all(toDelete.map((j) => deleteDoc(doc(_db, 'jobs', j.id))));
+  return toDelete.length;
+}
+
 // ── 예약 등록 ───────────────────────────────────────────────────────────────
 export async function fbAddReservedJob(job: Omit<Job, 'id'>, reservedAt: string): Promise<string> {
   // undefined 필드 제거 (Firestore는 undefined 값 거부 → 쓰기 실패 원인)
