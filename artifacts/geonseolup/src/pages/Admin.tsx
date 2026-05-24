@@ -648,123 +648,82 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
 
 /**
  * 본문을 요약해 비고(detail) 칸에 자동 입력.
- * — 자연어 톤 (사람이 쓴 것처럼)
- * — 다른 필드에 이미 들어가는 정보는 제외하고, 비고에 적기 좋은 보조 정보를 한국어 문장으로 정리.
+ * — 팩트 위주 간결 형식 (쉼표 구분 라벨)
+ * — 다른 필드(지역·직종·단가·연락처)에 이미 들어가는 정보는 제외, 인사말/마무리 멘트 없음.
  */
 function makeNote(text: string): string {
-  const sentences: string[] = [];
+  const facts: string[] = [];
   const seen = new Set<string>();
   const push = (s: string) => {
     const v = s.trim();
-    if (!v) return;
-    const key = v.replace(/[.\s]/g, '');
-    if (seen.has(key)) return;
-    seen.add(key);
-    sentences.push(v.endsWith('.') ? v : v + '.');
+    if (!v || seen.has(v)) return;
+    seen.add(v);
+    facts.push(v);
   };
 
-  // ── ① 인용 인사말 (예: "훅업 카톡 보고 연락드립니다"로 문자주세요) ────────
-  const greetRe = /["“"「']([^"”"」'\n]{3,40})["”"」']\s*(?:로|라고|이라고|으로)[^\n!?]*?(?:문자|연락|전화|콜)[^\n!?]*[!?]?/;
-  const greetM = text.match(greetRe);
-  if (greetM) push(greetM[0]);
-
-  // ── ② 모집 인원 (예: "20명", "기공 5명/조공 3명") ──────────────────────
+  // ① 모집 인원
   const headM = text.match(/(?:모집|구함)?\s*(?:인원\s*[:：]?\s*)?(\d{1,3})\s*명/);
-  if (headM && parseInt(headM[1], 10) >= 1 && parseInt(headM[1], 10) <= 999) {
-    push(`총 ${headM[1]}명 모집합니다`);
-  }
+  if (headM && +headM[1] >= 1 && +headM[1] <= 999) push(`${headM[1]}명 모집`);
 
-  // ── ③ 작업/현장명 ─────────────────────────────────────────────────────
-  const jobNameM = text.match(/(?:작업명|현장명|업체|공사명|현장)\s*[:：]\s*([^\n▶👉☎■◆◇★⭐]{2,30})/);
-  if (jobNameM) {
-    const v = jobNameM[1].trim().replace(/[,.]$/, '');
-    if (v) push(`현장은 ${v}입니다`);
-  }
-
-  // ── ④ 모집 직종 종류 ─────────────────────────────────────────────────
-  const skillM = text.match(/(?:기량|모집|직종|구함)\s*[:：]\s*([가-힣,·\s/]{2,30})/);
-  if (skillM) {
-    const v = skillM[1].trim().replace(/\s+/g, ' ').replace(/[,.]$/, '');
-    if (v && v.length >= 2 && !/^(인원|모집|구함)$/.test(v)) push(`모집 분야는 ${v}입니다`);
-  }
-
-  // ── ⑤ 경력 요건 ───────────────────────────────────────────────────────
+  // ② 경력
   const expM = text.match(/(?:경력|경험)\s*(\d{1,2})\s*년\s*(?:이상|↑|\+)/);
-  if (expM) push(`${expM[1]}년 이상 경력자를 모십니다`);
-  else if (/경력자\s*우대|경력자\s*환영/.test(text)) push('경력자 우대합니다');
+  if (expM) push(`경력 ${expM[1]}년↑`);
+  else if (/경력자\s*우대|경력자\s*환영/.test(text)) push('경력자 우대');
 
-  // ── ⑥ 나이 조건 ───────────────────────────────────────────────────────
+  // ③ 나이
   const ageM = text.match(/(\d{2})\s*[~\-∼]\s*(\d{2})\s*세/);
-  if (ageM) push(`연령은 ${ageM[1]}~${ageM[2]}세까지 가능합니다`);
+  if (ageM) push(`${ageM[1]}~${ageM[2]}세`);
 
-  // ── ⑦ 근무일 + 연장 ──────────────────────────────────────────────────
+  // ④ 근무일 / 연장
   const wdM = text.match(/주\s*([5-7])\s*일/);
-  const hasExt = /연장/.test(text);
+  if (wdM) push(`주${wdM[1]}일`);
   const extCountM = text.match(/연장\s*주?\s*(\d+[~\-]\d+|\d+)\s*회/);
   const extHourM = text.match(/연장\s*(?:1\s*시간)?\s*(\d+(?:\.\d+)?)\s*만/);
-  if (wdM && extCountM) push(`주 ${wdM[1]}일 근무에 연장 ${extCountM[1]}회 있습니다`);
-  else if (wdM && hasExt) push(`주 ${wdM[1]}일 근무이며 연장 작업 있습니다`);
-  else if (wdM) push(`주 ${wdM[1]}일 근무입니다`);
-  else if (extCountM) push(`연장 ${extCountM[1]}회 진행됩니다`);
-  else if (hasExt && extHourM) push(`연장 시간당 ${extHourM[1]}만원 지급됩니다`);
-  else if (hasExt) push('연장 작업 있습니다');
+  if (extCountM) push(`연장 ${extCountM[1]}회`);
+  else if (extHourM) push(`연장 시급 ${extHourM[1]}만`);
+  else if (/연장/.test(text)) push('연장 있음');
 
-  // ── ⑧ 근무 기간 / 공사 기간 ───────────────────────────────────────────
-  const durM = text.match(/(\d{1,2})\s*개월\s*(?:이상)?\s*(?:근무|작업|진행)?/);
-  if (durM && /근무가능|근무\s*가능|이상\s*근무|이상가능/.test(text)) {
-    push(`${durM[1]}개월 이상 근무 가능하신 분 모십니다`);
-  } else if (durM && /공사기간|공사\s*기간/.test(text)) {
-    push(`공사 기간은 약 ${durM[1]}개월입니다`);
-  }
+  // ⑤ 근무 기간 / 공사 기간
+  const durMonthM = text.match(/(\d{1,2})\s*개월/);
+  if (durMonthM && /근무가능|근무\s*가능|이상\s*근무|이상가능/.test(text)) push(`${durMonthM[1]}개월↑ 근무`);
+  else if (durMonthM && /공사기간|공사\s*기간/.test(text)) push(`공사 ${durMonthM[1]}개월`);
 
-  // ── ⑨ 출국/투입 일정 ─────────────────────────────────────────────────
+  // ⑥ 출국/투입
   const depM = text.match(/(\d{1,2})\s*월\s*(?:중)?\s*(?:출국|투입|입사|시작)/);
-  if (depM) push(`${depM[1]}월 출국 예정입니다`);
+  if (depM) push(`${depM[1]}월 출국`);
 
-  // ── ⑩ 급여 형태 ──────────────────────────────────────────────────────
-  if (/주급/.test(text)) push('주급으로 정산됩니다');
-  else if (/월급(?!여)/.test(text) && !/월급여/.test(text)) push('월급 지급입니다');
+  // ⑦ 급여 형태
+  if (/주급/.test(text)) push('주급');
+  else if (/월급(?!여)/.test(text) && !/월급여/.test(text)) push('월급');
 
-  // ── ⑪ 급여일 ─────────────────────────────────────────────────────────
+  // ⑧ 급여일
   const payDayM = text.match(/급여일\s*[:：]?\s*(매월\s*\d{1,2}일|\d{1,2}일|매주\s*\S{1,5})/);
-  if (payDayM) push(`급여일은 ${payDayM[1].trim()}입니다`);
+  if (payDayM) push(`급여일 ${payDayM[1].trim()}`);
 
-  // ── ⑫ 4대보험 ────────────────────────────────────────────────────────
-  if (/4대\s*(?:보험)?\s*(?:가입|유|적용)/.test(text) || /4대유/.test(text)) {
-    push('4대보험 가입됩니다');
-  }
+  // ⑨ 4대보험
+  if (/4대\s*(?:보험)?\s*(?:가입|유|적용)/.test(text) || /4대유/.test(text)) push('4대보험');
 
-  // ── ⑬ 숙식/식대 ──────────────────────────────────────────────────────
-  const meals: string[] = [];
-  if (/숙소\s*(?:제공|있음|가능)/.test(text)) meals.push('숙소 제공');
-  if (/식대\s*(?:제공|포함|있음)|식사\s*제공|3식\s*제공|중식\s*포함/.test(text)) meals.push('식사 제공');
-  if (meals.length > 0) push(`${meals.join(', ')}됩니다`);
+  // ⑩ 숙식/식대
+  if (/숙소\s*(?:제공|있음|가능)/.test(text)) push('숙소 제공');
+  if (/식대\s*(?:제공|포함|있음)|식사\s*제공|3식\s*제공|중식\s*포함/.test(text)) push('식사 제공');
 
-  // ── ⑭ 구비서류 ───────────────────────────────────────────────────────
+  // ⑪ 구비서류
   if (/구비서류|준비물|지참/.test(text)) {
     const docs: string[] = [];
     if (/이수증|기초안전/.test(text)) docs.push('이수증');
     if (/신분증/.test(text)) docs.push('신분증');
     if (/통장(?:사본)?/.test(text)) docs.push('통장사본');
-    if (/경력증명/.test(text)) docs.push('경력증명서');
-    if (docs.length > 0) push(`준비물은 ${docs.join(', ')}입니다`);
+    if (/경력증명/.test(text)) docs.push('경력증명');
+    if (docs.length > 0) push(`준비물: ${docs.join('·')}`);
   }
 
-  // ── ⑮ 우대/조건 ──────────────────────────────────────────────────────
-  const conds: string[] = [];
-  if (/초보\s*(?:가능|환영|ok|OK)/i.test(text)) conds.push('초보도 환영');
-  if (/장기\s*(?:근무|가능|우대)/.test(text)) conds.push('장기근무 가능자 우대');
-  if (/동반\s*(?:입사|가능)/.test(text)) conds.push('동반입사 가능');
-  if (/성실/.test(text)) conds.push('성실하신 분 환영');
-  if (/근태/.test(text) && !conds.some(c => c.includes('성실'))) conds.push('근태 좋으신 분 우대');
-  if (conds.length > 0) push(conds.join(', '));
+  // ⑫ 우대/조건
+  if (/초보\s*(?:가능|환영|ok|OK)/i.test(text)) push('초보 환영');
+  if (/장기\s*(?:근무|가능|우대)/.test(text)) push('장기근무 우대');
+  if (/동반\s*(?:입사|가능)/.test(text)) push('동반입사 가능');
+  if (/성실/.test(text)) push('성실한 분 우대');
 
-  // ── 마무리 멘트 (자연스럽게) ──
-  if (sentences.length > 0 && sentences.length <= 6) {
-    push('편하게 문의 주세요');
-  }
-
-  return sentences.join(' ').slice(0, 400);
+  return facts.join(' · ').slice(0, 200);
 }
 
 /** ─────────────────────────────────────────────────────────────────────────
