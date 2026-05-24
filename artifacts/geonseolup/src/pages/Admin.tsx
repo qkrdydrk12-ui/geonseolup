@@ -847,7 +847,35 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
     if (line) r.line = line;
   }
 
-  // ── 지역: 도시명 우선 → 광역시/도 직접 ──
+  // ── 지역: 해외 키워드 최우선 → 도시명 → 광역시/도 직접 ──
+  // 해외 국가/도시/지역명 감지 → 자동 "해외" 매핑
+  const OVERSEAS_KW = [
+    '해외', '외국', '국외',
+    // 영문
+    'USA', 'U.S.A', 'America', 'Japan', 'China', 'Vietnam', 'Singapore', 'Saudi', 'Qatar', 'UAE', 'Dubai', 'Kuwait',
+    // 미국
+    '미국', '텍사스', '캘리포니아', '뉴욕', '시애틀', '애리조나', '오스틴', '테일러', '피닉스', '실리콘밸리',
+    // 동아시아
+    '일본', '도쿄', '오사카', '나고야', '후쿠오카',
+    '중국', '베이징', '상하이', '상해', '광저우', '심천', '선전',
+    '대만', '타이완', '타이베이',
+    '홍콩', '마카오',
+    // 동남아
+    '베트남', '하노이', '호치민', '다낭',
+    '태국', '방콕', '치앙마이',
+    '말레이시아', '쿠알라룸푸르',
+    '싱가포르', '인도네시아', '자카르타', '필리핀', '마닐라', '캄보디아', '라오스', '미얀마',
+    // 중동
+    '사우디', '사우디아라비아', '카타르', '아랍에미리트', '두바이', '아부다비', '쿠웨이트', '오만', '바레인', '이라크', '이란',
+    // 유럽/오세아니아/기타
+    '호주', '시드니', '뉴질랜드', '캐나다', '독일', '프랑스', '영국', '러시아', '폴란드', '체코',
+    '몽골', '카자흐스탄', '우즈베키스탄',
+  ];
+  if (!r.region) {
+    for (const kw of OVERSEAS_KW) {
+      if (text.includes(kw)) { r.region = '해외'; break; }
+    }
+  }
   if (!r.region) {
     for (const [city, province] of Object.entries(CITY_TO_PROVINCE)) {
       if (text.includes(city)) { r.region = province; break; }
