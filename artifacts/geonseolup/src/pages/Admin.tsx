@@ -1500,8 +1500,18 @@ export default function Admin() {
     }
     setSubmitting(true);
     try {
+      // 안전망: contact가 비었는데 원문에 010 번호가 있으면 자동 보강
+      let safeContact = form.contact || '';
+      if (!safeContact.trim() && form.originalText) {
+        const rescued = extractPhones(form.originalText).main;
+        if (rescued) {
+          safeContact = rescued;
+          console.log('[QuickReserve] 연락처 자동 보강:', rescued);
+        }
+      }
       const jobData: Omit<Job, 'id'> = {
         ...(form as Omit<Job, 'id'>),
+        contact: safeContact,
         salaryNum: parseSalaryNum(form.salary || ''),
         date: new Date().toISOString(),
         hidden: false,
@@ -1700,8 +1710,18 @@ export default function Admin() {
     }
     setSubmitting(true);
     try {
+      // 안전망: contact가 비었는데 원문에 010 번호가 있으면 자동 보강
+      let safeContact = form.contact || '';
+      if (!safeContact.trim() && form.originalText) {
+        const rescued = extractPhones(form.originalText).main;
+        if (rescued) {
+          safeContact = rescued;
+          console.log('[AddJob] 연락처 자동 보강:', rescued);
+        }
+      }
       const baseJob: Omit<Job, 'id'> = {
         ...form,
+        contact: safeContact,
         salaryNum: parseSalaryNum(form.salary || ''),
         date: new Date().toISOString(),
         hidden: false,
