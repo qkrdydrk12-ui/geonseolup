@@ -510,13 +510,23 @@ function extractComplexSalary(text: string): ComplexSalaryResult | null {
   }
 
   // ── C-0: 공수 키워드 + 기본 + (선택) +추가 (라벨 없는 + 허용) ──────────────
-  // 예: "공수 24", "공수 : 24 + 1.5", "공수:25+2", "공 수 24+1"
+  // 예: "공수 24", "공수 : 24 + 1.5", "공수:25+2"
   // "공수"는 건설 현장에서 "일당/단가"와 동의어로 자주 쓰임
-  const gongsooPat = /공수\s*[:：]?\s*(\d+(?:\.\d+)?)(?:\s*\+\s*(\d+(?:\.\d+)?))?/g;
+  //
+  // ⚠️ 단, 다음은 일수(공수 횟수) 의미라 단가 아님 → 제외:
+  //   ① "평균공수/총공수/월공수/주공수/일공수/최대공수/최소공수/순공수/약공수/예상공수/보장공수" 등 prefix
+  //   ② 숫자 뒤에 "~숫자공수" 범위 표기 (예: "공수:28~30공수")
+  //   ③ 매치 직후에 또 "공수"가 붙음 (X공수 = 일수 단위)
+  //   ④ 일당 상식 범위(1~30만원) 밖
+  const gongsooPat = /(평균|총|월|주|일|최대|최소|순|약|예상|월평균|월최대|보장)?공수\s*[:：]?\s*(\d+(?:\.\d+)?)(\s*[~∼\-]\s*\d+(?:\.\d+)?\s*공수)?(?:\s*\+\s*(\d+(?:\.\d+)?))?/g;
   while ((m = gongsooPat.exec(cleaned)) !== null) {
-    const wage = parseManValue(m[1]);
-    if (wage <= 0) continue;
-    const extra = m[2] ? parseExtraManValue(m[2]) : 0;
+    if (m[1]) continue;                              // ① 일수 prefix → 단가 아님
+    if (m[3]) continue;                              // ② 범위 표기(X~Y공수) → 일수
+    const tail = cleaned.slice(m.index + m[0].length, m.index + m[0].length + 3);
+    if (/^\s*공수/.test(tail)) continue;             // ③ X공수 형태 → 일수
+    const wage = parseManValue(m[2]);
+    if (wage <= 0 || wage > 30) continue;            // ④ 일당 상식 범위 밖
+    const extra = m[4] ? parseExtraManValue(m[4]) : 0;
     const total = wage + extra;
     if (wageBreakdowns.length === 0) {
       wageBreakdowns.push({ role: '', wage, extraPay: extra, extraLabel: extra > 0 ? '추가' : '', total });
