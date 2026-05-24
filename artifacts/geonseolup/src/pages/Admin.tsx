@@ -971,6 +971,10 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   // 인식 표현: 안전시설반, 안전 시설반, 안전시설팀, 안전시설작업자, 시설반
   if (/안전\s*시설(반|팀|작업자?)?|시설반/.test(text)) r.job = '안전시설반';
 
+  // 3) 직종 fallback — 어떤 패턴에도 매칭되지 않으면 '기타'로 분류
+  //    (실리콘 작업, 부품 교체, 청소 등 비표준 직종이 누락되지 않도록)
+  if (!r.job) r.job = '기타';
+
   // ── 급여 (복합 단가 추출) ──
   const sal = extractComplexSalary(text);
   if (sal) {
