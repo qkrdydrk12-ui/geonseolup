@@ -424,6 +424,27 @@ function extractMonthlySalary(text: string): { text: string; num: number; score:
       best = { num: monthlyNum, raw: m[0], score };
     }
   }
+
+  // ── 만원 단위 한국식 표기 추가: "월900만", "월급 900만원", "월 900 만", "연봉 1억 2천만" 등 ──
+  // 100만~2000만 범위(월급) / 연봉은 1200만~30000만(=3억)
+  const monthlyManPat = /(월\s*급여?|월급|급여|임금|연봉|월)\s*[:：]?\s*(\d{2,5}(?:\.\d+)?)\s*만\s*원?/g;
+  while ((m = monthlyManPat.exec(cleaned)) !== null) {
+    const manVal = parseFloat(m[2]);
+    const isYearly = /연봉/.test(m[1]);
+    // 월급: 100만~2000만 / 연봉: 1200만~30000만
+    if (isYearly) {
+      if (manVal < 1200 || manVal > 30000) continue;
+    } else {
+      if (manVal < 100 || manVal > 2000) continue;
+    }
+    const rawNum = manVal * 10000;
+    const monthlyNum = isYearly ? Math.round(rawNum / 12) : rawNum;
+    if (monthlyNum < 1_000_000 || monthlyNum > 25_000_000) continue;
+    const score = isYearly ? 88 : 95;
+    if (!best || score > best.score || (score === best.score && monthlyNum > best.num)) {
+      best = { num: monthlyNum, raw: m[0], score };
+    }
+  }
   if (best) {
     return { text: `월 ${best.num.toLocaleString('ko-KR')}`, num: best.num, score: best.score };
   }
