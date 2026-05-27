@@ -272,7 +272,8 @@ export async function fbAddReservedJob(job: Omit<Job, 'id'>, reservedAt: string)
 
 export async function fbPublishReservedJob(job: Job): Promise<void> {
   const now = new Date().toISOString();
-  await updateDoc(doc(_db, 'jobs', job.id), {
+  // 안전망: contact 비었는데 원문에 010 번호가 있으면 자동 보강
+  const updatePayload: Record<string, unknown> = {
     status: 'active',
     date: now,
     publishedAt: now,
@@ -280,7 +281,18 @@ export async function fbPublishReservedJob(job: Job): Promise<void> {
     retryCount: 0,
     lastRetryAt: null,
     failReason: null,
-  });
+  };
+  const currentContact = (job.contact ?? '').trim();
+  const originalText = (job as { originalText?: string }).originalText ?? '';
+  if (!currentContact && originalText) {
+    const phoneMatch = originalText.match(/01[016789][-.\s]*\d{3,4}[-.\s]*\d{4}/);
+    if (phoneMatch) {
+      const rescued = phoneMatch[0].replace(/[\s.]/g, '-').replace(/-+/g, '-');
+      updatePayload.contact = rescued;
+      console.log('[Firebase] publish 안전망: 원문에서 전화번호 자동 보강 →', rescued);
+    }
+  }
+  await updateDoc(doc(_db, 'jobs', job.id), updatePayload);
   // 반복 예약: 발행 후 N일 뒤 새 공고 자동 생성
   if (job.repeatDays && job.repeatDays > 0) {
     const { id: _id, publishedAt: _p, failReason: _f, lastRetryAt: _lr, ...rest } = job;

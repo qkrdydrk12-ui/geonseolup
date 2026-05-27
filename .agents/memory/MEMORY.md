@@ -1,0 +1,1 @@
+- [Geonseolup contact safety net](geonseolup-contact-safety-net.md) — 카드 contact 비고 자동보강은 저장/발행 모든 경로에 다중 적용해야 함. 안전망 신규 배포 시 기존 reserved 잔여 데이터는 별도 복구 필요.

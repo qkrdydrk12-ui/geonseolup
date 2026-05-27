@@ -245,8 +245,8 @@ export async function runSchedulerOnce(): Promise<{
           "서버 스케줄러: publish 시도 중"
         );
 
-        // 발행 처리 — status: active, date: 현재, reservedAt 초기화
-        await updateDocument("jobs", job.id, {
+        // 안전망: contact 비었는데 원문에 010 번호가 있으면 자동 보강
+        const updatePayload: Record<string, unknown> = {
           status: "active",
           date: nowIso,
           publishedAt: nowIso,
@@ -254,7 +254,27 @@ export async function runSchedulerOnce(): Promise<{
           retryCount: 0,
           lastRetryAt: null,
           failReason: null,
-        });
+        };
+        const currentContact = ((job as { contact?: string }).contact ?? "").trim();
+        const originalText = (job as { originalText?: string }).originalText ?? "";
+        if (!currentContact && originalText) {
+          const phoneMatch = originalText.match(
+            /01[016789][-.\s]*\d{3,4}[-.\s]*\d{4}/
+          );
+          if (phoneMatch) {
+            const rescued = phoneMatch[0]
+              .replace(/[\s.]/g, "-")
+              .replace(/-+/g, "-");
+            updatePayload.contact = rescued;
+            logger.info(
+              { jobId: job.id, title: job.title, rescued },
+              "서버 스케줄러: contact 안전망 — 원문에서 전화번호 자동 보강"
+            );
+          }
+        }
+
+        // 발행 처리 — status: active, date: 현재, reservedAt 초기화
+        await updateDocument("jobs", job.id, updatePayload);
 
         logger.info(
           { jobId: job.id, title: job.title, publishedAt: nowIsoKST },
