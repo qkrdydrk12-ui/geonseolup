@@ -13,6 +13,7 @@ import {
   orderBy,
   serverTimestamp,
   onSnapshot,
+  runTransaction,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -270,35 +271,54 @@ export async function fbAddReservedJob(job: Omit<Job, 'id'>, reservedAt: string)
   return ref.id;
 }
 
-export async function fbPublishReservedJob(job: Job): Promise<void> {
-  const now = new Date().toISOString();
-  // 안전망: contact 비었는데 원문에 010 번호가 있으면 자동 보강
-  const updatePayload: Record<string, unknown> = {
-    status: 'active',
-    date: now,
-    publishedAt: now,
-    reservedAt: null,
-    retryCount: 0,
-    lastRetryAt: null,
-    failReason: null,
-  };
-  const currentContact = (job.contact ?? '').trim();
-  const originalText = (job as { originalText?: string }).originalText ?? '';
-  if (!currentContact && originalText) {
-    const phoneMatch = originalText.match(/01[016789][-.\s]*\d{3,4}[-.\s]*\d{4}/);
-    if (phoneMatch) {
-      const rescued = phoneMatch[0].replace(/[\s.]/g, '-').replace(/-+/g, '-');
-      updatePayload.contact = rescued;
-      console.log('[Firebase] publish 안전망: 원문에서 전화번호 자동 보강 →', rescued);
+// 발행을 원자적으로 처리 — 트랜잭션으로 'reserved' 상태일 때만 게시(중복 발행 방지).
+// 반환값: 이 호출이 실제로 발행을 수행했으면 true, 이미 다른 발행 주체가 처리해서
+// 건너뛴 경우 false. (클라이언트 다중 탭 + 서버 스케줄러 동시 실행 시 중복 방지)
+export async function fbPublishReservedJob(job: Job): Promise<boolean> {
+  const ref = doc(_db, 'jobs', job.id);
+  // 트랜잭션 스냅샷 데이터를 반환받아 반복예약 복제에 사용(stale 방지). claim 실패 시 null.
+  const claimedData = await runTransaction<(Job & { id: string }) | null>(_db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return null;
+    const data = { ...(snap.data() as Omit<Job, 'id'>), id: snap.id };
+    // 이미 발행됐거나 예약 상태가 아니면 건너뜀 (중복 발행 차단)
+    if (data.status !== 'reserved') return null;
+    const now = new Date().toISOString();
+    const updatePayload: Record<string, unknown> = {
+      status: 'active',
+      date: now,
+      publishedAt: now,
+      reservedAt: null,
+      retryCount: 0,
+      lastRetryAt: null,
+      failReason: null,
+    };
+    // 안전망: contact 비었는데 원문에 010 번호가 있으면 자동 보강
+    const currentContact = (data.contact ?? '').trim();
+    const originalText = (data as { originalText?: string }).originalText ?? '';
+    if (!currentContact && originalText) {
+      const phoneMatch = originalText.match(/01[016789][-.\s]*\d{3,4}[-.\s]*\d{4}/);
+      if (phoneMatch) {
+        const rescued = phoneMatch[0].replace(/[\s.]/g, '-').replace(/-+/g, '-');
+        updatePayload.contact = rescued;
+        console.log('[Firebase] publish 안전망: 원문에서 전화번호 자동 보강 →', rescued);
+      }
     }
+    tx.update(ref, updatePayload);
+    return data;
+  });
+  if (!claimedData) {
+    console.log('[Firebase] publish 건너뜀 — 이미 다른 주체가 발행함:', job.id);
+    return false;
   }
-  await updateDoc(doc(_db, 'jobs', job.id), updatePayload);
-  // 반복 예약: 발행 후 N일 뒤 새 공고 자동 생성
-  if (job.repeatDays && job.repeatDays > 0) {
-    const { id: _id, publishedAt: _p, failReason: _f, lastRetryAt: _lr, ...rest } = job;
-    const repeatAt = new Date(Date.now() + job.repeatDays * 24 * 3600000).toISOString();
+  // 반복 예약: 발행 성공(claim)한 주체만, 트랜잭션 스냅샷 기준으로 새 공고 생성 → 중복 복제 방지
+  if (claimedData.repeatDays && claimedData.repeatDays > 0) {
+    const now = new Date().toISOString();
+    const { id: _id, publishedAt: _p, failReason: _f, lastRetryAt: _lr, ...rest } = claimedData;
+    const repeatAt = new Date(Date.now() + claimedData.repeatDays * 24 * 3600000).toISOString();
     await fbAddReservedJob({ ...rest, status: 'reserved', retryCount: 0, date: now } as Omit<Job, 'id'>, repeatAt);
   }
+  return true;
 }
 
 export async function fbMarkReservationFailed(id: string, reason: string, currentRetry: number): Promise<void> {
@@ -367,7 +387,9 @@ export async function fbCheckAndPublishReserved(jobs: Job[]): Promise<{ publishe
 
   for (const job of due) {
     try {
-      await fbPublishReservedJob(job);
+      const didPublish = await fbPublishReservedJob(job);
+      // 이미 다른 주체가 발행한 경우(false) → 카운트/로그 건너뜀 (중복 로그 방지)
+      if (!didPublish) continue;
       published++;
       await fbSaveReservationLog({
         jobId: job.id,

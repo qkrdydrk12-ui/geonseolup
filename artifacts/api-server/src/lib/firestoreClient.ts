@@ -122,6 +122,8 @@ type FsFields = Record<string, FsValue>;
 interface FsDoc {
   name: string;
   fields: FsFields;
+  updateTime?: string;
+  createTime?: string;
 }
 
 // ── JS ↔ Firestore conversion ─────────────────────────────────────────────────
@@ -179,7 +181,8 @@ function fromFsFields(fields: FsFields): Record<string, unknown> {
 
 function docToObject(doc: FsDoc): Record<string, unknown> & { id: string } {
   const id = doc.name.split("/").pop() ?? "";
-  return { id, ...fromFsFields(doc.fields) };
+  // _updateTime: 낙관적 동시성 제어(원자적 발행)를 위한 서버 타임스탬프
+  return { id, _updateTime: doc.updateTime, ...fromFsFields(doc.fields) };
 }
 
 // ── Internal helper: fetch with optional retry using anonymous auth ────────────
@@ -301,6 +304,45 @@ export async function updateDocument(
       : `Firestore updateDocument 실패 [${res.status}]`;
     throw new Error(`${kind} collection=${collectionId} id=${docId}: ${text}`);
   }
+}
+
+// ── Guarded update (PATCH with currentDocument.updateTime precondition) ────────
+// 낙관적 동시성 제어: 읽은 시점(updateTime) 이후 문서가 바뀌지 않았을 때만 적용.
+// 다른 발행 주체가 먼저 처리했으면(updateTime 불일치) false 반환 → 중복 발행 방지.
+export async function updateDocumentGuarded(
+  collectionId: string,
+  docId: string,
+  updates: Record<string, unknown>,
+  expectedUpdateTime: string
+): Promise<boolean> {
+  const fields = toFsFields(updates);
+  const maskParams = Object.keys(updates)
+    .map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`)
+    .join("&");
+  const precond = `currentDocument.updateTime=${encodeURIComponent(expectedUpdateTime)}`;
+  const url = `${BASE_URL}/${collectionId}/${encodeURIComponent(docId)}?${maskParams}&${precond}&key=${API_KEY}`;
+  const body = JSON.stringify({ fields });
+
+  const res = await fetchWithAuth(url, "PATCH", body);
+
+  if (res.ok) return true;
+
+  const text = await res.text();
+  // updateTime 불일치 → 다른 주체가 먼저 발행 (경쟁에서 짐). 정상 동작이므로 false.
+  // Firestore/프록시 구현에 따라 409 ABORTED, 412 Precondition Failed,
+  // 400 FAILED_PRECONDITION 중 하나로 반환될 수 있어 모두 처리.
+  if (
+    res.status === 409 ||
+    res.status === 412 ||
+    (res.status === 400 && /FAILED_PRECONDITION|updateTime/i.test(text))
+  ) {
+    return false;
+  }
+
+  const kind = isPermissionError(res.status, text)
+    ? "Firestore 권한 오류 — 보안 규칙에서 쓰기를 허용해야 합니다"
+    : `Firestore updateDocumentGuarded 실패 [${res.status}]`;
+  throw new Error(`${kind} collection=${collectionId} id=${docId}: ${text}`);
 }
 
 // ── Get single document (read — API key only) ─────────────────────────────────

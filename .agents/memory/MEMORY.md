@@ -1,1 +1,2 @@
 - [Geonseolup contact safety net](geonseolup-contact-safety-net.md) — 카드 contact 비고 자동보강은 저장/발행 모든 경로에 다중 적용해야 함. 안전망 신규 배포 시 기존 reserved 잔여 데이터는 별도 복구 필요.
+- [Geonseolup 예약발행 중복](geonseolup-duplicate-publish.md) — 클라/서버 이중 스케줄러 레이스 + repeatDays 복제로 중복 증식. 발행은 원자적 claim(트랜잭션/updateTime 선조건)으로만.

@@ -5,6 +5,7 @@
 import {
   runQuery,
   updateDocument,
+  updateDocumentGuarded,
   addDocument,
   deleteDocument,
   getDocument,
@@ -273,8 +274,32 @@ export async function runSchedulerOnce(): Promise<{
           }
         }
 
-        // 발행 처리 — status: active, date: 현재, reservedAt 초기화
-        await updateDocument("jobs", job.id, updatePayload);
+        // 원자적 발행 — 읽은 시점 이후 문서가 안 바뀐 경우에만 적용.
+        // 다른 발행 주체(클라이언트 탭/다른 서버 인스턴스)가 먼저 처리했으면 건너뜀(중복 방지).
+        const expectedUpdateTime = (job as { _updateTime?: string })._updateTime;
+        if (!expectedUpdateTime) {
+          // updateTime을 확보하지 못하면 원자성 보장 불가 → 비원자적 발행은
+          // 중복 위험이 있으므로 이번 주기는 건너뛰고 다음 주기에 재시도.
+          logger.warn(
+            { jobId: job.id, title: job.title },
+            "서버 스케줄러: updateTime 미확보 — 원자성 보장 불가로 이번 발행 건너뜀(다음 주기 재시도)"
+          );
+          continue;
+        }
+        const claimed = await updateDocumentGuarded(
+          "jobs",
+          job.id,
+          updatePayload,
+          expectedUpdateTime
+        );
+
+        if (!claimed) {
+          logger.info(
+            { jobId: job.id, title: job.title },
+            "서버 스케줄러: publish 건너뜀 — 이미 다른 주체가 발행함(중복 방지)"
+          );
+          continue;
+        }
 
         logger.info(
           { jobId: job.id, title: job.title, publishedAt: nowIsoKST },
