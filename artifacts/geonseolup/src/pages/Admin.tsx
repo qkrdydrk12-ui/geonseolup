@@ -1087,6 +1087,7 @@ export default function Admin() {
   const [findSent, setFindSent] = useState(false);
   const [tab, setTab] = useState<Tab>('jobs');
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [deletingFailed, setDeletingFailed] = useState(false);
   const [pending, setPending] = useState<PendingJob[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Partial<Job>>(emptyForm());
@@ -1888,6 +1889,37 @@ export default function Admin() {
     await loadJobs();
   }
 
+  // 발행 실패(status==='failed') 공고 일괄 삭제.
+  // 이미 화면에 로드된 목록(jobs 상태)을 대상으로 하므로 추가 읽기 없이 동작 →
+  // Firestore 읽기 쿼터가 소진된 상태에서도 삭제(쓰기) 가능.
+  async function handleDeleteAllFailed() {
+    if (deletingFailed) return; // 중복 실행 방지
+    const failedJobs = jobs.filter((j) => j.status === 'failed');
+    if (failedJobs.length === 0) {
+      showToast('발행 실패한 공고가 없습니다');
+      return;
+    }
+    if (!confirm(`발행 실패한 공고 ${failedJobs.length}건을 모두 삭제하시겠습니까?`)) return;
+    setDeletingFailed(true);
+    showToast(`🗑 ${failedJobs.length}건 삭제 중…`);
+    const successIds = new Set<string>();
+    for (const j of failedJobs) {
+      // fbDeleteJob은 성공 시 true, 실패 시 false 반환 (예외를 던지지 않음)
+      if (await fbDeleteJob(j.id)) successIds.add(j.id);
+    }
+    // 실제 삭제에 성공한 항목만 로컬 상태에서 제거
+    // (loadJobs는 읽기 쿼터 소진 시 실패할 수 있어 로컬 반영이 중요)
+    setJobs((prev) => prev.filter((j) => !successIds.has(j.id)));
+    const failedToDelete = failedJobs.length - successIds.size;
+    showToast(
+      failedToDelete > 0
+        ? `⚠️ ${successIds.size}건 삭제, ${failedToDelete}건 실패 (잠시 후 재시도)`
+        : `✅ ${successIds.size}건 삭제 완료`
+    );
+    setDeletingFailed(false);
+    try { await loadJobs(); } catch { /* 읽기 실패 무시 — 로컬 상태로 이미 반영됨 */ }
+  }
+
   function handleCloneJob(job: Job) {
     // 발행 메타데이터 제외하고 내용만 복사
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -2166,6 +2198,7 @@ export default function Admin() {
   const visibleJobs = jobs.filter((j) => !j._deleted);
   const reservedJobs = visibleJobs.filter((j) => j.status === 'reserved');
   const activeJobs = visibleJobs.filter((j) => j.status !== 'reserved');
+  const failedCount = visibleJobs.filter((j) => j.status === 'failed').length;
 
   return (
     <div className="min-h-screen" style={{ background: '#f8f9fa' }}>
@@ -2377,6 +2410,19 @@ export default function Admin() {
               <div className="text-center py-12 text-gray-400">등록된 공고가 없습니다</div>
             ) : (
               <div className="grid gap-3">
+                {failedCount > 0 && (
+                  <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-[10px] px-4 py-2.5">
+                    <span className="text-[13px] font-bold text-red-600">❌ 발행 실패 공고 {failedCount}건</span>
+                    <button
+                      type="button"
+                      disabled={deletingFailed}
+                      className="bg-red-500 text-white py-[7px] px-3.5 rounded-lg text-[13px] font-bold cursor-pointer hover:bg-red-600 transition-colors font-[inherit] whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={handleDeleteAllFailed}
+                    >
+                      {deletingFailed ? '🗑 삭제 중…' : '🗑 실패 공고 전체 삭제'}
+                    </button>
+                  </div>
+                )}
                 {visibleJobs.map((job) => (
                   <div
                     key={job.id}

@@ -212,11 +212,13 @@ export async function fbToggleHide(id: string, hidden: boolean): Promise<void> {
   }
 }
 
-export async function fbDeleteJob(id: string): Promise<void> {
+export async function fbDeleteJob(id: string): Promise<boolean> {
   try {
     await updateDoc(doc(_db, 'jobs', id), { hidden: true, _deleted: true });
+    return true;
   } catch (e) {
     console.warn('[Firebase] fbDeleteJob failed:', e);
+    return false;
   }
 }
 
