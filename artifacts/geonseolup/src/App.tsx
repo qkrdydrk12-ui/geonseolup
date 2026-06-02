@@ -79,6 +79,14 @@ function useReservationScheduler() {
   const jobsRef = useRef<Job[]>([]);
 
   useEffect(() => {
+    // 예약 발행은 서버 스케줄러(api-server)가 상시 처리한다.
+    // 클라이언트 스케줄러는 "관리자 로그인 세션"에서만 보조로 동작 → 일반 방문자
+    // 브라우저마다 전체 컬렉션 실시간 구독 + 60초 폴링이 도는 것을 막아 Firestore
+    // 읽기 쿼터(무료 일일 50,000회) 소진을 방지. (방문자 N명 × 매분 전체조회 = 쿼터 폭증)
+    let isAdmin = false;
+    try { isAdmin = !!localStorage.getItem('cj_admin_auth'); } catch { /* localStorage 접근 불가 */ }
+    if (!isAdmin) return;
+
     // Firestore 실시간 구독 → 최신 jobs 항상 보유
     const unsub = fbOnJobs((jobs) => { jobsRef.current = jobs; });
 
