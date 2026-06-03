@@ -184,6 +184,45 @@ export async function fbGetJob(id: string): Promise<Job | null> {
   return localLoadJobs().find((j) => j.id === id) || null;
 }
 
+// ── 공개 목록: 서버 캐시 경유 (Firestore 직접 읽기 X) ────────────────────────────
+// 방문자마다 Firestore를 통째로 구독하면 읽기 쿼터가 폭증하므로,
+// 공개 화면(홈/상세)은 서버가 캐시한 /api/jobs 를 공유해서 읽는다.
+const PUBLIC_JOBS_CACHE_KEY = 'cj_public_jobs_cache';
+
+export async function fbLoadPublicJobs(): Promise<Job[]> {
+  try {
+    const res = await fetch('/api/jobs', { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as { jobs?: Job[] } | Job[];
+    const jobs = Array.isArray(data) ? data : data.jobs ?? [];
+    if (jobs.length > 0) {
+      try { localStorage.setItem(PUBLIC_JOBS_CACHE_KEY, JSON.stringify(jobs)); } catch { /* 용량 초과 무시 */ }
+    }
+    return jobs;
+  } catch (e) {
+    console.warn('[api] fbLoadPublicJobs failed:', e);
+    // 서버 미응답 시: 직전 캐시 → 로컬 저장본 순으로 폴백
+    try {
+      const cached = localStorage.getItem(PUBLIC_JOBS_CACHE_KEY);
+      if (cached) return JSON.parse(cached) as Job[];
+    } catch { /* 파싱 실패 무시 */ }
+    return localLoadJobs();
+  }
+}
+
+export async function fbGetPublicJob(id: string): Promise<Job | null> {
+  try {
+    const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as Job;
+  } catch (e) {
+    console.warn('[api] fbGetPublicJob failed:', e);
+    const all = await fbLoadPublicJobs();
+    return all.find((j) => j.id === id) || null;
+  }
+}
+
 export async function fbAddJob(job: Omit<Job, 'id'>): Promise<string> {
   // undefined 필드 제거 (Firestore는 undefined 값을 거부함)
   const clean = Object.fromEntries(

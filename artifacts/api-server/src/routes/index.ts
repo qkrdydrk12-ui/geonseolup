@@ -4,6 +4,7 @@ import adminRouter from "./admin";
 import visitorsRouter from "./visitors";
 import postCooldownRouter from "./postCooldown";
 import schedulerRouter from "./scheduler";
+import jobsRouter from "./jobs";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(adminRouter);
 router.use(visitorsRouter);
 router.use(postCooldownRouter);
 router.use(schedulerRouter);
+router.use(jobsRouter);
 
 export default router;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Job } from '@/lib/firebase';
-import { fbOnJobs } from '@/lib/firebase';
+import { fbLoadPublicJobs } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { isAutoHidden, WELD_SUBS, isWeld } from '@/lib/utils';
 import { getToken, apiVerify } from '@/lib/adminAuth';
@@ -282,26 +282,27 @@ export default function Home() {
   }
 
   useEffect(() => {
-    let resolved = false;
-    const unsub = fbOnJobs((firebaseJobs) => {
-      const data = firebaseJobs && firebaseJobs.length > 0 ? firebaseJobs : SAMPLE_JOBS;
-      resolved = true;
+    let active = true;
+    async function load() {
+      const fetched = await fbLoadPublicJobs();
+      if (!active) return;
+      const data = fetched && fetched.length > 0 ? fetched : SAMPLE_JOBS;
       setState((prev) => {
         const filtered = filterAndSort(data, { ...prev, allJobs: data });
         return { ...prev, allJobs: data, filtered };
       });
       setLoading(false);
-    });
-    const fallbackTimer = setTimeout(() => {
-      if (!resolved) {
-        setState((prev) => {
-          const filtered = filterAndSort(SAMPLE_JOBS, { ...prev, allJobs: SAMPLE_JOBS });
-          return { ...prev, allJobs: SAMPLE_JOBS, filtered };
-        });
-        setLoading(false);
-      }
-    }, 3000);
-    return () => { unsub(); clearTimeout(fallbackTimer); };
+    }
+    load();
+    // 주기적 갱신 + 탭 복귀 시 갱신 (실시간 구독 대신 캐시 폴링으로 읽기 절약)
+    const timer = setInterval(load, 90_000);
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbGetJob, fbLoadJobs } from '@/lib/firebase';
+import { fbGetPublicJob, fbLoadPublicJobs } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { formatDate, getJobIcon, JOB_ICON_BG, JOB_BADGE_COLOR, isNew, markViewed } from '@/lib/utils';
 
@@ -25,10 +25,10 @@ export default function Detail({ id }: Props) {
         const rels = SAMPLE_JOBS.filter((j) => j.id !== id && !j.hidden && j.job === sampleFound.job).slice(0, 10);
         setRelated(rels);
         setLoading(false);
-        fbGetJob(id).then((found) => {
+        fbGetPublicJob(id).then((found) => {
           if (found) { setJob(found); }
         });
-        fbLoadJobs().then((allJobs) => {
+        fbLoadPublicJobs().then((allJobs) => {
           if (allJobs.length > 0) {
             const job = allJobs.find((j) => j.id === id);
             if (job) setJob(job);
@@ -38,13 +38,13 @@ export default function Detail({ id }: Props) {
         });
         return;
       }
-      let found = await fbGetJob(id);
+      let found = await fbGetPublicJob(id);
       if (!found) {
         found = null;
       }
       setJob(found);
       markViewed(id);
-      const allJobs = await fbLoadJobs();
+      const allJobs = await fbLoadPublicJobs();
       const pool = allJobs.length > 0 ? allJobs : SAMPLE_JOBS;
       const rels = pool.filter((j) => j.id !== id && !j.hidden && j.job === (found?.job || '')).slice(0, 10);
       setRelated(rels);

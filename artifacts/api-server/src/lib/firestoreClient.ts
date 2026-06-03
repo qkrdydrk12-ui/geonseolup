@@ -281,6 +281,38 @@ export async function runQuery(
     .map((r) => docToObject(r.document!));
 }
 
+// ── List jobs for public cache ────────────────────────────────────────────────
+// 최신 공고를 date 내림차순 + limit 으로 한 번에 조회. where 절이 없어 인덱스가
+// 필요 없으며, 읽기 수를 limit 으로 상한 고정해 무료 쿼터 소진을 막는다.
+export async function listRecentDocs(
+  collectionId: string,
+  limit: number
+): Promise<Array<Record<string, unknown> & { id: string }>> {
+  const res = await fetch(`${BASE_URL}:runQuery?key=${API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId }],
+        orderBy: [{ field: { fieldPath: "date" }, direction: "DESCENDING" }],
+        limit,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Firestore listRecentDocs 실패 [${res.status}] collection=${collectionId}: ${text}`
+    );
+  }
+
+  const results = (await res.json()) as Array<{ document?: FsDoc }>;
+  return results
+    .filter((r) => r.document != null)
+    .map((r) => docToObject(r.document!));
+}
+
 // ── Update (PATCH with updateMask) ────────────────────────────────────────────
 
 export async function updateDocument(
