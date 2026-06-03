@@ -23,5 +23,18 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
-  startScheduler();
+  // 스케줄러(예약 발행 + 자동숨김/삭제 정리)는 Firestore를 주기적으로 읽는다.
+  // 개발 환경과 운영 환경이 같은 Firestore 프로젝트를 공유하므로, 둘 다 켜면
+  // 무료 읽기 한도를 두 배로 소진한다. 운영(NODE_ENV=production)에서만 켜고,
+  // 개발에서 강제로 켜야 할 때만 ENABLE_SCHEDULER=1 로 활성화한다.
+  const schedulerEnabled =
+    process.env["NODE_ENV"] === "production" ||
+    process.env["ENABLE_SCHEDULER"] === "1";
+  if (schedulerEnabled) {
+    startScheduler();
+  } else {
+    logger.info(
+      "서버 스케줄러 비활성화 (개발 환경) — Firestore 읽기 쿼터 절약. 켜려면 ENABLE_SCHEDULER=1",
+    );
+  }
 });

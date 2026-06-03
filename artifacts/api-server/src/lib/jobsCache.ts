@@ -17,8 +17,10 @@ export interface PublicJob {
 
 // 읽기 예산: 하루 읽기 ≈ (갱신 횟수/일) × LIMIT.
 // 무료 한도(50,000/일) 안에 들도록 TTL을 보수적으로 잡는다.
-// 예) TTL 300s → 최악(24h 연속 트래픽) 288회 × 200건 ≈ 57.6k, 야간 무트래픽 고려 시 실사용은 훨씬 낮음.
-const TTL_MS = Number(process.env["JOBS_CACHE_TTL_MS"] ?? 300_000); // 기본 5분
+// 공고가 200건(LIMIT)까지 누적된 상태에서 항상 켜진 탭이 1개만 있어도
+// TTL 5분이면 288회 × 200건 ≈ 57.6k 로 무료 한도를 넘어선다.
+// TTL 10분이면 144회 × 200건 ≈ 28.8k 로 스케줄러/정리 루틴 비용을 더해도 한도 안에 든다.
+const TTL_MS = Number(process.env["JOBS_CACHE_TTL_MS"] ?? 600_000); // 기본 10분
 const LIMIT = Number(process.env["JOBS_CACHE_LIMIT"] ?? 200); // 한 번에 읽는 최대 문서 수
 // 갱신 실패(예: 429) 후 재시도 억제 시간. 쿼터 소진 중 매 요청마다 재시도해
 // 소진 상태를 연장하지 않도록 한다.

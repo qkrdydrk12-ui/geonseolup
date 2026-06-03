@@ -26,3 +26,12 @@ description: 예약 발행 중단·429의 근본 원인(클라 스케줄러가 �
 - **프런트 폴백:** `fbLoadPublicJobs`/`fbGetPublicJob`는 서버 무응답 시 localStorage 캐시(`cj_public_jobs_cache`) → `localLoadJobs`(샘플) 순으로 폴백. 홈은 onSnapshot 대신 90초 폴링 + window focus 갱신.
 - **관리자/스케줄러는 예외:** reserved/failed가 필요하고 저트래픽이라 여전히 Firestore 직접 읽기(`fbLoadJobs/fbGetJob/fbOnJobs`). 공개 캐시로 라우팅하지 말 것.
 - **하드 상한 해제는 Blaze 업그레이드뿐**(Firebase Console → ⚙️ → Modify plan). 캐시는 무료 한도 내 운용을 위한 절감책.
+
+# 캐시 도입 후에도 매일 재소진된 이유 (200+ 공고 규모)
+- **증상:** 공개 캐시 배포 후에도 무료 한도가 매일 또 소진. 운영 `/api/jobs`가 stale(0건) → 프런트가 **샘플(SAMPLE_JOBS)로 폴백** → 사장 화면에 "실제 공고 사라지고 13개만" 보임(샘플 15개 중 숨김 2 = 13). 성공 갱신 로그는 `total=200 publicCount=129`로 실제 공고는 멀쩡히 200+건 존재.
+- **근본 원인 3가지:**
+  1) **TTL × LIMIT 예산 초과:** 공고가 LIMIT(200)까지 누적된 상태에서 항상 켜진 탭 1개만 있어도 TTL 5분이면 288회 × 200 ≈ 57.6k/일 > 50k. → TTL 기본을 **10분(600_000)** 으로 올림(144회 × 200 ≈ 28.8k).
+  2) **개발+운영이 같은 Firestore 프로젝트 공유:** api-server 스케줄러/정리 루틴이 dev·prod 양쪽에서 동시에 돌아 백그라운드 읽기를 2배로 소진. → `startScheduler()`를 **`NODE_ENV==='production' || ENABLE_SCHEDULER==='1'`** 일 때만 실행하도록 게이트. (운영 artifact.toml은 build/run env에 `NODE_ENV=production` 명시돼 있어 prod는 정상 가동.)
+  3) **빈 응답 시 프런트가 마지막 정상 캐시를 안 씀:** 서버가 200 OK + `jobs:[]`(콜드/429)를 주면 `fbLoadPublicJobs`가 그대로 []를 반환→샘플 폴백. → 응답이 비면 `localStorage cj_public_jobs_cache`(이 기기가 마지막에 받은 실제 공고)를 **샘플보다 우선** 반환하도록 수정.
+- **원칙:** 무료 50k 예산은 (공개캐시 ≈ 28.8k) + (정리 루틴 30분마다 전체 jobs 2쿼리 ≈ 최대 ~9.6k) + (스케줄러 reserved/failed 매분 조회) 합산으로 빠듯하다. **공고 규모가 200+로 커진 시점부터 무료 티어는 사실상 한계** — 캐시는 지연책일 뿐 항구적 해법은 Blaze.
+- **튜닝 레버:** 코드 수정 없이 운영 env로 조정 가능 — `JOBS_CACHE_TTL_MS`(↑ = 읽기↓·신선도↓), `JOBS_CACHE_LIMIT`. 정리 루틴 간격(CLEANUP_INTERVAL_MS 30분)도 읽기 비용원.

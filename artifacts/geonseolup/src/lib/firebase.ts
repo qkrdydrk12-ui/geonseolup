@@ -193,21 +193,35 @@ export async function fbLoadPublicJobs(): Promise<Job[]> {
   try {
     const res = await fetch('/api/jobs', { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as { jobs?: Job[] } | Job[];
+    const data = (await res.json()) as { jobs?: Job[]; stale?: boolean } | Job[];
     const jobs = Array.isArray(data) ? data : data.jobs ?? [];
     if (jobs.length > 0) {
       try { localStorage.setItem(PUBLIC_JOBS_CACHE_KEY, JSON.stringify(jobs)); } catch { /* 용량 초과 무시 */ }
+      return jobs;
     }
+    // 서버 캐시가 비어 있음(콜드 스타트/읽기 쿼터 소진 등) → 빈 목록 대신
+    // 이 기기가 마지막으로 받은 실제 공고를 보여준다 (샘플 폴백보다 우선).
+    const lastGood = readPublicJobsCache();
+    if (lastGood.length > 0) return lastGood;
     return jobs;
   } catch (e) {
     console.warn('[api] fbLoadPublicJobs failed:', e);
     // 서버 미응답 시: 직전 캐시 → 로컬 저장본 순으로 폴백
-    try {
-      const cached = localStorage.getItem(PUBLIC_JOBS_CACHE_KEY);
-      if (cached) return JSON.parse(cached) as Job[];
-    } catch { /* 파싱 실패 무시 */ }
+    const lastGood = readPublicJobsCache();
+    if (lastGood.length > 0) return lastGood;
     return localLoadJobs();
   }
+}
+
+function readPublicJobsCache(): Job[] {
+  try {
+    const cached = localStorage.getItem(PUBLIC_JOBS_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached) as Job[];
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch { /* 파싱 실패 무시 */ }
+  return [];
 }
 
 export async function fbGetPublicJob(id: string): Promise<Job | null> {
