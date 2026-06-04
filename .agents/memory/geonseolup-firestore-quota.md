@@ -35,3 +35,11 @@ description: 예약 발행 중단·429의 근본 원인(클라 스케줄러가 �
   3) **빈 응답 시 프런트가 마지막 정상 캐시를 안 씀:** 서버가 200 OK + `jobs:[]`(콜드/429)를 주면 `fbLoadPublicJobs`가 그대로 []를 반환→샘플 폴백. → 응답이 비면 `localStorage cj_public_jobs_cache`(이 기기가 마지막에 받은 실제 공고)를 **샘플보다 우선** 반환하도록 수정.
 - **원칙:** 무료 50k 예산은 (공개캐시 ≈ 28.8k) + (정리 루틴 30분마다 전체 jobs 2쿼리 ≈ 최대 ~9.6k) + (스케줄러 reserved/failed 매분 조회) 합산으로 빠듯하다. **공고 규모가 200+로 커진 시점부터 무료 티어는 사실상 한계** — 캐시는 지연책일 뿐 항구적 해법은 Blaze.
 - **튜닝 레버:** 코드 수정 없이 운영 env로 조정 가능 — `JOBS_CACHE_TTL_MS`(↑ = 읽기↓·신선도↓), `JOBS_CACHE_LIMIT`. 정리 루틴 간격(CLEANUP_INTERVAL_MS 30분)도 읽기 비용원.
+
+# Blaze 전환 후: 새 글 즉시 노출 (캐시 무효화)
+- **Blaze(종량제) 전환 후엔 무료 50k 제약이 사라지므로 신선도 우선으로 전환.** 공개 캐시 TTL 기본을 **60초**로 낮춤(`JOBS_CACHE_TTL_MS`로 무료 티어 복귀 시 다시 길게).
+- **핵심: 공개 글쓰기/승인은 클라이언트가 Firestore에 직접 쓰고 api-server를 우회**하므로, 서버 인메모리 캐시는 그 쓰기를 모른다. → 쓰기 직후 프런트가 `POST /api/jobs/invalidate`(firebase.ts `fbInvalidatePublicCache`)를 호출해 서버 캐시를 비워야 새 글이 바로 보인다. 호출 지점: Post.tsx 자동노출 분기, Admin.tsx 승인.
+- **무효화 엔드포인트는 Firestore를 읽지 않음**(캐시만 null). 비용은 다음 GET의 refresh에서 발생.
+- **레이스/남용 방지 2가지(필수):** ① `_generation` 토큰 — 갱신 시작 시 세대 캡처, 완료 시 세대가 바뀌었으면(=도중 무효화됨) 캐시에 안 씀 → 쓰기 이전 스냅샷이 새 글을 덮어쓰는 레이스 차단. ② 무효화 디바운스 `MIN_INVALIDATE_INTERVAL_MS`(기본 3s) — 무인증 공개 엔드포인트 스팸으로 sub-TTL 강제 갱신이 폭주하는 것을 막음.
+- **HTTP 캐시 제거:** `/api/jobs` 목록 응답을 `Cache-Control: no-store`로(이전 max-age=30이 무효화 후에도 ~30s 묵은 응답 제공). 프런트 fetch도 `cache:'no-store'`. 방문자 폭주는 서버 인메모리 캐시가 흡수하므로 JSON HTTP 캐시는 불필요. (상세 `/api/jobs/:id`는 max-age 유지 — 즉시성 불필요.)
+- **승인대기(review) 모드 주의:** `localStorage cj_review_mode==='on'`이면 글이 `fbAddPending(status:'pending')`로 들어가 **관리자 승인 전까지 공개 안 됨**(캐시와 무관). "글이 안 올라온다" 문의 시 성공화면 문구로 구분 — "즉시 노출"=자동발행 / "관리자 검토 후"=승인대기.

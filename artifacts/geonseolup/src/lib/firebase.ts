@@ -191,7 +191,7 @@ const PUBLIC_JOBS_CACHE_KEY = 'cj_public_jobs_cache';
 
 export async function fbLoadPublicJobs(): Promise<Job[]> {
   try {
-    const res = await fetch('/api/jobs', { headers: { Accept: 'application/json' } });
+    const res = await fetch('/api/jobs', { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { jobs?: Job[]; stale?: boolean } | Job[];
     const jobs = Array.isArray(data) ? data : data.jobs ?? [];
@@ -211,6 +211,14 @@ export async function fbLoadPublicJobs(): Promise<Job[]> {
     if (lastGood.length > 0) return lastGood;
     return localLoadJobs();
   }
+}
+
+// 글 작성/승인 등 공개 목록에 영향을 주는 쓰기 직후 호출 → 서버 캐시 즉시 무효화.
+// 실패해도 TTL 만료로 곧 갱신되므로 조용히 무시한다.
+export async function fbInvalidatePublicCache(): Promise<void> {
+  try {
+    await fetch('/api/jobs/invalidate', { method: 'POST', headers: { Accept: 'application/json' } });
+  } catch { /* 무시 */ }
 }
 
 function readPublicJobsCache(): Job[] {

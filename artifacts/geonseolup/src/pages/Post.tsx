@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { fbAddPending, fbAddJob } from '@/lib/firebase';
+import { fbAddPending, fbAddJob, fbInvalidatePublicCache } from '@/lib/firebase';
 import { WELD_SUBS, parseSalaryNum } from '@/lib/utils';
 
 const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '해외', '전국'];
@@ -152,6 +152,7 @@ export default function Post() {
           date: new Date().toISOString(),
           hidden: false,
         });
+        await fbInvalidatePublicCache(); // 새 글 즉시 노출
         setAutoPublished(true);
       }
       recordPostLocal(form.contact); // UI 즉시 반영용 (로컬 보조)

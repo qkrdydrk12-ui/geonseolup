@@ -21,6 +21,7 @@ import {
   fbDeleteReport,
   fbSetSetting,
   fbGetSetting,
+  fbInvalidatePublicCache,
   type ReservationLog,
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
@@ -1953,6 +1954,7 @@ export default function Admin() {
         hidden: false,
       });
       await fbUpdatePending(item.id, { status: 'approved' });
+      await fbInvalidatePublicCache(); // 승인된 글 즉시 노출
       showToast('✅ 승인 처리됐습니다');
       await loadJobs();
       await loadPending();

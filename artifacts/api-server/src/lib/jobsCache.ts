@@ -16,11 +16,10 @@ export interface PublicJob {
 }
 
 // 읽기 예산: 하루 읽기 ≈ (갱신 횟수/일) × LIMIT.
-// 무료 한도(50,000/일) 안에 들도록 TTL을 보수적으로 잡는다.
-// 공고가 200건(LIMIT)까지 누적된 상태에서 항상 켜진 탭이 1개만 있어도
-// TTL 5분이면 288회 × 200건 ≈ 57.6k 로 무료 한도를 넘어선다.
-// TTL 10분이면 144회 × 200건 ≈ 28.8k 로 스케줄러/정리 루틴 비용을 더해도 한도 안에 든다.
-const TTL_MS = Number(process.env["JOBS_CACHE_TTL_MS"] ?? 600_000); // 기본 10분
+// Blaze(종량제)로 전환해 무료 50k 상한 제약이 사라졌으므로, 신선도를 위해 TTL을 짧게 잡는다.
+// 또한 글 작성/승인 직후에는 `invalidatePublicJobsCache()`로 즉시 무효화되어 새 글이 바로 노출된다.
+// (TTL은 그 사이의 백스톱일 뿐.) 무료 티어로 되돌릴 경우 env로 다시 길게(예: 600_000) 조정.
+const TTL_MS = Number(process.env["JOBS_CACHE_TTL_MS"] ?? 60_000); // 기본 60초
 const LIMIT = Number(process.env["JOBS_CACHE_LIMIT"] ?? 200); // 한 번에 읽는 최대 문서 수
 // 갱신 실패(예: 429) 후 재시도 억제 시간. 쿼터 소진 중 매 요청마다 재시도해
 // 소진 상태를 연장하지 않도록 한다.
@@ -34,6 +33,15 @@ interface CacheEntry {
 let _cache: CacheEntry | null = null;
 let _inflight: Promise<PublicJob[]> | null = null;
 let _lastFailAt = 0;
+// 무효화 세대 토큰: 갱신(refresh) 도중 무효화가 발생하면 세대가 바뀐다.
+// 진행 중이던 갱신이 쓰기 이전 데이터로 캐시를 덮어쓰는 레이스를 막는 데 쓴다.
+let _generation = 0;
+// 외부 무효화 디바운스: POST /api/jobs/invalidate 가 남용돼도
+// 이 간격보다 자주 강제 갱신(=Firestore 재읽기)되지 않도록 빈도를 제한한다.
+let _lastInvalidateAt = 0;
+const MIN_INVALIDATE_INTERVAL_MS = Number(
+  process.env["JOBS_CACHE_MIN_INVALIDATE_MS"] ?? 3_000
+);
 
 // 한 건의 공고가 공개 노출 가능한지 (삭제/숨김/예약/실패 제외).
 function isPublic(j: PublicJob): boolean {
@@ -51,9 +59,14 @@ function toPublic(all: PublicJob[]): PublicJob[] {
 }
 
 async function refresh(): Promise<PublicJob[]> {
+  const gen = _generation;
   const all = (await listRecentDocs("jobs", LIMIT)) as PublicJob[];
   const pub = toPublic(all);
-  _cache = { jobs: pub, fetchedAt: Date.now() };
+  // 이 갱신이 시작된 뒤 무효화(쓰기 직후)가 일어났다면 캐시에 쓰지 않는다.
+  // 쓰기 이전 스냅샷으로 캐시가 덮어써져 새 글이 가려지는 레이스를 방지.
+  if (gen === _generation) {
+    _cache = { jobs: pub, fetchedAt: Date.now() };
+  }
   logger.info(
     { total: all.length, publicCount: pub.length },
     "공개 공고 캐시 갱신"
@@ -123,4 +136,17 @@ export async function getPublicJobById(id: string): Promise<PublicJob | null> {
     logger.warn({ err, id }, "공개 공고 단건 조회 실패");
     return null;
   }
+}
+
+// 공개 목록에 영향을 주는 쓰기(글 작성/승인/수정/삭제) 직후 호출.
+// Firestore를 읽지 않고 캐시만 비워, 다음 요청에서 즉시 최신 목록을 다시 읽게 한다.
+// 진행 중인 갱신이 있으면 세대(_generation)를 올려 그 결과가 캐시를 덮어쓰지 않게 하고,
+// 디바운스로 외부 남용 시 과도한 강제 갱신을 막는다.
+export function invalidatePublicJobsCache(): void {
+  const now = Date.now();
+  if (now - _lastInvalidateAt < MIN_INVALIDATE_INTERVAL_MS) return;
+  _lastInvalidateAt = now;
+  _cache = null;
+  _lastFailAt = 0;
+  _generation++;
 }
