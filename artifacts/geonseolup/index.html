@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
@@ -38,12 +38,62 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+    <!-- ===== 구조화 데이터 (검색엔진용 JSON-LD) ===== -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "건설UP",
+      "alternateName": "건설업 일자리 정보",
+      "url": "https://geonseolup.com/",
+      "description": "전국 건설 현장 구인 정보를 실시간으로 제공하는 건설 일자리 사이트. 조공·배관·용접·화기감시자·형틀·철근 등 현장직 채용 정보."
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "건설UP",
+      "url": "https://geonseolup.com/",
+      "logo": "https://geonseolup.com/favicon.png",
+      "description": "전국 건설 현장 일자리(구인·구직) 정보 플랫폼"
+    }
+    </script>
+
     <!-- ===== Google AdSense ===== -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4564839197459262"
      crossorigin="anonymous"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      검색엔진(특히 네이버 Yeti)용 정적 본문.
+      JavaScript가 실행되면 React가 이 내용을 실제 앱 화면으로 교체합니다.
+      크롤러가 자바스크립트를 실행하지 않아도 사이트의 핵심 내용을 읽을 수 있도록 둡니다.
+    -->
+    <div id="root">
+      <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">건설UP — 전국 건설 현장 일자리 정보</h1>
+        <p style="margin:0 0 16px;color:#334155">
+          전국 건설 현장의 구인·구직 정보를 실시간으로 제공하는 건설 일자리 사이트입니다.
+          조공, 배관, 용접(TIG·아크·CO2), 화기감시자, 형틀, 철근, 비계, 안전시설 등
+          다양한 건설 현장직 채용 정보를 지역별·직종별로 한눈에 확인하세요.
+        </p>
+        <h2 style="font-size:16px;font-weight:600;margin:16px 0 6px">주요 모집 직종</h2>
+        <p style="margin:0 0 16px;color:#334155">
+          조공 · 배관공 · 용접공 · 화기감시자 · 형틀목공 · 철근공 · 비계공 ·
+          안전시설반 · 보통인부 · 신호수 · 도장 · 방수 · 전기 · 설비
+        </p>
+        <h2 style="font-size:16px;font-weight:600;margin:16px 0 6px">서비스 지역</h2>
+        <p style="margin:0 0 16px;color:#334155">
+          서울 · 경기 · 인천 · 부산 · 대구 · 광주 · 대전 · 울산 · 세종 ·
+          강원 · 충북 · 충남 · 전북 · 전남 · 경북 · 경남 · 제주 전국
+        </p>
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
