@@ -206,7 +206,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
                       recordContactReveal();
                       setRevealed(true);
                     }}
-                    className="shrink-0 text-[10px] bg-[#f97316] text-white px-2 py-[3px] rounded-full font-bold cursor-pointer border-none hover:bg-[#ea580c] transition-colors whitespace-nowrap"
+                    className="shrink-0 text-[10px] bg-white text-[#f97316] px-2 py-[3px] rounded-full font-bold cursor-pointer border border-[#f97316] hover:bg-orange-50 transition-colors whitespace-nowrap"
                   >
                     👁 보기 ({getTodayContactCount()}/{getContactDailyLimit()})
                   </button>
