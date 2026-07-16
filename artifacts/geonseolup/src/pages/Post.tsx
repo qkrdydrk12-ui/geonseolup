@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { fbAddPending, fbAddJob, fbInvalidatePublicCache } from '@/lib/firebase';
 import { WELD_SUBS, parseSalaryNum } from '@/lib/utils';
+import { REGIONS, JOBS, parseJobText, generateSEOTitle } from '@/lib/parseJob';
 
-const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '해외', '전국'];
-const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '안전담당자', '안전시설반', '품질담당자', '공사담당자', '기타'];
 const WELD_TEST_OPTIONS = ['가능', '불가능'];
 
 function formatPhone(raw: string): string {
@@ -44,6 +43,29 @@ export default function Post() {
   const [done, setDone] = useState(false);
   const [autoPublished, setAutoPublished] = useState(false);
   const [error, setError] = useState('');
+  const [parseText, setParseText] = useState('');
+  const [parsedOnce, setParsedOnce] = useState(false);
+
+  function handleAutoParse() {
+    const text = parseText.trim();
+    if (!text) return;
+    const parsed = parseJobText(text);
+    const seoTitle = generateSEOTitle(parsed);
+    setForm((prev) => ({
+      ...prev,
+      title: seoTitle || parsed.title || prev.title,
+      region: parsed.region || prev.region,
+      job: parsed.job || prev.job,
+      weldSub: parsed.weldSub || prev.weldSub,
+      salary: parsed.salary || prev.salary,
+      meal: parsed.meal || prev.meal,
+      lodging: parsed.lodging || prev.lodging,
+      contact: parsed.contact ? formatPhone(parsed.contact) : prev.contact,
+      detail: (parsed.detail || prev.detail).slice(0, 200),
+      originalText: text,
+    }));
+    setParsedOnce(true);
+  }
 
   const showWeld = form.job === '용접';
 
@@ -211,6 +233,36 @@ export default function Post() {
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+          {/* 원문 자동 파싱 */}
+          <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-orange-300 p-5">
+            <h2 className="text-sm font-extrabold text-gray-700 mb-2 flex items-center gap-1.5">
+              ⚡ 공고 원문 자동 입력
+            </h2>
+            <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+              카톡·문자로 받은 공고 원문을 붙여넣고 버튼을 누르면 제목·지역·직종·급여·연락처가 자동으로 채워집니다. 채워진 내용은 아래에서 수정할 수 있습니다.
+            </p>
+            <textarea
+              value={parseText}
+              onChange={(e) => setParseText(e.target.value)}
+              placeholder={'예)\n💥 대구 시스템비계 작업자 모집 💥\n일당 17만원부터 · 숙소 제공\n문의: 010-1234-5678'}
+              rows={5}
+              className="w-full py-3 px-4 border border-gray-300 rounded-lg text-sm outline-none font-[inherit] transition-all resize-y focus:border-[#f97316] focus:ring-2 focus:ring-orange-100"
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={handleAutoParse}
+                disabled={!parseText.trim()}
+                className="bg-[#f97316] text-white border-none px-5 py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-[inherit]"
+              >
+                ⚡ 자동 입력
+              </button>
+              {parsedOnce && (
+                <span className="text-xs font-semibold text-emerald-600">✔ 자동 입력 완료 — 아래 내용을 확인·수정 후 등록해주세요</span>
+              )}
+            </div>
+          </div>
 
           {/* 기본 정보 */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
