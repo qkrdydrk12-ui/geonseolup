@@ -865,7 +865,7 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   // ── 지역: 해외 키워드 최우선 → 도시명 → 광역시/도 직접 ──
   // 해외 국가/도시/지역명 감지 → 자동 "해외" 매핑
   const OVERSEAS_KW = [
-    '해외', '외국', '국외',
+    '해외', '국외',
     // 영문
     'USA', 'U.S.A', 'America', 'Japan', 'China', 'Vietnam', 'Singapore', 'Saudi', 'Qatar', 'UAE', 'Dubai', 'Kuwait',
     // 미국
@@ -881,25 +881,38 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
     '말레이시아', '쿠알라룸푸르',
     '싱가포르', '인도네시아', '자카르타', '필리핀', '마닐라', '캄보디아', '라오스', '미얀마',
     // 중동
-    '사우디', '사우디아라비아', '카타르', '아랍에미리트', '두바이', '아부다비', '쿠웨이트', '오만', '바레인', '이라크', '이란',
+    '사우디', '사우디아라비아', '카타르', '아랍에미리트', '두바이', '아부다비', '쿠웨이트', '바레인', '이라크',
     // 유럽/오세아니아/기타
     '호주', '시드니', '뉴질랜드', '캐나다', '독일', '프랑스', '영국', '러시아', '폴란드', '체코',
     '몽골', '카자흐스탄', '우즈베키스탄',
+  ];
+  // 짧아서 오탐 위험이 큰 해외 키워드는 문맥까지 확인
+  // - "외국인 지원 가능"은 국내 공고에도 흔함 → '외국인'은 제외
+  // - "오만원"(금액), "~이란"(조사) 오탐 방지
+  const OVERSEAS_RX = [
+    /외국(?!인)/,
+    /(?<![가-힣])오만(?![원가-힣])/,
+    /(?<![가-힣])이란(?![가-힣])/,
   ];
   if (!r.region) {
     for (const kw of OVERSEAS_KW) {
       if (text.includes(kw)) { r.region = '해외'; break; }
     }
+    if (!r.region && OVERSEAS_RX.some((rx) => rx.test(text))) r.region = '해외';
   }
+  // 본문에 여러 지역이 언급될 때는 "가장 먼저 등장한" 지역을 선택
+  // (예: 제목 "지역 대구 ..." 이 근무지역 나열보다 우선)
   if (!r.region) {
+    let best: { region: string; idx: number } | null = null;
     for (const [city, province] of Object.entries(CITY_TO_PROVINCE)) {
-      if (text.includes(city)) { r.region = province; break; }
+      const idx = text.indexOf(city);
+      if (idx >= 0 && (best === null || idx < best.idx)) best = { region: province, idx };
     }
-  }
-  if (!r.region) {
     for (const reg of REGIONS) {
-      if (text.includes(reg)) { r.region = reg; break; }
+      const idx = text.indexOf(reg);
+      if (idx >= 0 && (best === null || idx < best.idx)) best = { region: reg, idx };
     }
+    if (best) r.region = best.region;
   }
 
   // ── 직종 ──
