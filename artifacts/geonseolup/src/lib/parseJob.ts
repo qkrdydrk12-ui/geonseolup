@@ -134,7 +134,7 @@ const NOISE_PATS: RegExp[] = [
   /\d{1,2}월\s*\d{1,2}일/g,                  // N월N일 날짜
   /급여일\s*\d+/g,                             // 급여일
   /\d+\s*개월/g,                               // 개월수
-  /\d{1,2}:\d{2}/g,                           // HH:MM 시간
+  /\d{1,2}\s*:\s*\d{2}/g,                     // HH:MM 시간 ("17 :00", "19 : 30" 등 공백 포함 표기 포함)
   /\d{1,2}\s*시\s*(?:\d{1,2}\s*분)?/g,         // N시 / N시 N분 (근무 시간대) — "14시~24시"가 단가로 오인식되는 것 방지
   /P[1-9](?:라인|LINE)?/gi,                    // P라인 현장명
   /\d+\s*명/g,                                 // 인원수
@@ -924,6 +924,8 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
     if (/식사\s*제공|식 제공|식대\s*제공/.test(text)) r.meal = '식사제공';
   }
   if (/숙[소박]\s*[Oo제]|숙박제공|숙소O/.test(text)) r.lodging = '숙박제공';
+  // 기숙사 제공/사용 가능 → 숙박제공 (단, "불가/없음/X" 인접 시 제외)
+  if (/기숙사(?![^\n]{0,8}(?:불가|없|X|x|✕|❌))/.test(text)) r.lodging = '숙박제공';
   // 키워드 없으면 협의로 기본값 설정
   if (!r.meal) r.meal = '협의';
   if (!r.lodging) r.lodging = '협의';
