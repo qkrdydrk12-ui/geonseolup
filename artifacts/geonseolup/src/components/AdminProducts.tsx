@@ -65,6 +65,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [coupangUrl, setCoupangUrl] = useState('');
+  const [coupangKeyword, setCoupangKeyword] = useState('');
   const [fetching, setFetching] = useState(false);
 
   async function reload() {
@@ -125,7 +126,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
       const res = await fetch('/api/admin/coupang/product', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() || ''}` },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, keyword: coupangKeyword.trim() || undefined }),
       });
       const data = (await res.json()) as {
         ok: boolean;
@@ -135,7 +136,11 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
       };
       if (!res.ok || !data.ok || !data.product) {
         if (data.partnerLink) {
-          setForm((prev) => ({ ...prev, link: data.partnerLink || '' }));
+          setForm((prev) => ({
+            ...prev,
+            link: data.partnerLink || '',
+            name: prev.name || coupangKeyword.trim(),
+          }));
           showToast(`${data.message || '상품 조회 실패'} (파트너스 링크는 폼에 채워뒀습니다)`);
         } else {
           showToast(data.message || '❌ 상품 조회에 실패했습니다');
@@ -158,6 +163,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
         createdAt: new Date().toISOString(),
       });
       setCoupangUrl('');
+      setCoupangKeyword('');
       showToast(`✅ "${p.name.slice(0, 20)}${p.name.length > 20 ? '…' : ''}" 자동 등록 완료`);
       await reload();
     } catch {
@@ -254,14 +260,24 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
       {/* 쿠팡 URL 자동 등록 */}
       <div className="bg-white rounded-2xl shadow-sm border-2 border-orange-200 p-5">
         <h3 className="text-sm font-extrabold text-gray-700 mb-1.5">🔗 쿠팡 URL 자동 등록</h3>
-        <p className="text-xs text-gray-500 mb-3">쿠팡 상품 페이지 주소를 붙여넣으면 상품명·이미지·가격·카테고리·파트너스 링크를 자동으로 가져와 바로 등록합니다.</p>
-        <div className="flex gap-2 flex-col sm:flex-row">
+        <p className="text-xs text-gray-500 mb-3">쿠팡 상품 페이지 주소를 붙여넣으면 상품명·이미지·가격·카테고리·파트너스 링크를 자동으로 가져와 바로 등록합니다. 상품명 키워드를 함께 입력하면 자동 조회 성공률이 크게 올라갑니다.</p>
+        <div className="flex gap-2 flex-col">
           <input
             type="url"
             value={coupangUrl}
             onChange={(e) => setCoupangUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleCoupangImport(); }}
             placeholder="https://www.coupang.com/vp/products/... 또는 https://link.coupang.com/..."
+            className={inputCls}
+            disabled={fetching}
+          />
+          <div className="flex gap-2 flex-col sm:flex-row">
+          <input
+            type="text"
+            value={coupangKeyword}
+            onChange={(e) => setCoupangKeyword(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCoupangImport(); }}
+            placeholder="상품명 키워드 (권장, 예: K2 안전화 6인치)"
             className={inputCls}
             disabled={fetching}
           />
@@ -273,6 +289,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
           >
             {fetching ? '가져오는 중...' : '⚡ 자동 등록'}
           </button>
+          </div>
         </div>
         <p className="text-[11px] text-gray-400 mt-2">등록 후 아래 목록에서 별점·후기수 등을 수정할 수 있습니다.</p>
       </div>

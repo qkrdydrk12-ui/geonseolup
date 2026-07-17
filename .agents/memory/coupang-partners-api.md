@@ -8,6 +8,8 @@ description: Non-obvious behaviors of Coupang Partners deeplink/search APIs
 - Deeplink API converts full product URLs WITH `itemId` query param fine; plain `/vp/products/<id>` URLs fail with rCode 400. Keep query params when resolving short links.
 - CEA HMAC signing: signed-date format `yyMMdd'T'HHmmss'Z'` UTC; message = date+method+path+query.
 - `brandName` in search results is usually empty.
+- Search API `limit` > 10 silently returns EMPTY productData (rCode 0, no error). Always use limit<=10.
+- Search API only covers a curated ad feed — many live products (e.g. niche safety shoes) never appear for any keyword. Best flow: search with admin-provided product-name keyword, match productId exactly; if absent, return deeplink-only partial so admin fills details manually.
 
 **Why:** deeplink failures were silent early on because the old code fell back to search productUrl, masking that deeplink never worked.
 **How to apply:** any change to the Coupang route should keep the "partner-link-or-fail" guarantee and treat rCode inside 200 responses as errors.

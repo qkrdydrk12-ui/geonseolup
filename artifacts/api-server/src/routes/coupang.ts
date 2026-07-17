@@ -125,7 +125,7 @@ router.post("/admin/coupang/product", requireAdmin, async (req: Request, res: Re
       res.status(500).json({ ok: false, message: "쿠팡파트너스 API 키가 설정되지 않았습니다" });
       return;
     }
-    const { url } = req.body as { url?: string };
+    const { url, keyword } = req.body as { url?: string; keyword?: string };
     const parsed = url ? parseCoupangUrl(url.trim()) : null;
     if (!parsed) {
       res.status(400).json({ ok: false, message: "쿠팡 상품 URL을 입력해주세요 (https://www.coupang.com 또는 link.coupang.com 링크만 가능)" });
@@ -139,15 +139,25 @@ router.post("/admin/coupang/product", requireAdmin, async (req: Request, res: Re
       return;
     }
 
-    // 1) 상품번호로 검색 → 상품정보 (productUrl은 파트너스 추적 링크로 반환됨).
-    //    검색 API는 productId와 무관한 인기상품을 섞어 돌려주므로,
+    // 1) 검색 API로 상품정보 조회 (productUrl은 파트너스 추적 링크로 반환됨).
+    //    검색 API는 키워드와 무관한 인기상품을 섞어 돌려주므로,
     //    productId가 정확히 일치하는 결과만 사용한다 (엉뚱한 상품 자동등록 방지).
-    const query = `keyword=${encodeURIComponent(productId)}&limit=10`;
-    const sr = (await coupangGet(SEARCH_PATH, query)) as {
-      data?: { productData?: SearchItem[] };
-    };
-    const items = sr.data?.productData ?? [];
-    const item = items.find((it) => String(it.productId) === productId);
+    //    상품번호 검색은 거의 못 찾으므로, 관리자가 준 상품명 키워드를 우선 사용.
+    const keywords = [
+      ...(keyword && keyword.trim() ? [keyword.trim()] : []),
+      productId,
+    ];
+    let item: SearchItem | undefined;
+    for (const kw of keywords) {
+      // 주의: limit이 10을 넘으면 쿠팡 검색 API가 조용히 빈 결과를 반환한다
+      const query = `keyword=${encodeURIComponent(kw)}&limit=10`;
+      const sr = (await coupangGet(SEARCH_PATH, query)) as {
+        data?: { productData?: SearchItem[] };
+      };
+      const items = sr.data?.productData ?? [];
+      item = items.find((it) => String(it.productId) === productId);
+      if (item) break;
+    }
     if (!item) {
       // 상품정보는 못 찾았지만 파트너스 링크는 만들어서 폼에 채워준다
       let partnerLink = "";
