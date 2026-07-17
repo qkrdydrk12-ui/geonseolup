@@ -56,7 +56,7 @@ function ProductCard({ p }: { p: Product }) {
           onClick={(e) => { if (!link) e.preventDefault(); }}
           className="mt-auto block text-center bg-[#f97316] hover:bg-[#ea580c] text-white text-[13px] font-bold rounded-lg py-2 no-underline transition-colors"
         >
-          최저가 보기
+          제품 보러가기
         </a>
       </div>
     </div>
