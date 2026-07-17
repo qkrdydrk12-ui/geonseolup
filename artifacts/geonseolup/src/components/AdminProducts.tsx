@@ -8,6 +8,7 @@ import {
   PRODUCT_CATEGORIES,
   type Product,
 } from '@/lib/firebase';
+import { getToken } from '@/lib/adminAuth';
 
 const inputCls = 'w-full py-2.5 px-3.5 border border-gray-300 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 transition-all bg-white';
 
@@ -63,6 +64,8 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
   const [imgBusy, setImgBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  const [coupangUrl, setCoupangUrl] = useState('');
+  const [fetching, setFetching] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -110,6 +113,58 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
   function cancelEdit() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+  }
+
+  /** 쿠팡 URL → API 조회 → 자동 등록 */
+  async function handleCoupangImport() {
+    const url = coupangUrl.trim();
+    if (!url) { showToast('쿠팡 상품 URL을 붙여넣어 주세요'); return; }
+    if (!/coupang\.com/i.test(url)) { showToast('쿠팡(coupang.com) 상품 링크만 등록할 수 있습니다'); return; }
+    setFetching(true);
+    try {
+      const res = await fetch('/api/admin/coupang/product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() || ''}` },
+        body: JSON.stringify({ url }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        message?: string;
+        partnerLink?: string;
+        product?: { name: string; price: number; image: string; brand: string; category: string; link: string };
+      };
+      if (!res.ok || !data.ok || !data.product) {
+        if (data.partnerLink) {
+          setForm((prev) => ({ ...prev, link: data.partnerLink || '' }));
+          showToast(`${data.message || '상품 조회 실패'} (파트너스 링크는 폼에 채워뒀습니다)`);
+        } else {
+          showToast(data.message || '❌ 상품 조회에 실패했습니다');
+        }
+        return;
+      }
+      const p = data.product;
+      const maxOrder = products.reduce((mx, x) => Math.max(mx, x.order ?? 0), 0);
+      await fbAddProduct({
+        name: p.name,
+        category: p.category,
+        price: p.price || 0,
+        rating: 0,
+        reviewCount: 0,
+        link: p.link,
+        image: p.image || '',
+        brand: p.brand || '',
+        order: maxOrder + 1,
+        hidden: false,
+        createdAt: new Date().toISOString(),
+      });
+      setCoupangUrl('');
+      showToast(`✅ "${p.name.slice(0, 20)}${p.name.length > 20 ? '…' : ''}" 자동 등록 완료`);
+      await reload();
+    } catch {
+      showToast('❌ 쿠팡 상품 조회에 실패했습니다');
+    } finally {
+      setFetching(false);
+    }
   }
 
   async function handleSave() {
@@ -195,6 +250,32 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
 
   return (
     <div className="flex flex-col gap-5">
+
+      {/* 쿠팡 URL 자동 등록 */}
+      <div className="bg-white rounded-2xl shadow-sm border-2 border-orange-200 p-5">
+        <h3 className="text-sm font-extrabold text-gray-700 mb-1.5">🔗 쿠팡 URL 자동 등록</h3>
+        <p className="text-xs text-gray-500 mb-3">쿠팡 상품 페이지 주소를 붙여넣으면 상품명·이미지·가격·카테고리·파트너스 링크를 자동으로 가져와 바로 등록합니다.</p>
+        <div className="flex gap-2 flex-col sm:flex-row">
+          <input
+            type="url"
+            value={coupangUrl}
+            onChange={(e) => setCoupangUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCoupangImport(); }}
+            placeholder="https://www.coupang.com/vp/products/... 또는 https://link.coupang.com/..."
+            className={inputCls}
+            disabled={fetching}
+          />
+          <button
+            type="button"
+            onClick={handleCoupangImport}
+            disabled={fetching}
+            className="shrink-0 bg-[#f97316] text-white border-none px-6 py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors disabled:opacity-50 font-[inherit]"
+          >
+            {fetching ? '가져오는 중...' : '⚡ 자동 등록'}
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-2">등록 후 아래 목록에서 별점·후기수 등을 수정할 수 있습니다.</p>
+      </div>
 
       {/* 상품 추가/수정 폼 */}
       <div ref={formRef} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">

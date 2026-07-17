@@ -46,6 +46,7 @@ Korean construction job listing website at `artifacts/geonseolup/`.
 - Job posting form (pending approval flow)
 - Admin panel with password auth (default: 1234), job management, pending approval, settings
 - 건설 추천템 shop (`/shop`): Coupang Partners product recommendations from Firestore `products` collection (13 categories, search, responsive card grid); admin CRUD tab (🛒 추천템) with image upload (client-resized ≤600px JPEG base64), order reorder via batch write. NOTE: requires Firestore rules to allow `products` collection. Header menu 정보/꿀팁 replaced by 건설 추천템 (/info routes still alive).
+- Coupang Open API auto-registration: admin pastes Coupang product URL → POST `/api/admin/coupang/product` (api-server, requireAdmin) resolves short links (host-allowlisted redirects, https-only), extracts productId, fetches name/image/price/category via search API (CEA HMAC signing with COUPANG_ACCESS_KEY/SECRET_KEY secrets), maps to shop category, returns partner tracking link (search API `productUrl` preferred; deeplink API fallback; never falls back to a non-partner link). Route: `artifacts/api-server/src/routes/coupang.ts`.
 
 ### Key Files
 - `src/App.tsx` — Router with pages

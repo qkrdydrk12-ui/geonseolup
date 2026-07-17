@@ -650,6 +650,7 @@ export interface Product {
   reviewCount: number;
   link: string;         // 쿠팡파트너스 링크
   image: string;        // base64 data URL 또는 이미지 URL
+  brand?: string;       // 브랜드 (쿠팡 API 자동 조회 시)
   order: number;        // 노출 순서 (낮을수록 먼저)
   hidden?: boolean;
   createdAt: string;
