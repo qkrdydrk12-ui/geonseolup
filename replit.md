@@ -45,6 +45,7 @@ Korean construction job listing website at `artifacts/geonseolup/`.
 - Job detail page with phone/SMS CTA
 - Job posting form (pending approval flow)
 - Admin panel with password auth (default: 1234), job management, pending approval, settings
+- 건설 추천템 shop (`/shop`): Coupang Partners product recommendations from Firestore `products` collection (13 categories, search, responsive card grid); admin CRUD tab (🛒 추천템) with image upload (client-resized ≤600px JPEG base64), order reorder via batch write. NOTE: requires Firestore rules to allow `products` collection. Header menu 정보/꿀팁 replaced by 건설 추천템 (/info routes still alive).
 
 ### Key Files
 - `src/App.tsx` — Router with pages

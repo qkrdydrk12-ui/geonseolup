@@ -9,6 +9,7 @@ import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
 import Contact from '@/pages/Contact';
 import Info from '@/pages/Info';
+import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
 import VisitorWidget from '@/components/VisitorWidget';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
@@ -150,6 +151,10 @@ function Router() {
       </Route>
       <Route path="/admin">
         <Admin />
+      </Route>
+      <Route path="/shop">
+        <Header />
+        <Shop />
       </Route>
       <Route path="/info">
         <Info />

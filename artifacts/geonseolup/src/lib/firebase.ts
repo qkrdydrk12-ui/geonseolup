@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   onSnapshot,
   runTransaction,
+  writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -31,6 +32,7 @@ const _app = initializeApp(FIREBASE_CONFIG);
 const _db = getFirestore(_app);
 
 const JOBS_COL = collection(_db, 'jobs');
+const PRODUCTS_COL = collection(_db, 'products');
 const PENDING_COL = collection(_db, 'pending');
 const SETTINGS_COL = collection(_db, 'settings');
 const LOGS_COL = collection(_db, 'reservationLogs');
@@ -635,3 +637,80 @@ export async function fbSetSetting(key: string, value: unknown): Promise<void> {
 }
 
 export { _db as db, JOBS_COL, PENDING_COL, SETTINGS_COL };
+
+// ── 건설 추천템 (쿠팡파트너스 상품) ──────────────────────────────────────────
+export const PRODUCT_CATEGORIES = ['안전화', '안전모', '작업복', '장갑', '공구', '측정기', '전동공구', '용접용품', '우의', '여름용품', '겨울용품', '차량용품', '기타'];
+
+export interface Product {
+  id: string;
+  name: string;
+  category: string;
+  price: number;        // 원 단위
+  rating: number;       // 0~5 (소수 허용)
+  reviewCount: number;
+  link: string;         // 쿠팡파트너스 링크
+  image: string;        // base64 data URL 또는 이미지 URL
+  order: number;        // 노출 순서 (낮을수록 먼저)
+  hidden?: boolean;
+  createdAt: string;
+}
+
+const PRODUCTS_CACHE_KEY = 'cj_products_cache';
+const PRODUCTS_CACHE_TTL = 10 * 60 * 1000; // 10분 — 방문자 Firestore 읽기 절약
+
+export async function fbLoadProducts(force = false): Promise<Product[]> {
+  if (!force) {
+    try {
+      const raw = localStorage.getItem(PRODUCTS_CACHE_KEY);
+      if (raw) {
+        const { ts, items } = JSON.parse(raw) as { ts: number; items: Product[] };
+        if (Date.now() - ts < PRODUCTS_CACHE_TTL && Array.isArray(items)) return items;
+      }
+    } catch { /* 캐시 파싱 실패 무시 */ }
+  }
+  try {
+    const snap = await getDocs(query(PRODUCTS_COL, orderBy('order', 'asc')));
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product));
+    try { localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify({ ts: Date.now(), items })); } catch { /* 용량 초과 무시 */ }
+    return items;
+  } catch (e) {
+    console.warn('[Firebase] fbLoadProducts failed:', e);
+    try {
+      const raw = localStorage.getItem(PRODUCTS_CACHE_KEY);
+      if (raw) return (JSON.parse(raw) as { items: Product[] }).items || [];
+    } catch { /* 무시 */ }
+    return [];
+  }
+}
+
+export function fbInvalidateProductsCache(): void {
+  try { localStorage.removeItem(PRODUCTS_CACHE_KEY); } catch { /* 무시 */ }
+}
+
+export async function fbAddProduct(p: Omit<Product, 'id'>): Promise<string> {
+  const clean = Object.fromEntries(
+    Object.entries({ ...p, _createdAt: serverTimestamp() }).filter(([, v]) => v !== undefined)
+  );
+  const ref = await addDoc(PRODUCTS_COL, clean);
+  fbInvalidateProductsCache();
+  return ref.id;
+}
+
+export async function fbUpdateProduct(id: string, p: Partial<Product>): Promise<void> {
+  const clean = Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined));
+  await updateDoc(doc(_db, 'products', id), clean);
+  fbInvalidateProductsCache();
+}
+
+export async function fbDeleteProduct(id: string): Promise<void> {
+  await deleteDoc(doc(_db, 'products', id));
+  fbInvalidateProductsCache();
+}
+
+/** 정렬된 상품 ID 배열대로 order를 1..N 재부여 (원자적 배치 쓰기) */
+export async function fbReorderProducts(orderedIds: string[]): Promise<void> {
+  const batch = writeBatch(_db);
+  orderedIds.forEach((id, i) => batch.update(doc(_db, 'products', id), { order: i + 1 }));
+  await batch.commit();
+  fbInvalidateProductsCache();
+}

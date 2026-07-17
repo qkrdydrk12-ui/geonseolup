@@ -32,6 +32,7 @@ import {
   toManStr, buildWageDisplayText,
   type SalaryCandidate, type ComplexSalaryResult,
 } from '@/lib/parseJob';
+import AdminProducts from '@/components/AdminProducts';
 import {
   getToken,
   setToken,
@@ -111,7 +112,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'settings' | 'stats';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'settings' | 'stats';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1277,6 +1278,7 @@ export default function Admin() {
               { key: 'add', label: '➕ 공고 등록' },
               { key: 'pending', label: `📥 신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
               { key: 'reports', label: `🚩 신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
+              { key: 'products', label: '🛒 추천템' },
               { key: 'stats', label: '📊 방문 통계' },
               { key: 'settings', label: '⚙️ 설정' },
             ] as { key: Tab; label: string }[]
@@ -2141,6 +2143,8 @@ export default function Admin() {
             )}
           </div>
         )}
+
+        {tab === 'products' && <AdminProducts showToast={showToast} />}
 
         {tab === 'pending' && (
           <div className="bg-white rounded-xl p-6 shadow-sm">
