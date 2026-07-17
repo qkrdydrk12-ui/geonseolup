@@ -4,7 +4,8 @@ description: Non-obvious behaviors of Coupang Partners deeplink/search APIs
 ---
 - Deeplink API often returns HTTP 200 with body `{"rCode":"400","rMessage":"url convert failed"}` for plain `www.coupang.com/vp/products/<id>` URLs — check rCode, not just HTTP status.
 - The product search API's `productUrl` is ALREADY a partner tracking link (link.coupang.com/re/AFFSDP with lptag). Prefer it over the deeplink API; never fall back to raw product URLs (no commission).
-- Search by `keyword=<productId>` works to look up a specific product; match `productId` in results.
+- Search by `keyword=<productId>` does NOT reliably find that product — it returns unrelated popular items. Only use results whose `productId` matches exactly; NEVER fall back to items[0] (caused wrong-product auto-registration).
+- Deeplink API converts full product URLs WITH `itemId` query param fine; plain `/vp/products/<id>` URLs fail with rCode 400. Keep query params when resolving short links.
 - CEA HMAC signing: signed-date format `yyMMdd'T'HHmmss'Z'` UTC; message = date+method+path+query.
 - `brandName` in search results is usually empty.
 

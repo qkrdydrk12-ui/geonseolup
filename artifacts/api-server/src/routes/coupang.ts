@@ -139,17 +139,32 @@ router.post("/admin/coupang/product", requireAdmin, async (req: Request, res: Re
       return;
     }
 
-    // 1) 상품번호로 검색 → 상품정보 (productUrl은 파트너스 추적 링크로 반환됨)
+    // 1) 상품번호로 검색 → 상품정보 (productUrl은 파트너스 추적 링크로 반환됨).
+    //    검색 API는 productId와 무관한 인기상품을 섞어 돌려주므로,
+    //    productId가 정확히 일치하는 결과만 사용한다 (엉뚱한 상품 자동등록 방지).
     const query = `keyword=${encodeURIComponent(productId)}&limit=10`;
     const sr = (await coupangGet(SEARCH_PATH, query)) as {
       data?: { productData?: SearchItem[] };
     };
     const items = sr.data?.productData ?? [];
-    const item = items.find((it) => String(it.productId) === productId) ?? items[0];
+    const item = items.find((it) => String(it.productId) === productId);
     if (!item) {
+      // 상품정보는 못 찾았지만 파트너스 링크는 만들어서 폼에 채워준다
+      let partnerLink = "";
+      try {
+        const dl = (await coupangPost(DEEPLINK_PATH, { coupangUrls: [resolved] })) as {
+          data?: Array<{ shortenUrl?: string; landingUrl?: string }>;
+        };
+        partnerLink = dl.data?.[0]?.shortenUrl || dl.data?.[0]?.landingUrl || "";
+      } catch (e) {
+        req.log.warn({ err: e }, "coupang deeplink failed (no search match)");
+      }
       res.status(404).json({
         ok: false,
-        message: "쿠팡 API에서 상품 정보를 찾지 못했습니다. 상품명·가격을 직접 입력해주세요.",
+        message: partnerLink
+          ? "상품 정보를 자동으로 가져오지 못했습니다. 파트너스 링크만 채워두었으니 상품명·가격·이미지를 직접 입력해주세요."
+          : "쿠팡 API에서 상품 정보를 찾지 못했습니다. 상품명·가격을 직접 입력해주세요.",
+        partnerLink,
       });
       return;
     }
