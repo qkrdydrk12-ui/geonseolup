@@ -171,10 +171,11 @@ export default function Header() {
           <div className="grid grid-cols-4 gap-1.5 sm:flex sm:items-center sm:gap-2 sm:shrink-0">
             <Link
               href="/shop"
-              className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
+              className="shop-sparkle relative overflow-hidden flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white no-underline border border-white/30 bg-white/15 transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
             >
-              <span>🛒</span>
+              <span className="shop-sparkle-icon">🛒</span>
               <span className="whitespace-nowrap">건설 추천템</span>
+              <span className="shop-sparkle-shine" aria-hidden="true"></span>
             </Link>
             <Link
               href="/post"

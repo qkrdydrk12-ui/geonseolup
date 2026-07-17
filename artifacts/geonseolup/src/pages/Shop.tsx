@@ -89,14 +89,15 @@ export default function Shop() {
 
   return (
     <div className="min-h-screen pb-16" style={{ background: '#eef2f7' }}>
-      <div className="max-w-[1100px] mx-auto px-3 pt-6">
+      <div className="max-w-[1100px] mx-auto px-3 pt-3">
+
+        <p className="text-center text-[11px] text-gray-400 leading-relaxed mb-4">
+          이 페이지의 링크는 쿠팡 파트너스 활동의 일환으로,<br className="sm:hidden" /> 이에 따른 일정액의 수수료를 제공받을 수 있습니다.
+        </p>
 
         <div className="text-center mb-5">
           <h1 className="text-2xl font-extrabold text-[#1e3a5f] mb-1.5">🛒 건설 추천템</h1>
           <p className="text-[13px] text-gray-500">현장에서 검증된 추천 장비·용품을 모았습니다</p>
-          <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
-            이 페이지의 링크는 쿠팡 파트너스 활동의 일환으로,<br className="sm:hidden" /> 이에 따른 일정액의 수수료를 제공받을 수 있습니다.
-          </p>
         </div>
 
         {/* 검색 */}

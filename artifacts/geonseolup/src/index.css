@@ -183,3 +183,33 @@
     to { opacity: 1; transform: translateY(0); }
   }
 }
+
+/* 건설 추천템 버튼 반짝 효과 */
+@keyframes shop-shine-sweep {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  18% { transform: translateX(250%) skewX(-20deg); }
+  100% { transform: translateX(250%) skewX(-20deg); }
+}
+@keyframes shop-icon-twinkle {
+  0%, 84%, 100% { filter: none; transform: scale(1); }
+  88% { filter: drop-shadow(0 0 4px rgba(255, 220, 120, 0.95)) brightness(1.35); transform: scale(1.18); }
+  92% { filter: drop-shadow(0 0 2px rgba(255, 220, 120, 0.6)) brightness(1.15); transform: scale(1.05); }
+  96% { filter: drop-shadow(0 0 5px rgba(255, 220, 120, 0.9)) brightness(1.3); transform: scale(1.12); }
+}
+.shop-sparkle-shine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  pointer-events: none;
+  animation: shop-shine-sweep 3.6s ease-in-out infinite;
+}
+.shop-sparkle-icon {
+  display: inline-block;
+  animation: shop-icon-twinkle 3.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-sparkle-shine, .shop-sparkle-icon { animation: none; }
+}
