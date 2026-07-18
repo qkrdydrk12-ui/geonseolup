@@ -11,6 +11,7 @@ description: Non-obvious behaviors of Coupang Partners deeplink/search APIs
 - Search API `limit` > 10 silently returns EMPTY productData (rCode 0, no error). Always use limit<=10.
 - Partners widget iframe embeds use `coupa.ng/{code}` — fetching coupa.ng directly returns 404, but `link.coupang.com/a/{code}` with the same code 302-redirects to the real product URL. The coupa.ng link itself IS the user's partner link, so it's a safe partnerLink fallback when search+deeplink fail.
 - Deeplink API fails ("url convert failed") for some specific products regardless of URL format (with/without itemId) — not convertible via API at all.
+- Search fails on full product titles with options ("우르오스 스킨워시, 500ml, 1개") — retry with progressively shortened keywords (strip after comma, drop trailing words).
 - Search API only covers a curated ad feed — many live products (e.g. niche safety shoes) never appear for any keyword. Best flow: search with admin-provided product-name keyword, match productId exactly; if absent, return deeplink-only partial so admin fills details manually.
 
 **Why:** deeplink failures were silent early on because the old code fell back to search productUrl, masking that deeplink never worked.

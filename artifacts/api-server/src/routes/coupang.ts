@@ -165,10 +165,22 @@ router.post("/admin/coupang/product", requireAdmin, async (req: Request, res: Re
     //    검색 API는 키워드와 무관한 인기상품을 섞어 돌려주므로,
     //    productId가 정확히 일치하는 결과만 사용한다 (엉뚱한 상품 자동등록 방지).
     //    상품번호 검색은 거의 못 찾으므로, 관리자가 준 상품명 키워드를 우선 사용.
-    const keywords = [
-      ...(keyword && keyword.trim() ? [keyword.trim()] : []),
-      productId,
-    ];
+    //    옵션이 붙은 상품명("우르오스 스킨워시, 500ml, 1개")은 검색이 안 되므로
+    //    쉼표 앞부분 등으로 점점 줄여가며 재시도한다.
+    const kwVariants: string[] = [];
+    const kw0 = (keyword ?? "").trim();
+    if (kw0) {
+      kwVariants.push(kw0);
+      const beforeComma = kw0.split(",")[0]?.trim();
+      if (beforeComma && beforeComma !== kw0) kwVariants.push(beforeComma);
+      // 뒤쪽 단어를 하나씩 떼며 최대 2단계 축약 (예: "A B C" → "A B")
+      let words = (beforeComma || kw0).split(/\s+/);
+      for (let i = 0; i < 2 && words.length > 2; i++) {
+        words = words.slice(0, -1);
+        kwVariants.push(words.join(" "));
+      }
+    }
+    const keywords = [...new Set([...kwVariants, productId])];
     let item: SearchItem | undefined;
     for (const kw of keywords) {
       // 주의: limit이 10을 넘으면 쿠팡 검색 API가 조용히 빈 결과를 반환한다
