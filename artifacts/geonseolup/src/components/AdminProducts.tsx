@@ -78,6 +78,22 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
     setForm((prev) => ({ ...prev, [key]: val }));
   }
 
+  /** 클립보드에 복사한 스크린샷/이미지를 붙여넣기(Ctrl+V)하면 바로 등록 */
+  function handleImagePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          void handleImageFile(file);
+        }
+        return;
+      }
+    }
+  }
+
   async function handleImageFile(file: File | undefined) {
     if (!file) return;
     if (!file.type.startsWith('image/')) { showToast('이미지 파일만 업로드할 수 있습니다'); return; }
@@ -209,7 +225,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
           </div>
           <div className="sm:col-span-2">
             <label className="block text-xs font-bold text-gray-600 mb-1">상품 이미지</label>
-            <div className="flex items-start gap-3 flex-wrap">
+            <div className="flex items-start gap-3 flex-wrap" onPaste={handleImagePaste}>
               <div className="w-24 h-24 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
                 {form.image
                   ? <img src={form.image} alt="미리보기" className="w-full h-full object-cover" />
@@ -226,7 +242,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
                     if (m?.[1]) v = m[1];
                   }
                   setField('image', v);
-                }} placeholder="또는 이미지 URL 직접 입력 (HTML 붙여넣기 가능)" className={inputCls} />
+                }} placeholder="이미지 URL 입력 또는 스크린샷 붙여넣기 (Ctrl+V)" className={inputCls} />
                 {form.image && (
                   <button type="button" onClick={() => setField('image', '')} className="self-start text-xs text-red-500 font-semibold bg-transparent border-none cursor-pointer p-0">이미지 제거</button>
                 )}
