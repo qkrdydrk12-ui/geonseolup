@@ -315,33 +315,6 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <div className="sm:col-span-2">
-            <label className="block text-xs font-bold text-gray-600 mb-1">상품명 *</label>
-            <input type="text" value={form.name} onChange={(e) => setField('name', e.target.value)} placeholder="예: K2 안전화 KV-609 6인치" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1">카테고리 *</label>
-            <select value={form.category} onChange={(e) => setField('category', e.target.value)} className={inputCls}>
-              {PRODUCT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1">가격 (원)</label>
-            <input type="text" inputMode="numeric" value={form.price} onChange={(e) => setField('price', e.target.value.replace(/[^0-9]/g, ''))} placeholder="예: 89000" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1">별점 (0~5)</label>
-            <input type="text" inputMode="decimal" value={form.rating} onChange={(e) => {
-              let v = e.target.value.replace(/[^0-9.]/g, '');
-              // 소수점 없이 6~50 입력 시 자동 변환 (예: 45 → 4.5, 50 → 5.0)
-              if (/^\d{2}$/.test(v) && Number(v) > 5 && Number(v) <= 50) v = `${v[0]}.${v[1]}`;
-              setField('rating', v);
-            }} placeholder="예: 4.7 (45 입력 시 4.5로 자동 변환)" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1">후기 수</label>
-            <input type="text" inputMode="numeric" value={form.reviewCount} onChange={(e) => setField('reviewCount', e.target.value.replace(/[^0-9]/g, ''))} placeholder="예: 1234" className={inputCls} />
-          </div>
-          <div className="sm:col-span-2">
             <label className="block text-xs font-bold text-gray-600 mb-1">쿠팡파트너스 링크</label>
             <input type="url" value={form.link} onChange={(e) => setField('link', e.target.value)} placeholder="https://link.coupang.com/a/..." className={inputCls} />
           </div>
@@ -370,6 +343,33 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
                 )}
               </div>
             </div>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-gray-600 mb-1">상품명 *</label>
+            <input type="text" value={form.name} onChange={(e) => setField('name', e.target.value)} placeholder="예: K2 안전화 KV-609 6인치" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">카테고리 *</label>
+            <select value={form.category} onChange={(e) => setField('category', e.target.value)} className={inputCls}>
+              {PRODUCT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">가격 (원)</label>
+            <input type="text" inputMode="numeric" value={form.price} onChange={(e) => setField('price', e.target.value.replace(/[^0-9]/g, ''))} placeholder="예: 89000" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">별점 (0~5)</label>
+            <input type="text" inputMode="decimal" value={form.rating} onChange={(e) => {
+              let v = e.target.value.replace(/[^0-9.]/g, '');
+              // 소수점 없이 6~50 입력 시 자동 변환 (예: 45 → 4.5, 50 → 5.0)
+              if (/^\d{2}$/.test(v) && Number(v) > 5 && Number(v) <= 50) v = `${v[0]}.${v[1]}`;
+              setField('rating', v);
+            }} placeholder="예: 4.7 (45 입력 시 4.5로 자동 변환)" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">후기 수</label>
+            <input type="text" inputMode="numeric" value={form.reviewCount} onChange={(e) => setField('reviewCount', e.target.value.replace(/[^0-9]/g, ''))} placeholder="예: 1234" className={inputCls} />
           </div>
         </div>
         <div className="flex gap-2 mt-4">
