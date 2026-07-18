@@ -639,7 +639,7 @@ export async function fbSetSetting(key: string, value: unknown): Promise<void> {
 export { _db as db, JOBS_COL, PENDING_COL, SETTINGS_COL };
 
 // ── 건설 추천템 (쿠팡파트너스 상품) ──────────────────────────────────────────
-export const PRODUCT_CATEGORIES = ['안전화', '안전모', '작업복', '장갑', '공구', '측정기', '전동공구', '용접용품', '우의', '여름용품', '겨울용품', '차량용품', '기타'];
+export const PRODUCT_CATEGORIES = ['안전화', '작업복', '장갑', '전동공구', '용접용품', '우의', '여름용품', '겨울용품', '차량용품', '생활물품', '기타'];
 
 export interface Product {
   id: string;
