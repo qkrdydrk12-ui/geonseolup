@@ -116,17 +116,29 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
     setForm(EMPTY_FORM);
   }
 
+  /** 붙여넣은 파트너스 HTML에서 이미지·상품명 추출 (배너 <a><img> 형식) */
+  function extractFromEmbed(raw: string): { image: string; name: string } {
+    let image = '';
+    let name = '';
+    const img = raw.match(/<img[^>]*src\s*=\s*["']([^"']+coupangcdn\.com[^"']*)["'][^>]*>/i);
+    if (img?.[1]) image = img[1];
+    const alt = raw.match(/alt\s*=\s*["']([^"']+)["']/i);
+    if (alt?.[1]) name = alt[1];
+    return { image, name };
+  }
+
   /** 쿠팡 URL → API 조회 → 자동 등록 */
   async function handleCoupangImport() {
     const url = coupangUrl.trim();
     if (!url) { showToast('쿠팡 상품 URL을 붙여넣어 주세요'); return; }
     if (!/coupang\.com|coupa\.ng/i.test(url)) { showToast('쿠팡(coupang.com·coupa.ng) 상품 링크만 등록할 수 있습니다'); return; }
+    const embed = extractFromEmbed(url);
     setFetching(true);
     try {
       const res = await fetch('/api/admin/coupang/product', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() || ''}` },
-        body: JSON.stringify({ url, keyword: coupangKeyword.trim() || undefined }),
+        body: JSON.stringify({ url, keyword: coupangKeyword.trim() || embed.name || undefined }),
       });
       const data = (await res.json()) as {
         ok: boolean;
@@ -139,9 +151,10 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
           setForm((prev) => ({
             ...prev,
             link: data.partnerLink || '',
-            name: prev.name || coupangKeyword.trim(),
+            name: prev.name || embed.name || coupangKeyword.trim(),
+            image: prev.image || embed.image,
           }));
-          showToast(`${data.message || '상품 조회 실패'} (파트너스 링크는 폼에 채워뒀습니다)`);
+          showToast(`${data.message || '상품 조회 실패'} (파트너스 링크${embed.image ? '·이미지' : ''}는 폼에 채워뒀습니다)`);
         } else {
           showToast(data.message || '❌ 상품 조회에 실패했습니다');
         }
@@ -156,7 +169,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
         rating: 0,
         reviewCount: 0,
         link: p.link,
-        image: p.image || '',
+        image: p.image || embed.image || '',
         brand: p.brand || '',
         order: maxOrder + 1,
         hidden: false,
@@ -342,7 +355,15 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
               <div className="flex-1 min-w-[200px] flex flex-col gap-2">
                 <input ref={fileRef} type="file" accept="image/*" onChange={(e) => handleImageFile(e.target.files?.[0])} className="text-xs" />
                 {imgBusy && <span className="text-xs text-gray-400">이미지 처리 중...</span>}
-                <input type="url" value={form.image.startsWith('data:') ? '' : form.image} onChange={(e) => setField('image', e.target.value)} placeholder="또는 이미지 URL 직접 입력" className={inputCls} />
+                <input type="text" value={form.image.startsWith('data:') ? '' : form.image} onChange={(e) => {
+                  let v = e.target.value;
+                  // HTML 임베드 코드를 붙여넣으면 이미지 주소만 추출
+                  if (v.includes('<')) {
+                    const m = v.match(/<img[^>]*src\s*=\s*["']([^"']+)["']/i);
+                    if (m?.[1]) v = m[1];
+                  }
+                  setField('image', v);
+                }} placeholder="또는 이미지 URL 직접 입력 (HTML 붙여넣기 가능)" className={inputCls} />
                 {form.image && (
                   <button type="button" onClick={() => setField('image', '')} className="self-start text-xs text-red-500 font-semibold bg-transparent border-none cursor-pointer p-0">이미지 제거</button>
                 )}

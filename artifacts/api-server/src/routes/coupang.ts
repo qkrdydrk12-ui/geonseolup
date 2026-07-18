@@ -69,8 +69,12 @@ function parseCoupangUrl(raw: string): URL | null {
  *    (coupa.ng 직접 접근은 404지만 link.coupang.com/a/는 같은 코드로 리다이렉트됨) */
 function normalizeInput(raw: string): string {
   let s = raw.trim();
-  const src = s.match(/src\s*=\s*["']([^"']+)["']/i);
-  if (src?.[1]) s = src[1];
+  if (s.includes("<")) {
+    // HTML 임베드 코드: href/src 속성의 URL 중 쿠팡 링크(이미지 CDN 제외)를 선택
+    const urls = [...s.matchAll(/(?:href|src)\s*=\s*["']([^"']+)["']/gi)].map((m) => m[1] ?? "");
+    const pick = urls.find((u) => /^https?:\/\/(link\.coupang\.com|coupa\.ng|www\.coupang\.com|m\.coupang\.com)\//i.test(u));
+    if (pick) s = pick;
+  }
   const cn = s.match(/^https?:\/\/coupa\.ng\/([A-Za-z0-9]+)/);
   if (cn?.[1]) s = `https://link.coupang.com/a/${cn[1]}`;
   return s;
