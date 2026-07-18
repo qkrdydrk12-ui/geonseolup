@@ -63,6 +63,19 @@ function parseCoupangUrl(raw: string): URL | null {
   }
 }
 
+/** 관리자 입력 정규화:
+ *  - iframe 임베드 HTML이 붙여넣어지면 src에서 URL 추출
+ *  - coupa.ng/{code} 위젯 단축링크는 link.coupang.com/a/{code}로 변환
+ *    (coupa.ng 직접 접근은 404지만 link.coupang.com/a/는 같은 코드로 리다이렉트됨) */
+function normalizeInput(raw: string): string {
+  let s = raw.trim();
+  const src = s.match(/src\s*=\s*["']([^"']+)["']/i);
+  if (src?.[1]) s = src[1];
+  const cn = s.match(/^https?:\/\/coupa\.ng\/([A-Za-z0-9]+)/);
+  if (cn?.[1]) s = `https://link.coupang.com/a/${cn[1]}`;
+  return s;
+}
+
 function extractProductId(url: string): string | null {
   const m = url.match(/\/vp\/products\/(\d+)/) || url.match(/[?&]pageKey=(\d+)/);
   return m ? m[1] ?? null : null;
@@ -124,11 +137,18 @@ router.post("/admin/coupang/product", requireAdmin, async (req: Request, res: Re
       return;
     }
     const { url, keyword } = req.body as { url?: string; keyword?: string };
-    const parsed = url ? parseCoupangUrl(url.trim()) : null;
+    const parsed = url ? parseCoupangUrl(normalizeInput(url)) : null;
     if (!parsed) {
-      res.status(400).json({ ok: false, message: "쿠팡 상품 URL을 입력해주세요 (https://www.coupang.com 또는 link.coupang.com 링크만 가능)" });
+      res.status(400).json({ ok: false, message: "쿠팡 상품 URL을 입력해주세요 (coupang.com·link.coupang.com·coupa.ng 링크 또는 파트너스 iframe HTML 가능)" });
       return;
     }
+
+    // 입력이 이미 파트너스 단축링크(link.coupang.com/a/…, coupa.ng 변환 포함)라면
+    // API 조회가 실패해도 그 링크 자체를 파트너스 링크로 쓸 수 있다.
+    const inputPartnerLink =
+      parsed.hostname === "link.coupang.com" && parsed.pathname.startsWith("/a/")
+        ? parsed.toString()
+        : "";
 
     const resolved = await resolveUrl(parsed.toString());
     const productId = extractProductId(resolved);
@@ -167,6 +187,7 @@ router.post("/admin/coupang/product", requireAdmin, async (req: Request, res: Re
       } catch (e) {
         req.log.warn({ err: e }, "coupang deeplink failed (no search match)");
       }
+      if (!partnerLink) partnerLink = inputPartnerLink;
       res.status(404).json({
         ok: false,
         message: partnerLink
@@ -191,6 +212,7 @@ router.post("/admin/coupang/product", requireAdmin, async (req: Request, res: Re
         req.log.warn({ err: e }, "coupang deeplink failed");
       }
     }
+    if (!partnerLink) partnerLink = inputPartnerLink;
     if (!partnerLink) {
       res.status(502).json({
         ok: false,

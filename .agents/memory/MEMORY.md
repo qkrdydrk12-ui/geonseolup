@@ -3,4 +3,4 @@
 - [Geonseolup Firestore 쿼터 소진](geonseolup-firestore-quota.md) — 클라 스케줄러가 모든 방문자에서 전체조회+구독→429로 발행 중단. 백그라운드 작업은 서버/관리자 세션 한정으로.
 - [parseJob 파싱 회귀 테스트](parse-testing.md) — 파싱 버그는 tsx 스텁 하니스로 원문 재현 후 수정; 급여 오인식은 대개 NOISE_PATS 누락이 원인.
 - [Firestore rules gate new collections](firestore-rules.md) — geonseolup rules whitelist collections; new ones are 403 until user edits rules in Firebase console.
-- [Coupang Partners API quirks](coupang-partners-api.md) — deeplink returns 200+rCode 400 for plain URLs; search productUrl is already a tracking link, prefer it.
+- [Coupang Partners API quirks](coupang-partners-api.md) — deeplink 200+rCode 400 quirk; search limit≤10, curated feed; coupa.ng↔link.coupang.com/a 매핑; partner-link-or-fail 원칙.

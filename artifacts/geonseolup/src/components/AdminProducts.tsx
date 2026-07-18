@@ -120,7 +120,7 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
   async function handleCoupangImport() {
     const url = coupangUrl.trim();
     if (!url) { showToast('쿠팡 상품 URL을 붙여넣어 주세요'); return; }
-    if (!/coupang\.com/i.test(url)) { showToast('쿠팡(coupang.com) 상품 링크만 등록할 수 있습니다'); return; }
+    if (!/coupang\.com|coupa\.ng/i.test(url)) { showToast('쿠팡(coupang.com·coupa.ng) 상품 링크만 등록할 수 있습니다'); return; }
     setFetching(true);
     try {
       const res = await fetch('/api/admin/coupang/product', {
@@ -263,11 +263,11 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
         <p className="text-xs text-gray-500 mb-3">쿠팡 상품 페이지 주소를 붙여넣으면 상품명·이미지·가격·카테고리·파트너스 링크를 자동으로 가져와 바로 등록합니다. 상품명 키워드를 함께 입력하면 자동 조회 성공률이 크게 올라갑니다.</p>
         <div className="flex gap-2 flex-col">
           <input
-            type="url"
+            type="text"
             value={coupangUrl}
             onChange={(e) => setCoupangUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleCoupangImport(); }}
-            placeholder="https://www.coupang.com/vp/products/... 또는 https://link.coupang.com/..."
+            placeholder="쿠팡 상품 URL, coupa.ng 링크 또는 파트너스 iframe HTML 붙여넣기"
             className={inputCls}
             disabled={fetching}
           />
