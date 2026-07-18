@@ -316,7 +316,12 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">별점 (0~5)</label>
-            <input type="text" inputMode="decimal" value={form.rating} onChange={(e) => setField('rating', e.target.value.replace(/[^0-9.]/g, ''))} placeholder="예: 4.7" className={inputCls} />
+            <input type="text" inputMode="decimal" value={form.rating} onChange={(e) => {
+              let v = e.target.value.replace(/[^0-9.]/g, '');
+              // 소수점 없이 6~50 입력 시 자동 변환 (예: 45 → 4.5, 50 → 5.0)
+              if (/^\d{2}$/.test(v) && Number(v) > 5 && Number(v) <= 50) v = `${v[0]}.${v[1]}`;
+              setField('rating', v);
+            }} placeholder="예: 4.7 (45 입력 시 4.5로 자동 변환)" className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">후기 수</label>
