@@ -64,9 +64,6 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
   const [imgBusy, setImgBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
-  const [coupangUrl, setCoupangUrl] = useState('');
-  const [coupangKeyword, setCoupangKeyword] = useState('');
-  const [fetching, setFetching] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -114,77 +111,6 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
   function cancelEdit() {
     setEditingId(null);
     setForm(EMPTY_FORM);
-  }
-
-  /** 붙여넣은 파트너스 HTML에서 이미지·상품명 추출 (배너 <a><img> 형식) */
-  function extractFromEmbed(raw: string): { image: string; name: string } {
-    let image = '';
-    let name = '';
-    const img = raw.match(/<img[^>]*src\s*=\s*["']([^"']+coupangcdn\.com[^"']*)["'][^>]*>/i);
-    if (img?.[1]) image = img[1];
-    const alt = raw.match(/alt\s*=\s*["']([^"']+)["']/i);
-    if (alt?.[1]) name = alt[1];
-    return { image, name };
-  }
-
-  /** 쿠팡 URL → API 조회 → 자동 등록 */
-  async function handleCoupangImport() {
-    const url = coupangUrl.trim();
-    if (!url) { showToast('쿠팡 상품 URL을 붙여넣어 주세요'); return; }
-    if (!/coupang\.com|coupa\.ng/i.test(url)) { showToast('쿠팡(coupang.com·coupa.ng) 상품 링크만 등록할 수 있습니다'); return; }
-    const embed = extractFromEmbed(url);
-    setFetching(true);
-    try {
-      const res = await fetch('/api/admin/coupang/product', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() || ''}` },
-        body: JSON.stringify({ url, keyword: coupangKeyword.trim() || embed.name || undefined }),
-      });
-      const data = (await res.json()) as {
-        ok: boolean;
-        message?: string;
-        partnerLink?: string;
-        product?: { name: string; price: number; image: string; brand: string; category: string; link: string };
-      };
-      if (!res.ok || !data.ok || !data.product) {
-        // 조회 실패 시에도 키워드/배너에서 얻은 상품명·이미지·링크는 폼에 채워준다
-        setForm((prev) => ({
-          ...prev,
-          link: data.partnerLink || prev.link,
-          name: coupangKeyword.trim() || embed.name || prev.name,
-          image: prev.image || embed.image,
-        }));
-        if (data.partnerLink) {
-          showToast(`${data.message || '상품 조회 실패'} (파트너스 링크${embed.image ? '·이미지' : ''}·상품명은 폼에 채워뒀습니다)`);
-        } else {
-          showToast(data.message || '❌ 상품 조회에 실패했습니다');
-        }
-        return;
-      }
-      const p = data.product;
-      const maxOrder = products.reduce((mx, x) => Math.max(mx, x.order ?? 0), 0);
-      await fbAddProduct({
-        name: p.name,
-        category: p.category,
-        price: p.price || 0,
-        rating: 0,
-        reviewCount: 0,
-        link: p.link,
-        image: p.image || embed.image || '',
-        brand: p.brand || '',
-        order: maxOrder + 1,
-        hidden: false,
-        createdAt: new Date().toISOString(),
-      });
-      setCoupangUrl('');
-      setCoupangKeyword('');
-      showToast(`✅ "${p.name.slice(0, 20)}${p.name.length > 20 ? '…' : ''}" 자동 등록 완료`);
-      await reload();
-    } catch {
-      showToast('❌ 쿠팡 상품 조회에 실패했습니다');
-    } finally {
-      setFetching(false);
-    }
   }
 
   async function handleSave() {
@@ -270,43 +196,6 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
 
   return (
     <div className="flex flex-col gap-5">
-
-      {/* 쿠팡 URL 자동 등록 */}
-      <div className="bg-white rounded-2xl shadow-sm border-2 border-orange-200 p-5">
-        <h3 className="text-sm font-extrabold text-gray-700 mb-1.5">🔗 쿠팡 URL 자동 등록</h3>
-        <p className="text-xs text-gray-500 mb-3">쿠팡 상품 페이지 주소를 붙여넣으면 상품명·이미지·가격·카테고리·파트너스 링크를 자동으로 가져와 바로 등록합니다. 상품명 키워드를 함께 입력하면 자동 조회 성공률이 크게 올라갑니다.</p>
-        <div className="flex gap-2 flex-col">
-          <input
-            type="text"
-            value={coupangUrl}
-            onChange={(e) => setCoupangUrl(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleCoupangImport(); }}
-            placeholder="쿠팡 상품 URL, coupa.ng 링크 또는 파트너스 iframe HTML 붙여넣기"
-            className={inputCls}
-            disabled={fetching}
-          />
-          <div className="flex gap-2 flex-col sm:flex-row">
-          <input
-            type="text"
-            value={coupangKeyword}
-            onChange={(e) => setCoupangKeyword(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleCoupangImport(); }}
-            placeholder="상품명 키워드 (권장, 예: K2 안전화 6인치)"
-            className={inputCls}
-            disabled={fetching}
-          />
-          <button
-            type="button"
-            onClick={handleCoupangImport}
-            disabled={fetching}
-            className="shrink-0 bg-[#f97316] text-white border-none px-6 py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors disabled:opacity-50 font-[inherit]"
-          >
-            {fetching ? '가져오는 중...' : '⚡ 자동 등록'}
-          </button>
-          </div>
-        </div>
-        <p className="text-[11px] text-gray-400 mt-2">등록 후 아래 목록에서 별점·후기수 등을 수정할 수 있습니다.</p>
-      </div>
 
       {/* 상품 추가/수정 폼 */}
       <div ref={formRef} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
