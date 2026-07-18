@@ -765,10 +765,19 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   const cleanText = text.replace(/[^\uAC00-\uD7A30-9A-Za-z]/g, '');
   const plineM = cleanText.match(/P([1-6])/i);
   const line = plineM ? `P${plineM[1]}` : '';
-  if (cleanText.includes('평택') || cleanText.includes('고덕') || line) {
+  // P라인 번호만으로는 삼성 반도체로 단정하지 않음 (해시태그 "#P4" 등 오탐 방지)
+  // 반드시 평택/고덕 또는 삼성·반도체 문맥이 함께 있어야 함
+  if (cleanText.includes('평택') || cleanText.includes('고덕') || (line && /삼성|반도체/.test(cleanText))) {
     r.region = '경기';
     r.site = '삼성 반도체';
     if (line) r.line = line;
+  }
+
+  // ── "현 장 : XXX" 라벨 명시값 최우선 (라벨 글자 사이 공백 허용) ──
+  const siteLabelM = text.match(/현\s*장\s*(?:명)?\s*[:：]\s*(.+)/);
+  if (siteLabelM) {
+    const v = stripEmoji(siteLabelM[1]).replace(/\(.*?\)/g, '').trim();
+    if (v) r.site = v;
   }
 
   // ── 지역: 해외 키워드 최우선 → 도시명 → 광역시/도 직접 ──
@@ -835,6 +844,17 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   }
   if (firstJob) r.job = firstJob.job;
 
+  // 1.5) "직 종 : XXX" 라벨 명시값이 있으면 최우선 (라벨 글자 사이 공백 허용)
+  //      값 안에 알려진 직종이 있으면 그 직종으로, 없으면 값 그대로 사용 (예: 안전감시단)
+  const jobLabelM = text.match(/직\s*종\s*[:：]\s*(.+)/);
+  if (jobLabelM) {
+    const val = stripEmoji(jobLabelM[1]).replace(/\(.*?\)/g, '').trim();
+    if (val) {
+      const known = [...JOBS, ...WELD_SUBS_SAFE].find((j) => j !== '기타' && val.includes(j));
+      r.job = known ?? val;
+    }
+  }
+
   // "자동용접" / "자동 용접" / "용접 자동" / "용접:자동" / "용접종류 자동" / "자동용접사" 감지
   // → 직종 드롭다운은 '용접'으로 두고 weldSub만 '자동'으로 설정
   //   (관리자 폼 JOBS 옵션에 '자동'이 없어서 드롭다운이 비어 보이는 버그 회피)
@@ -847,7 +867,14 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   //    반드시 "화기감시"·"화재감시"·"안전감시"·"감시자" 같은 직종 명사가 들어있어야 함
   //    (예전 `/화재|화기|감시/` 는 본문에 우연히 "감시"만 있어도 잘못 덮어써서 버그)
   //    그리고 JOBS 매칭이 이미 다른 직종(배관·조공 등)을 잡았으면 덮어쓰지 않음
-  if (!r.job && /화기\s*감시(?:자)?|화재\s*감시(?:자)?|안전\s*감시(?:자)?|감시자/.test(text)) {
+  if (!r.job && /화기\s*감시(?:자|단|원)?|화재\s*감시(?:자|단|원)?/.test(text)) {
+    r.job = '화기감시자';
+  }
+  // 안전감시단/안전감시자는 화기감시자와 다른 직종 — 값 그대로 사용
+  if (!r.job && /안전\s*감시(?:단|자|원)?/.test(text)) {
+    r.job = '안전감시단';
+  }
+  if (!r.job && /감시자/.test(text)) {
     r.job = '화기감시자';
   }
   // 안전시설반 변형 표현 정규화 (공백 포함, 다양한 접미사 모두 "안전시설반"으로 통합)
@@ -901,13 +928,13 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   if (mgrM) r.manager = stripEmoji(mgrM[1]);
 
   // ── 회사명 ──
-  for (const pat of [/(?:회사|업체명|업체|회사명)\s*[:：]\s*(.+)/, /회사[:：](.+)/]) {
+  for (const pat of [/(?:회\s*사\s*명?|업\s*체\s*명?)\s*[:：]\s*(.+)/, /회사[:：](.+)/]) {
     const m = text.match(pat);
     if (m) { r.company = m[1].trim(); break; }
   }
 
   // ── 모집인원 ──
-  const hcM = text.match(/(?:모집인원|인원)\s*[:：]?\s*(.+)/);
+  const hcM = text.match(/(?:모\s*집\s*인\s*원|인\s*원)\s*[:：]\s*(.+)/) || text.match(/(?:모집인원|인원)\s*[:：]?\s*(.+)/);
   if (hcM) r.headcount = hcM[1].replace(/\(.*?\)/g, '').trim();
   else {
     const hcAuto = text.match(/(?:남녀?|여성?|남성?)?(?:조공|기공|기사|용접사|배관공)?\s*\d+\s*명/);
@@ -973,7 +1000,9 @@ function generateSEOTitle(p: Partial<Job>): string {
   parts.push('모집');
   const wage = p.dailyWage || p.salaryNum;
   if (wage && wage >= 100000) {
-    parts.push(`일${toManStr(wage)}`);
+    // 월급 공고(급여 텍스트가 "월…"이거나 일당 없이 100만원 이상)는 "월N만"으로 표기
+    const isMonthly = (p.salary ?? '').trim().startsWith('월') || (!p.dailyWage && wage >= 1000000);
+    parts.push(`${isMonthly ? '월' : '일'}${toManStr(wage)}`);
     if (p.extraPay && p.extraPay > 0) parts.push(`+${toManStr(p.extraPay)}`);
   }
   if (p.lodging === '숙박제공') parts.push('숙박O');
