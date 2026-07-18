@@ -147,14 +147,15 @@ export default function AdminProducts({ showToast }: { showToast: (msg: string) 
         product?: { name: string; price: number; image: string; brand: string; category: string; link: string };
       };
       if (!res.ok || !data.ok || !data.product) {
+        // 조회 실패 시에도 키워드/배너에서 얻은 상품명·이미지·링크는 폼에 채워준다
+        setForm((prev) => ({
+          ...prev,
+          link: data.partnerLink || prev.link,
+          name: coupangKeyword.trim() || embed.name || prev.name,
+          image: prev.image || embed.image,
+        }));
         if (data.partnerLink) {
-          setForm((prev) => ({
-            ...prev,
-            link: data.partnerLink || '',
-            name: prev.name || embed.name || coupangKeyword.trim(),
-            image: prev.image || embed.image,
-          }));
-          showToast(`${data.message || '상품 조회 실패'} (파트너스 링크${embed.image ? '·이미지' : ''}는 폼에 채워뒀습니다)`);
+          showToast(`${data.message || '상품 조회 실패'} (파트너스 링크${embed.image ? '·이미지' : ''}·상품명은 폼에 채워뒀습니다)`);
         } else {
           showToast(data.message || '❌ 상품 조회에 실패했습니다');
         }
