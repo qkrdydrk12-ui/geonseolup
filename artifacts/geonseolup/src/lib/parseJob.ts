@@ -774,7 +774,7 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   }
 
   // ── "현 장 : XXX" 라벨 명시값 최우선 (라벨 글자 사이 공백 허용) ──
-  const siteLabelM = text.match(/현\s*장\s*(?:명)?\s*[:：]\s*(.+)/);
+  const siteLabelM = text.match(/현\s*장\s*(?:명)?\s*(?:\(.*?\))?\s*[:：]\s*(.+)/);
   if (siteLabelM) {
     const v = stripEmoji(siteLabelM[1]).replace(/\(.*?\)/g, '').trim();
     if (v) r.site = v;
@@ -846,12 +846,14 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
 
   // 1.5) "직 종 : XXX" 라벨 명시값이 있으면 최우선 (라벨 글자 사이 공백 허용)
   //      값 안에 알려진 직종이 있으면 그 직종으로, 없으면 값 그대로 사용 (예: 안전감시단)
-  const jobLabelM = text.match(/직\s*종\s*[:：]\s*(.+)/);
+  const jobLabelM = text.match(/(?:직\s*종|업\s*무|담당\s*업무)\s*[:：]\s*(.+)/);
   if (jobLabelM) {
     const val = stripEmoji(jobLabelM[1]).replace(/\(.*?\)/g, '').trim();
     if (val) {
       const known = [...JOBS, ...WELD_SUBS_SAFE].find((j) => j !== '기타' && val.includes(j));
-      r.job = known ?? val;
+      // "안전관리자"는 안전담당자로 통합
+      if (!known && /안전\s*관리자?/.test(val)) r.job = '안전담당자';
+      else r.job = known ?? val;
     }
   }
 
@@ -906,6 +908,26 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
     }
   }
 
+  // ── 급여 fallback: "급여 : 350 ~ 500" 처럼 단위 없는 만원 단위 표기 ──
+  //    100~999 범위 숫자는 월급 만원 단위로 해석 (예: 350 → 월 350만원)
+  if (!r.salary) {
+    const gm = text.match(/급\s*여\s*[:：]\s*([0-9,]{2,7})(?:\s*[~\-]\s*([0-9,]{2,7}))?\s*(만\s*원?)?/);
+    if (gm) {
+      const n1 = parseInt(gm[1].replace(/,/g, ''), 10);
+      const n2 = gm[2] ? parseInt(gm[2].replace(/,/g, ''), 10) : 0;
+      const isMan = !!gm[3] || (n1 >= 100 && n1 <= 999);
+      if (isMan && n1 >= 100 && n1 <= 999) {
+        // 만원 단위 월급 (범위면 하한 기준)
+        r.salary = n2 ? `월 ${n1}~${n2}만원` : `월 ${n1}만원`;
+        r.salaryNum = n1 * 10000;
+        r._salaryCalc = n2 ? `월급 범위 ${n1}만~${n2}만원 감지 (하한 기준)` : `월급 ${n1}만원 감지`;
+      } else if (n1 >= 100000) {
+        r.salary = n2 ? `${n1.toLocaleString()}~${n2.toLocaleString()}원` : `${n1.toLocaleString()}원`;
+        r.salaryNum = n1;
+      }
+    }
+  }
+
   // ── 전화번호 (이모지/특수문자 제거, 구분자 유무·연속 숫자·문맥 추론 모두 지원) ──
   const phoneResult = extractPhones(text);
   if (phoneResult.main) {
@@ -948,9 +970,9 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
     r.meal = '식사제공';
     r.lodging = '숙박제공';
   } else {
-    if (/식사\s*제공|식 제공|식대\s*제공/.test(text)) r.meal = '식사제공';
+    if (/식사\s*제공|식 제공|식대\s*제공|식사\s*[:：]\s*(?:지원|제공|O|o)/.test(text)) r.meal = '식사제공';
   }
-  if (/숙[소박]\s*[Oo제]|숙박제공|숙소O/.test(text)) r.lodging = '숙박제공';
+  if (/숙[소박]\s*[Oo제]|숙박제공|숙소O|숙소\s*[:：]\s*(?:지원|제공|O|o)/.test(text)) r.lodging = '숙박제공';
   // 기숙사 제공/사용 가능 → 숙박제공 (단, "불가/없음/X" 인접 시 제외)
   if (/기숙사(?![^\n]{0,8}(?:불가|없|X|x|✕|❌))/.test(text)) r.lodging = '숙박제공';
   // 키워드 없으면 협의로 기본값 설정
@@ -958,7 +980,8 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   if (!r.lodging) r.lodging = '협의';
 
   // ── 나이 제한 ──
-  const ageRangeM = text.match(/(\d+)\s*세?\s*[~\-~]\s*(\d+)\s*세/);
+  const ageRangeM = text.match(/(\d+)\s*세?\s*[~\-~]\s*(\d+)\s*세/)
+    || text.match(/(?:나이|연령)\s*(?:제한)?\s*[:：]?\s*(\d{2})\s*[~\-~]\s*(\d{2})/);
   if (ageRangeM) r.ageLimit = `${ageRangeM[1]}~${ageRangeM[2]}세`;
   else {
     const ageTilM = text.match(/(\d+)\s*세\s*(?:까지|이하|미만)/);
