@@ -242,6 +242,7 @@ export default function Admin() {
   // ── 고속 등록 UX ──────────────────────────────────────────────────────────
   const parseTextareaRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const autoQuadInFlightRef = useRef(false);
   const [dupWarning, setDupWarning] = useState<string | null>(null);
   const [acHistory, setAcHistory] = useState<{ companies: string[]; sites: string[]; contacts: string[] }>(() => {
     try { return JSON.parse(localStorage.getItem('cj_ac_history') || '{"companies":[],"sites":[],"contacts":[]}'); }
@@ -678,6 +679,106 @@ export default function Admin() {
     }
   }
 
+  // ── Ctrl+Q: 4회 자동 발행 (즉시 1회 + 새벽 05:30 / 정오 11:00 / 저녁 20:00 예약 3회) ──
+  async function handleAutoQuadPublish() {
+    // 중복 실행 방지: ref 기반 락 (stale closure에서도 안전)
+    if (autoQuadInFlightRef.current || submitting) return;
+    if (!form.title?.trim() || !form.region || !form.job) {
+      showToast('⚠️ 필수 항목을 입력해주세요 (제목·지역·직종)');
+      return;
+    }
+    autoQuadInFlightRef.current = true;
+    setSubmitting(true);
+    try {
+      // 안전망: contact가 비었는데 원문에 010 번호가 있으면 자동 보강
+      let safeContact = form.contact || '';
+      if (!safeContact.trim() && form.originalText) {
+        const rescued = extractPhones(form.originalText).main;
+        if (rescued) safeContact = rescued;
+      }
+      const baseJob: Omit<Job, 'id'> = {
+        ...(form as Omit<Job, 'id'>),
+        contact: safeContact,
+        salaryNum: parseSalaryNum(form.salary || ''),
+        date: new Date().toISOString(),
+        hidden: false,
+        repeatDays,
+        retryCount: 0,
+        dispatchMode: 'manual' as const,
+      };
+
+      // 1) 즉시 발행 — 완료 확인 후 다음 단계 진행
+      showToast('⚡ 4회 자동 발행 시작 — 1/4 즉시 발행 중…');
+      const firstId = await fbAddJob(baseJob);
+      console.log('[AutoQuad] 1/4 즉시 발행 완료, id:', firstId);
+
+      // 2~4) 새벽 05:30 → 정오 11:00 → 저녁 20:00 순차 예약
+      const slots: { h: number; m: number; label: '새벽' | '정오' | '저녁'; emoji: string }[] = [
+        { h: 5, m: 30, label: '새벽', emoji: '🌅' },
+        { h: 11, m: 0, label: '정오', emoji: '☀️' },
+        { h: 20, m: 0, label: '저녁', emoji: '🌙' },
+      ];
+      const nowKST = new Date(Date.now() + 9 * 3600000);
+      const todayKST = nowKST.toISOString().slice(0, 10);
+      const tomorrowKST = new Date(nowKST.getTime() + 86400000).toISOString().slice(0, 10);
+      const createdReservedAts: string[] = [];
+      let step = 2;
+      for (const s of slots) {
+        const timeStr = `${String(s.h).padStart(2, '0')}:${String(s.m).padStart(2, '0')}`;
+        let reservedAt = toKSTIso(todayKST, timeStr);
+        // 이미 지난 시각이면 다음날로
+        if (new Date(reservedAt).getTime() <= Date.now()) {
+          reservedAt = toKSTIso(tomorrowKST, timeStr);
+        }
+        // 랜덤 분산 옵션 적용 (±5~15분)
+        if (useRandomSpread) {
+          const spread = Math.floor(Math.random() * 11) + 5;
+          reservedAt = new Date(new Date(reservedAt).getTime() + spread * 60000).toISOString();
+        }
+        // 충돌 방지: 기존 예약(방금 등록분 포함)과 10분 이내 겹치면 뒤로 밀기
+        const existing = [
+          ...jobs.filter((j) => j.status === 'reserved' && j.reservedAt).map((j) => j.reservedAt!),
+          ...createdReservedAts,
+        ];
+        const targetMs = new Date(reservedAt).getTime();
+        const conflicting = existing.filter((t) => Math.abs(new Date(t).getTime() - targetMs) < 10 * 60000);
+        if (conflicting.length > 0) {
+          const latestMs = Math.max(...conflicting.map((t) => new Date(t).getTime()));
+          const gap = Math.floor(Math.random() * 8) + 3;
+          reservedAt = new Date(latestMs + gap * 60000).toISOString();
+        }
+        showToast(`${s.emoji} ${step}/4 ${s.label} 예약 등록 중…`);
+        const savedId = await fbAddReservedJob(baseJob, reservedAt);
+        await fbSaveReservationLog({
+          jobId: savedId,
+          jobTitle: form.title || '',
+          scheduledAt: reservedAt,
+          status: 'published',
+          repeatDays: repeatDays || undefined,
+          isRepeat: false,
+          createdAt: new Date().toISOString(),
+          quickReserveType: s.label,
+          shortcutUsed: true,
+        });
+        console.log(`[AutoQuad] ${step}/4 ${s.label} 예약 완료, id:`, savedId, '/', formatKST(reservedAt));
+        createdReservedAts.push(reservedAt);
+        step++;
+      }
+
+      showToast(`✅ 4회 자동 발행 완료! (즉시 + 새벽·정오·저녁 예약)`);
+      applySmartClear(form);
+      if (quickMode) setTimeout(() => titleInputRef.current?.focus(), 80);
+      await loadJobs();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[AutoQuad] 4회 자동 발행 실패:', msg, err);
+      showToast(`❌ 4회 발행 중단: ${msg.slice(0, 60)} (이미 등록된 건은 유지됨)`);
+    } finally {
+      autoQuadInFlightRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
   // 예약 취소
   async function handleCancelReservation(id: string) {
     if (!confirm('예약을 취소하시겠습니까?')) return;
@@ -771,6 +872,12 @@ export default function Admin() {
       if (e.key === 'g' || e.key === 'G') {
         e.preventDefault();
         void handleQuickReserve(20, 0, '저녁', '🌙', true);
+        return;
+      }
+      // Ctrl+Q → ⚡ 4회 자동 발행 (즉시 + 새벽/정오/저녁 예약)
+      if (e.key === 'q' || e.key === 'Q') {
+        e.preventDefault();
+        void handleAutoQuadPublish();
         return;
       }
       if (e.key !== 'Enter') return;
@@ -1679,6 +1786,7 @@ export default function Admin() {
                 <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+G</kbd> 저녁</span>
                 <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+Enter</kbd> 즉시등록</span>
                 <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+⇧+Enter</kbd> 예약모달</span>
+                <span className="text-[10px] text-gray-400"><kbd className="bg-gray-100 border border-gray-300 rounded px-1 py-0.5 text-[9px] font-mono">Ctrl+Q</kbd> ⚡4회 자동발행 (즉시+새벽·정오·저녁)</span>
               </div>
               {parseResult && (() => {
                 const LABEL: Record<string, string> = {
