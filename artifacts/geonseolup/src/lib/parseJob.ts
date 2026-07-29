@@ -3,7 +3,7 @@ import type { Job } from '@/lib/firebase';
 import { WELD_SUBS } from '@/lib/utils';
 
 const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '해외', '전국'];
-const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '안전담당자', '안전시설반', '품질담당자', '공사담당자', '기타'];
+const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '포설', '보온', '관리자', '안전담당자', '안전시설반', '품질담당자', '공사담당자', '기타'];
 const MEALS = ['식사제공', '식사없음', '협의', '출퇴근'];
 const LODGINGS = ['숙박제공', '숙박없음', '협의'];
 
@@ -850,10 +850,13 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   if (jobLabelM) {
     const val = stripEmoji(jobLabelM[1]).replace(/\(.*?\)/g, '').trim();
     if (val) {
-      const known = [...JOBS, ...WELD_SUBS_SAFE].find((j) => j !== '기타' && val.includes(j));
-      // "안전관리자"는 안전담당자로 통합
-      if (!known && /안전\s*관리자?/.test(val)) r.job = '안전담당자';
-      else r.job = known ?? val;
+      // "안전관리자"는 안전담당자로 통합 (일반 '관리자' 직종보다 우선)
+      if (/안전\s*관리자?/.test(val)) {
+        r.job = '안전담당자';
+      } else {
+        const known = [...JOBS, ...WELD_SUBS_SAFE].find((j) => j !== '기타' && val.includes(j));
+        r.job = known ?? val;
+      }
     }
   }
 
