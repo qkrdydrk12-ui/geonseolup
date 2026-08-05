@@ -26,15 +26,16 @@ async function createAndPublishContainer(
   userId: string,
   token: string,
   text: string,
-  replyToId?: string
+  opts: { replyToId?: string; imageUrl?: string } = {}
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     const createParams = new URLSearchParams({
-      media_type: "TEXT",
+      media_type: opts.imageUrl ? "IMAGE" : "TEXT",
       text,
       access_token: token,
     });
-    if (replyToId) createParams.set("reply_to_id", replyToId);
+    if (opts.imageUrl) createParams.set("image_url", opts.imageUrl);
+    if (opts.replyToId) createParams.set("reply_to_id", opts.replyToId);
 
     const createRes = await fetch(`${GRAPH_BASE}/${userId}/threads?${createParams.toString()}`, {
       method: "POST",
@@ -64,7 +65,8 @@ async function createAndPublishContainer(
 }
 
 // 본문 발행 후, 링크가 있으면 별도 댓글로 링크만 단다 (본문엔 링크 금지 원칙).
-export async function publishToThreads(text: string, linkUrl?: string): Promise<PublishResult> {
+// imageUrl을 주면 이미지+캡션 게시물로, 안 주면 텍스트 전용 게시물로 발행한다.
+export async function publishToThreads(text: string, linkUrl?: string, imageUrl?: string): Promise<PublishResult> {
   const userId = process.env["THREADS_USER_ID"];
   if (!userId) return { ok: false, error: "THREADS_USER_ID 미설정" };
 
@@ -74,19 +76,21 @@ export async function publishToThreads(text: string, linkUrl?: string): Promise<
     return { ok: false, error: "Threads 토큰이 만료됨 — 재발급 필요" };
   }
 
-  const mainResult = await createAndPublishContainer(userId, tokenInfo.token, text);
+  const mainResult = await createAndPublishContainer(userId, tokenInfo.token, text, { imageUrl });
   if (!mainResult.ok || !mainResult.id) {
     logger.error({ error: mainResult.error }, "[threads-publish] 본문 발행 실패");
     return { ok: false, error: mainResult.error };
   }
 
   if (linkUrl) {
-    const replyResult = await createAndPublishContainer(userId, tokenInfo.token, linkUrl, mainResult.id);
+    const replyResult = await createAndPublishContainer(userId, tokenInfo.token, linkUrl, {
+      replyToId: mainResult.id,
+    });
     if (!replyResult.ok) {
       logger.warn({ error: replyResult.error }, "[threads-publish] 링크 댓글 발행 실패 (본문은 성공)");
     }
   }
 
-  logger.info({ postId: mainResult.id }, "[threads-publish] 발행 완료");
+  logger.info({ postId: mainResult.id, hasImage: Boolean(imageUrl) }, "[threads-publish] 발행 완료");
   return { ok: true, postId: mainResult.id };
 }

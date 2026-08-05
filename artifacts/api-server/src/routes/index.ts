@@ -8,6 +8,7 @@ import jobsRouter from "./jobs";
 import coupangRouter from "./coupang";
 import pushRouter from "./push";
 import subscribeRouter from "./subscribe";
+import threadsImageRouter from "./threadsImage";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(jobsRouter);
 router.use(coupangRouter);
 router.use(pushRouter);
 router.use(subscribeRouter);
+router.use(threadsImageRouter);
 
 export default router;

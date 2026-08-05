@@ -201,7 +201,8 @@ router.post("/admin/threads/drafts/:id/publish", requireAdmin, async (req: Reque
     }
     // 편집된 문구를 보냈다면 그걸 우선 사용 (관리자가 발행 전 수정 가능)
     const text = typeof req.body?.text === "string" && req.body.text.trim() ? req.body.text.trim() : draft.text;
-    const result = await publishToThreads(text, draft.linkUrl);
+    const imageUrl = draft.hasImage ? `https://geonseolup.com/api/threads-image/${draft.id}` : undefined;
+    const result = await publishToThreads(text, draft.linkUrl, imageUrl);
     if (!result.ok) {
       res.status(502).json({ ok: false, message: result.error ?? "발행 실패" });
       return;

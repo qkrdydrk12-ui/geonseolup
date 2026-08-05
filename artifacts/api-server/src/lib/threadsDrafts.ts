@@ -4,6 +4,7 @@
 
 import { pgPool } from "./db.js";
 import { logger } from "./logger.js";
+import { generateImage } from "./imageGen.js";
 
 export interface ThreadsDraft {
   id: number;
@@ -16,6 +17,7 @@ export interface ThreadsDraft {
   imageStyle: string | null;
   imageCopy: string | null;
   imagePrompt: string | null;
+  hasImage: boolean;
 }
 
 let _initialized = false;
@@ -32,11 +34,15 @@ async function ensureTable(): Promise<void> {
       published_at TIMESTAMPTZ,
       image_style TEXT,
       image_copy TEXT,
-      image_prompt TEXT
+      image_prompt TEXT,
+      image_data BYTEA,
+      image_mime TEXT
     );
     ALTER TABLE threads_drafts ADD COLUMN IF NOT EXISTS image_style TEXT;
     ALTER TABLE threads_drafts ADD COLUMN IF NOT EXISTS image_copy TEXT;
     ALTER TABLE threads_drafts ADD COLUMN IF NOT EXISTS image_prompt TEXT;
+    ALTER TABLE threads_drafts ADD COLUMN IF NOT EXISTS image_data BYTEA;
+    ALTER TABLE threads_drafts ADD COLUMN IF NOT EXISTS image_mime TEXT;
   `);
   _initialized = true;
 }
@@ -232,19 +238,30 @@ export async function maybeCreateDraft(job: NewJobPayload, salaryNum?: number): 
   if (!isPromotable(job, salaryNum)) return;
   try {
     const style = await pickImageStyle();
+    const prompt = style.prompt(job);
+
+    // 이미지 실제 생성 (OPENAI_API_KEY 없으면 generateImage가 null을 반환하고
+    // 조용히 건너뜀 — 이 경우도 텍스트 초안 + 스타일/프롬프트는 정상 생성된다).
+    const image = await generateImage(prompt);
+
     await pgPool.query(
-      `INSERT INTO threads_drafts (job_id, text, link_url, image_style, image_copy, image_prompt)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO threads_drafts (job_id, text, link_url, image_style, image_copy, image_prompt, image_data, image_mime)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         job.id,
         buildDraftText(job),
         `https://geonseolup.com/detail/${job.id}`,
         style.name,
         style.copy(job),
-        style.prompt(job),
+        prompt,
+        image?.data ?? null,
+        image?.mime ?? null,
       ]
     );
-    logger.info({ jobId: job.id, imageStyle: style.name }, "[threads-drafts] 신규 홍보 초안 생성");
+    logger.info(
+      { jobId: job.id, imageStyle: style.name, imageGenerated: Boolean(image) },
+      "[threads-drafts] 신규 홍보 초안 생성"
+    );
   } catch (err) {
     logger.warn({ err: String(err), jobId: job.id }, "[threads-drafts] 초안 생성 실패");
   }
@@ -255,10 +272,24 @@ export async function listPendingDrafts(): Promise<ThreadsDraft[]> {
   const result = await pgPool.query(
     `SELECT id, job_id AS "jobId", text, link_url AS "linkUrl", status,
             created_at AS "createdAt", published_at AS "publishedAt",
-            image_style AS "imageStyle", image_copy AS "imageCopy", image_prompt AS "imagePrompt"
+            image_style AS "imageStyle", image_copy AS "imageCopy", image_prompt AS "imagePrompt",
+            (image_data IS NOT NULL) AS "hasImage"
      FROM threads_drafts WHERE status = 'pending' ORDER BY created_at DESC LIMIT 30`
   );
   return result.rows;
+}
+
+// 이미지 바이트 자체는 목록 조회에 포함하지 않고(용량 부담), 실제 <img> 요청이
+// 올 때만 이 함수로 별도 조회한다 (GET /api/threads-image/:id 라우트에서 사용).
+export async function getDraftImage(id: number): Promise<{ data: Buffer; mime: string } | null> {
+  await ensureTable();
+  const result = await pgPool.query<{ image_data: Buffer | null; image_mime: string | null }>(
+    `SELECT image_data, image_mime FROM threads_drafts WHERE id = $1`,
+    [id]
+  );
+  const row = result.rows[0];
+  if (!row?.image_data) return null;
+  return { data: row.image_data, mime: row.image_mime || "image/png" };
 }
 
 export async function markDraftPublished(id: number): Promise<void> {
