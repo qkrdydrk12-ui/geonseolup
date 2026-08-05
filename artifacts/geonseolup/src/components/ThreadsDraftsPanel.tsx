@@ -99,6 +99,28 @@ export default function ThreadsDraftsPanel() {
     }
   }
 
+  // 자동으로 만들지 않고, 필요한 초안만 골라서 이미지를 생성한다 (비용은 여기서만 발생).
+  async function handleGenerateImage(id: number) {
+    setBusyId(id);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/admin/threads/drafts/${id}/generate-image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = (await res.json()) as { ok: boolean; message?: string };
+      if (data.ok) {
+        setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, hasImage: true } : d)));
+      } else {
+        setMsg({ id, text: `❌ ${data.message || '이미지 생성 실패'}`, ok: false });
+      }
+    } catch (e) {
+      setMsg({ id, text: `❌ 네트워크 오류: ${String(e)}`, ok: false });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4 pb-2.5 border-b-2 border-gray-100">
@@ -186,9 +208,13 @@ export default function ThreadsDraftsPanel() {
                     </p>
                   )}
                   {!d.hasImage && (
-                    <p className="text-[10px] text-gray-400 mt-1.5">
-                      * 이미지가 자동 생성되지 않았어요(OPENAI_API_KEY 미설정 등). 위 프롬프트로 직접 만들어 첨부하거나, 챗에서 "이 초안 이미지 만들어줘"라고 요청하세요.
-                    </p>
+                    <button
+                      disabled={busyId === d.id}
+                      className="mt-2 bg-white text-[#f97316] border-[1.5px] border-[#f97316] px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-[#f97316] hover:text-white transition-all disabled:opacity-60"
+                      onClick={() => handleGenerateImage(d.id)}
+                    >
+                      {busyId === d.id ? '이미지 생성 중…' : '🎨 이미지 생성 (필요할 때만 클릭 — 비용 발생)'}
+                    </button>
                   )}
                 </div>
               )}

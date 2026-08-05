@@ -13,7 +13,7 @@ import { getPopularJobIds } from "../lib/jobViews.js";
 import { countSubscriptions } from "../lib/pushSubscriptions.js";
 import { countEmailSubscribers } from "../lib/emailSubscribers.js";
 import { getCurrentThreadsToken } from "../lib/threadsToken.js";
-import { listPendingDrafts, markDraftPublished, markDraftRejected, getDraftById } from "../lib/threadsDrafts.js";
+import { listPendingDrafts, markDraftPublished, markDraftRejected, getDraftById, generateDraftImage } from "../lib/threadsDrafts.js";
 import { publishToThreads } from "../lib/threadsPublish.js";
 
 const router = Router();
@@ -209,6 +209,22 @@ router.post("/admin/threads/drafts/:id/publish", requireAdmin, async (req: Reque
     }
     await markDraftPublished(id);
     res.json({ ok: true, postId: result.postId });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// POST /api/admin/threads/drafts/:id/generate-image — 관리자가 필요할 때만 클릭해서
+// 그 초안 하나에 대해서만 실제 이미지를 생성 (비용은 이 호출에서만 발생).
+router.post("/admin/threads/drafts/:id/generate-image", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params["id"]);
+    const result = await generateDraftImage(id);
+    if (!result.ok) {
+      res.status(502).json({ ok: false, message: result.error ?? "이미지 생성 실패" });
+      return;
+    }
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, message: String(err) });
   }

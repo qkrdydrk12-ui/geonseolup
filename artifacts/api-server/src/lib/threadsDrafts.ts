@@ -233,6 +233,10 @@ async function pickImageStyle(): Promise<ImageStyleDef> {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+// 초안 생성 시점엔 이미지를 자동으로 만들지 않는다 (비용 절약 — 신규 공고마다
+// 매번 생성하면 관리자가 실제로 안 쓸 이미지에도 비용이 나가게 됨). 스타일/문구/
+// 프롬프트만 미리 준비해두고, 실제 이미지는 관리자가 "이미지 생성" 버튼을
+// 눌렀을 때만(generateDraftImage) 그 초안 하나에 대해서 생성한다.
 export async function maybeCreateDraft(job: NewJobPayload, salaryNum?: number): Promise<void> {
   await ensureTable();
   if (!isPromotable(job, salaryNum)) return;
@@ -240,31 +244,35 @@ export async function maybeCreateDraft(job: NewJobPayload, salaryNum?: number): 
     const style = await pickImageStyle();
     const prompt = style.prompt(job);
 
-    // 이미지 실제 생성 (OPENAI_API_KEY 없으면 generateImage가 null을 반환하고
-    // 조용히 건너뜀 — 이 경우도 텍스트 초안 + 스타일/프롬프트는 정상 생성된다).
-    const image = await generateImage(prompt);
-
     await pgPool.query(
-      `INSERT INTO threads_drafts (job_id, text, link_url, image_style, image_copy, image_prompt, image_data, image_mime)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        job.id,
-        buildDraftText(job),
-        `https://geonseolup.com/detail/${job.id}`,
-        style.name,
-        style.copy(job),
-        prompt,
-        image?.data ?? null,
-        image?.mime ?? null,
-      ]
+      `INSERT INTO threads_drafts (job_id, text, link_url, image_style, image_copy, image_prompt)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [job.id, buildDraftText(job), `https://geonseolup.com/detail/${job.id}`, style.name, style.copy(job), prompt]
     );
-    logger.info(
-      { jobId: job.id, imageStyle: style.name, imageGenerated: Boolean(image) },
-      "[threads-drafts] 신규 홍보 초안 생성"
-    );
+    logger.info({ jobId: job.id, imageStyle: style.name }, "[threads-drafts] 신규 홍보 초안 생성");
   } catch (err) {
     logger.warn({ err: String(err), jobId: job.id }, "[threads-drafts] 초안 생성 실패");
   }
+}
+
+// 관리자가 "이미지 생성" 버튼을 눌렀을 때만 호출 — 이 초안 하나에 대해서만
+// 실제 이미지를 만들어 저장한다 (비용이 실제로 발생하는 지점).
+export async function generateDraftImage(id: number): Promise<{ ok: boolean; error?: string }> {
+  await ensureTable();
+  const draft = await getDraftById(id);
+  if (!draft) return { ok: false, error: "초안을 찾을 수 없음" };
+  if (!draft.imagePrompt) return { ok: false, error: "이미지 프롬프트가 없는 초안" };
+
+  const image = await generateImage(draft.imagePrompt);
+  if (!image) return { ok: false, error: "이미지 생성 실패 (OPENAI_API_KEY 미설정이거나 API 오류)" };
+
+  await pgPool.query(`UPDATE threads_drafts SET image_data = $1, image_mime = $2 WHERE id = $3`, [
+    image.data,
+    image.mime,
+    id,
+  ]);
+  logger.info({ draftId: id }, "[threads-drafts] 관리자 요청으로 이미지 생성 완료");
+  return { ok: true };
 }
 
 export async function listPendingDrafts(): Promise<ThreadsDraft[]> {
