@@ -6,6 +6,8 @@ import postCooldownRouter from "./postCooldown";
 import schedulerRouter from "./scheduler";
 import jobsRouter from "./jobs";
 import coupangRouter from "./coupang";
+import pushRouter from "./push";
+import subscribeRouter from "./subscribe";
 
 const router: IRouter = Router();
 
@@ -16,5 +18,7 @@ router.use(postCooldownRouter);
 router.use(schedulerRouter);
 router.use(jobsRouter);
 router.use(coupangRouter);
+router.use(pushRouter);
+router.use(subscribeRouter);
 
 export default router;

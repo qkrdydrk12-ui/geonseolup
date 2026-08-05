@@ -6,6 +6,8 @@
 import { getDocument, listRecentDocs } from "./firestoreClient.js";
 import { logger } from "./logger.js";
 import { notifyGoogleIndexing } from "./googleIndexing.js";
+import { notifyPushSubscribers } from "./webPush.js";
+import { notifyNewJobSubscribers } from "./emailSubscribers.js";
 
 export interface PublicJob {
   id: string;
@@ -80,6 +82,20 @@ async function refresh(): Promise<PublicJob[]> {
     const newlyAdded = pub.filter((j) => !previousIds.has(j.id));
     for (const j of newlyAdded) {
       notifyGoogleIndexing(`https://geonseolup.com/detail/${j.id}`, "URL_UPDATED").catch(() => {});
+      notifyPushSubscribers({
+        id: j.id,
+        title: typeof j.title === "string" ? j.title : undefined,
+        region: typeof j.region === "string" ? j.region : undefined,
+        job: typeof j.job === "string" ? j.job : undefined,
+        salary: typeof j.salary === "string" ? j.salary : undefined,
+      }).catch(() => {});
+      notifyNewJobSubscribers({
+        id: j.id,
+        title: typeof j.title === "string" ? j.title : undefined,
+        region: typeof j.region === "string" ? j.region : undefined,
+        job: typeof j.job === "string" ? j.job : undefined,
+        salary: typeof j.salary === "string" ? j.salary : undefined,
+      }).catch(() => {});
     }
   }
 
