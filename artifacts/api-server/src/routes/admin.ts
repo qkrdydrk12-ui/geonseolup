@@ -8,6 +8,11 @@ import {
   requireAdmin,
 } from "../lib/adminStore";
 import { updateDocument, addDocument } from "../lib/firestoreClient.js";
+import { getPublicJobs } from "../lib/jobsCache.js";
+import { getPopularJobIds } from "../lib/jobViews.js";
+import { countSubscriptions } from "../lib/pushSubscriptions.js";
+import { countEmailSubscribers } from "../lib/emailSubscribers.js";
+import { getCurrentThreadsToken } from "../lib/threadsToken.js";
 
 const router = Router();
 
@@ -113,5 +118,38 @@ router.delete(
     }
   }
 );
+
+// GET /api/admin/stats/summary — 성장 지표 한눈에 보기 (관리자 전용).
+// 공고 수, 구독자 수(푸시/이메일), 인기 공고, Threads 토큰 상태를 한 번에 반환.
+router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const [{ jobs }, popular, pushCount, emailCount, threadsToken] = await Promise.all([
+      getPublicJobs(),
+      getPopularJobIds(5, 7),
+      countSubscriptions(),
+      countEmailSubscribers(),
+      getCurrentThreadsToken(),
+    ]);
+
+    res.json({
+      activeJobs: jobs.length,
+      popularJobs: popular,
+      subscribers: {
+        push: pushCount,
+        emailConfirmed: emailCount.confirmed,
+        emailPendingConfirm: emailCount.unconfirmed,
+      },
+      threadsToken: threadsToken
+        ? {
+            configured: true,
+            expiresAt: threadsToken.expiresAt.toISOString(),
+            daysLeft: Math.floor((threadsToken.expiresAt.getTime() - Date.now()) / 86400000),
+          }
+        : { configured: false },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
 
 export default router;

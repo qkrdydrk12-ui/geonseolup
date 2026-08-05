@@ -8,6 +8,7 @@ import { logger } from "./logger.js";
 import { notifyGoogleIndexing } from "./googleIndexing.js";
 import { notifyPushSubscribers } from "./webPush.js";
 import { notifyNewJobSubscribers } from "./emailSubscribers.js";
+import { pingSearchEngines } from "./searchEnginePing.js";
 
 export interface PublicJob {
   id: string;
@@ -80,6 +81,9 @@ async function refresh(): Promise<PublicJob[]> {
   // previousIds가 비어있는 최초 갱신(서버 재시작 직후)에는 전체를 "새 글"로 오인하지 않도록 건너뛴다.
   if (previousIds.size > 0) {
     const newlyAdded = pub.filter((j) => !previousIds.has(j.id));
+    if (newlyAdded.length > 0) {
+      pingSearchEngines().catch(() => {});
+    }
     for (const j of newlyAdded) {
       notifyGoogleIndexing(`https://geonseolup.com/detail/${j.id}`, "URL_UPDATED").catch(() => {});
       notifyPushSubscribers({

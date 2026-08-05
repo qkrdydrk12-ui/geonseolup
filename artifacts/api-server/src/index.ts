@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { startEmailDigestScheduler } from "./lib/emailSubscribers";
+import { startThreadsTokenScheduler } from "./lib/threadsToken";
 
 const rawPort = process.env["PORT"];
 
@@ -27,6 +28,8 @@ app.listen(port, (err) => {
   // 이메일 구독 다이제스트는 Firestore가 아닌 Postgres/Resend만 쓰므로
   // 읽기 쿼터와 무관 — 환경 상관없이 항상 켠다 (RESEND_API_KEY 없으면 내부에서 조용히 스킵).
   startEmailDigestScheduler();
+  // Threads 장기 토큰 자동 갱신 — THREADS_ACCESS_TOKEN_SEED 없으면 내부에서 조용히 스킵.
+  startThreadsTokenScheduler();
   // 스케줄러(예약 발행 + 자동숨김/삭제 정리)는 Firestore를 주기적으로 읽는다.
   // 개발 환경과 운영 환경이 같은 Firestore 프로젝트를 공유하므로, 둘 다 켜면
   // 무료 읽기 한도를 두 배로 소진한다. 운영(NODE_ENV=production)에서만 켜고,
