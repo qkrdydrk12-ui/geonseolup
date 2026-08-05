@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { getArticle, INFO_ARTICLES } from '@/lib/infoData';
+import { getArticle, getArticleImage, INFO_ARTICLES } from '@/lib/infoData';
 
 interface Props {
   slug: string;
@@ -54,12 +54,20 @@ export default function InfoDetail({ slug }: Props) {
         </div>
 
         {/* 본문 카드 */}
-        <article className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8">
-          <div className="text-4xl mb-4">{article.emoji}</div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
-            {article.title}
-          </h1>
-          <p className="text-sm text-gray-400 mb-6 pb-5 border-b border-gray-100">{article.description}</p>
+        <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="relative aspect-[16/9] bg-gray-100">
+            <img
+              src={getArticleImage(article.slug)}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="p-6 sm:p-8">
+            <div className="text-4xl mb-4">{article.emoji}</div>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
+              {article.title}
+            </h1>
+            <p className="text-sm text-gray-400 mb-6 pb-5 border-b border-gray-100">{article.description}</p>
 
           <div className="space-y-5 text-[15px] text-gray-700 leading-relaxed">
             {article.body.map((block, i) => (
@@ -88,6 +96,7 @@ export default function InfoDetail({ slug }: Props) {
             >
               구인 목록 보기 →
             </Link>
+          </div>
           </div>
         </article>
 

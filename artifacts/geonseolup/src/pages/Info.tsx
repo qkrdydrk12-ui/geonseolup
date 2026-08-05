@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { INFO_ARTICLES } from '@/lib/infoData';
+import { INFO_ARTICLES, getArticleImage } from '@/lib/infoData';
 
 export default function Info() {
   useEffect(() => {
@@ -26,16 +26,28 @@ export default function Info() {
               href={`/info/${article.slug}`}
               className="block no-underline"
             >
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
-                <div className="text-3xl mb-3">{article.emoji}</div>
-                <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">
-                  {article.title}
-                </h2>
-                <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
-                  {article.description}
-                </p>
-                <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#f97316]">
-                  자세히 보기 →
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer h-full flex flex-col">
+                <div className="relative aspect-[16/9] bg-gray-100 overflow-hidden">
+                  <img
+                    src={getArticleImage(article.slug)}
+                    alt=""
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                  <span className="absolute top-2 left-2 text-xl bg-white/90 rounded-full w-8 h-8 flex items-center justify-center shadow-sm">
+                    {article.emoji}
+                  </span>
+                </div>
+                <div className="p-5 flex-1 flex flex-col">
+                  <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">
+                    {article.title}
+                  </h2>
+                  <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
+                    {article.description}
+                  </p>
+                  <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#f97316]">
+                    자세히 보기 →
+                  </div>
                 </div>
               </div>
             </Link>
