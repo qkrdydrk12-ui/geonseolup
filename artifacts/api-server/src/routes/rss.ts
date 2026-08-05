@@ -78,19 +78,30 @@ async function fetchJobs(): Promise<FirestoreDoc[]> {
   return results.filter((r) => r.document).map((r) => r.document!);
 }
 
-// GET /rss
-router.get("/rss", async (_req: Request, res: Response) => {
+// 공통 RSS 생성 로직 — 전체 피드와 지역/직종 필터 피드가 함께 쓴다.
+async function buildFeed(
+  res: Response,
+  opts: { region?: string; job?: string; feedPath: string; feedTitleSuffix?: string }
+): Promise<void> {
   try {
     const docs = await fetchJobs();
     const siteUrl = "https://geonseolup.com";
     const now = new Date().toUTCString();
 
-    const activeDocs = docs.filter(
+    let activeDocs = docs.filter(
       (doc) => !bool(doc, "hidden") && !bool(doc, "_deleted")
     );
+    if (opts.region) {
+      activeDocs = activeDocs.filter((doc) => str(doc, "region") === opts.region);
+    }
+    if (opts.job) {
+      activeDocs = activeDocs.filter((doc) => str(doc, "job") === opts.job);
+    }
+
+    const feedTitle = `건설UP${opts.feedTitleSuffix ? ` - ${opts.feedTitleSuffix}` : " - 건설 현장 일자리 정보"}`;
 
     const DUMMY_ITEM = `    <item>
-      <title>건설UP - 건설 현장 일자리 정보</title>
+      <title>${escapeXml(feedTitle)}</title>
       <link>https://geonseolup.com</link>
       <description>전국 건설 현장 일자리 정보를 실시간으로 제공합니다. 조공·배관·용접·화기감시자 등 다양한 직종의 구인 공고를 확인하세요.</description>
       <pubDate>${new Date().toUTCString()}</pubDate>
@@ -140,16 +151,19 @@ router.get("/rss", async (_req: Request, res: Response) => {
       .join("\n");
 
     const itemsXml = items.length > 0 ? items : DUMMY_ITEM;
+    const feedDesc = opts.region || opts.job
+      ? `${[opts.region, opts.job].filter(Boolean).join(" ")} 건설 현장 구인 공고를 실시간으로 제공합니다.`
+      : "전국 건설 현장 일자리 정보를 실시간으로 제공합니다. 조공·배관·용접·화기감시자 등 다양한 직종의 구인 공고를 확인하세요.";
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>건설UP - 건설 현장 일자리 정보</title>
+    <title>${escapeXml(feedTitle)}</title>
     <link>${siteUrl}</link>
-    <description>전국 건설 현장 일자리 정보를 실시간으로 제공합니다. 조공·배관·용접·화기감시자 등 다양한 직종의 구인 공고를 확인하세요.</description>
+    <description>${escapeXml(feedDesc)}</description>
     <language>ko</language>
     <lastBuildDate>${now}</lastBuildDate>
-    <atom:link href="${siteUrl}/rss" rel="self" type="application/rss+xml"/>
+    <atom:link href="${siteUrl}${opts.feedPath}" rel="self" type="application/rss+xml"/>
     <image>
       <url>${siteUrl}/og-image.png</url>
       <title>건설UP</title>
@@ -178,6 +192,27 @@ ${itemsXml}
     res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
     res.status(200).send(fallbackXml);
   }
+}
+
+// GET /rss — 전체 공고 피드
+router.get("/rss", async (_req: Request, res: Response) => {
+  await buildFeed(res, { feedPath: "/rss" });
+});
+
+// GET /rss/:region/:job — 지역×직종 필터 피드 (롱테일 구독/신디케이션용).
+// "전체"는 필터 없음으로 취급한다 (예: /rss/전체/조공 → 조공 전체 지역).
+router.get("/rss/:region/:job", async (req: Request, res: Response) => {
+  const region = decodeURIComponent(String(req.params.region));
+  const job = decodeURIComponent(String(req.params.job));
+  const opts = {
+    region: region && region !== "전체" ? region : undefined,
+    job: job && job !== "전체" ? job : undefined,
+    feedPath: `/rss/${encodeURIComponent(region)}/${encodeURIComponent(job)}`,
+    feedTitleSuffix: [region !== "전체" ? region : "", job !== "전체" ? job : "", "구인 공고"]
+      .filter(Boolean)
+      .join(" "),
+  };
+  await buildFeed(res, opts);
 });
 
 export default router;

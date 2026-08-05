@@ -369,6 +369,13 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
       `$1"${pageUrl}"`
     );
 
+    // 이 지역×직종 조합 전용 RSS 피드로 자동발견 태그를 교체 (전체 피드 대신).
+    const regionJobRssUrl = `${SITE_URL}/rss/${encodeURIComponent(region)}/${encodeURIComponent(jobType)}`;
+    html = html.replace(
+      /<link rel=["']alternate["'] type=["']application\/rss\+xml["'][^>]*\/>/,
+      `<link rel="alternate" type="application/rss+xml" title="${escapeHtmlAttr(`건설UP ${region} ${jobType} 구인 공고`)}" href="${regionJobRssUrl}" />`
+    );
+
     // 크롤러용 폴백 본문: 실제 매칭 공고 목록(제목+급여+링크)을 그대로 나열.
     // 실사용자는 React가 mount되면서 동일 필터가 적용된 실제 UI로 바로 교체됨.
     const listItems = matched

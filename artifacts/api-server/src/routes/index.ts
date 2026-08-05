@@ -7,6 +7,8 @@ import schedulerRouter from "./scheduler";
 import jobsRouter from "./jobs";
 import coupangRouter from "./coupang";
 import indexingRouter from "./indexing";
+import pushRouter from "./push";
+import subscribeRouter from "./subscribe";
 
 const router: IRouter = Router();
 
@@ -18,5 +20,7 @@ router.use(schedulerRouter);
 router.use(jobsRouter);
 router.use(coupangRouter);
 router.use(indexingRouter);
+router.use(pushRouter);
+router.use(subscribeRouter);
 
 export default router;

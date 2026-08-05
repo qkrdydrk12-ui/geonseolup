@@ -5,6 +5,9 @@
 
 import { getDocument, listRecentDocs } from "./firestoreClient.js";
 import { logger } from "./logger.js";
+import { notifyGoogleIndexing } from "./googleIndexing.js";
+import { notifyPushSubscribers } from "./webPush.js";
+import { notifyNewJobSubscribers } from "./emailSubscribers.js";
 
 export interface PublicJob {
   id: string;
@@ -60,6 +63,7 @@ function toPublic(all: PublicJob[]): PublicJob[] {
 
 async function refresh(): Promise<PublicJob[]> {
   const gen = _generation;
+  const previousIds = new Set((_cache?.jobs ?? []).map((j) => j.id));
   const all = (await listRecentDocs("jobs", LIMIT)) as PublicJob[];
   const pub = toPublic(all);
   // 이 갱신이 시작된 뒤 무효화(쓰기 직후)가 일어났다면 캐시에 쓰지 않는다.
@@ -71,6 +75,30 @@ async function refresh(): Promise<PublicJob[]> {
     { total: all.length, publicCount: pub.length },
     "공개 공고 캐시 갱신"
   );
+
+  // 새로 나타난 공고는 구글에 색인 알림을 보낸다 (JobPosting 페이지 전용, 부가 기능이라 실패해도 무시).
+  // previousIds가 비어있는 최초 갱신(서버 재시작 직후)에는 전체를 "새 글"로 오인하지 않도록 건너뛴다.
+  if (previousIds.size > 0) {
+    const newlyAdded = pub.filter((j) => !previousIds.has(j.id));
+    for (const j of newlyAdded) {
+      notifyGoogleIndexing(`https://geonseolup.com/detail/${j.id}`, "URL_UPDATED").catch(() => {});
+      notifyPushSubscribers({
+        id: j.id,
+        title: typeof j.title === "string" ? j.title : undefined,
+        region: typeof j.region === "string" ? j.region : undefined,
+        job: typeof j.job === "string" ? j.job : undefined,
+        salary: typeof j.salary === "string" ? j.salary : undefined,
+      }).catch(() => {});
+      notifyNewJobSubscribers({
+        id: j.id,
+        title: typeof j.title === "string" ? j.title : undefined,
+        region: typeof j.region === "string" ? j.region : undefined,
+        job: typeof j.job === "string" ? j.job : undefined,
+        salary: typeof j.salary === "string" ? j.salary : undefined,
+      }).catch(() => {});
+    }
+  }
+
   return pub;
 }
 

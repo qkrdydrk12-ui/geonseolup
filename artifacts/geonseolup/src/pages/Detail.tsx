@@ -9,6 +9,29 @@ interface Props {
   id: string;
 }
 
+// 관련 공고 스코어링: 같은 지역+직종 > 같은 직종 > 같은 지역 순으로 우선순위를 매겨
+// 단순 "같은 직종만" 필터보다 실제로 더 관련성 높은 공고를 상단에 보여준다.
+function rankRelated(pool: Job[], id: string, region: string, job: string, limit = 10): Job[] {
+  return pool
+    .filter((j) => j.id !== id && !j.hidden)
+    .map((j) => {
+      let score = 0;
+      if (job && j.job === job) score += 2;
+      if (region && j.region === region) score += 1;
+      return { j, score };
+    })
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score || new Date(b.j.date).getTime() - new Date(a.j.date).getTime())
+    .slice(0, limit)
+    .map((r) => r.j);
+}
+
+// 조회수 집계용 — 같은 방문자가 새로고침해도 서버에서 하루 1회만 카운트되므로
+// 실패해도(네트워크 오류 등) 무시하고 조용히 넘어간다 (부가 기능).
+function recordServerView(id: string): void {
+  fetch(`/api/jobs/${encodeURIComponent(id)}/view`, { method: 'POST' }).catch(() => {});
+}
+
 export default function Detail({ id }: Props) {
   const [, setLocation] = useLocation();
   const [job, setJob] = useState<Job | null>(null);
@@ -22,7 +45,8 @@ export default function Detail({ id }: Props) {
       if (sampleFound) {
         setJob(sampleFound);
         markViewed(id);
-        const rels = SAMPLE_JOBS.filter((j) => j.id !== id && !j.hidden && j.job === sampleFound.job).slice(0, 10);
+        recordServerView(id);
+        const rels = rankRelated(SAMPLE_JOBS, id, sampleFound.region, sampleFound.job);
         setRelated(rels);
         setLoading(false);
         fbGetPublicJob(id).then((found) => {
@@ -32,7 +56,7 @@ export default function Detail({ id }: Props) {
           if (allJobs.length > 0) {
             const job = allJobs.find((j) => j.id === id);
             if (job) setJob(job);
-            const rels2 = allJobs.filter((j) => j.id !== id && !j.hidden && j.job === (job?.job || sampleFound.job)).slice(0, 10);
+            const rels2 = rankRelated(allJobs, id, job?.region || sampleFound.region, job?.job || sampleFound.job);
             if (rels2.length > 0) setRelated(rels2);
           }
         });
@@ -44,9 +68,10 @@ export default function Detail({ id }: Props) {
       }
       setJob(found);
       markViewed(id);
+      recordServerView(id);
       const allJobs = await fbLoadPublicJobs();
       const pool = allJobs.length > 0 ? allJobs : SAMPLE_JOBS;
-      const rels = pool.filter((j) => j.id !== id && !j.hidden && j.job === (found?.job || '')).slice(0, 10);
+      const rels = rankRelated(pool, id, found?.region || '', found?.job || '');
       setRelated(rels);
       setLoading(false);
     }

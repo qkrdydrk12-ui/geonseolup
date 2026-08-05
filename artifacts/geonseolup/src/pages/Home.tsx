@@ -1,10 +1,73 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbLoadPublicJobs } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
-import { isAutoHidden, WELD_SUBS, isWeld } from '@/lib/utils';
+import { isAutoHidden, WELD_SUBS, isWeld, getJobIcon, JOB_ICON_BG, isNew } from '@/lib/utils';
 import { getToken, apiVerify } from '@/lib/adminAuth';
 import JobCard from '@/components/JobCard';
+import { isPushSupported, subscribeToPush, unsubscribeFromPush, isPushMarkedSubscribed } from '@/lib/push';
+
+// 실시간 인기 공고 (조회수 집계 기반, 최근 7일 / 서버 API — 부가 기능이라 실패해도 무시)
+function usePopularJobs(): (Job & { views?: number })[] {
+  const [popular, setPopular] = useState<(Job & { views?: number })[]>([]);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/jobs/popular?limit=8')
+      .then((r) => (r.ok ? r.json() : { jobs: [] }))
+      .then((data: { jobs?: (Job & { views?: number })[] }) => {
+        if (active && Array.isArray(data.jobs)) setPopular(data.jobs);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+  return popular;
+}
+
+function PopularJobsSection() {
+  const [, setLocation] = useLocation();
+  const popular = usePopularJobs();
+  if (popular.length === 0) return null;
+  return (
+    <section className="mb-2.5">
+      <div className="text-xs font-extrabold text-gray-500 mb-1.5 flex items-center gap-1 uppercase tracking-wide">
+        👀 지금 많이 보고 있어요
+      </div>
+      <div className="flex gap-2.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: 'none' }}>
+        {popular.map((j) => {
+          const bg = JOB_ICON_BG[j.job] || '#f3f4f6';
+          return (
+            <a
+              key={j.id}
+              href={`/detail/${j.id}`}
+              className="shrink-0 w-[200px] bg-white rounded-[10px] border-[1.5px] border-gray-200 shadow-sm p-[13px] cursor-pointer hover:shadow-md hover:border-[#f97316] hover:-translate-y-0.5 transition-all no-underline text-gray-800 block"
+              onClick={(e) => { e.preventDefault(); setLocation(`/detail/${j.id}`); }}
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-8 h-8 rounded-[7px] flex items-center justify-center text-[15px]" style={{ background: bg }}>
+                  {getJobIcon(j.job)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold leading-snug line-clamp-2">{j.title}</div>
+                </div>
+              </div>
+              <span className="block text-[#f97316] text-[13px] font-extrabold mb-0.5">{j.salary || '협의'}</span>
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-[10px] text-gray-500">📍 {j.region}</span>
+                {typeof j.views === 'number' && (
+                  <span className="text-[10px] text-gray-400">👀 {j.views}</span>
+                )}
+              </div>
+              {isNew(j.date) && (
+                <span className="text-[9px] font-bold bg-[#f97316] text-white px-[5px] py-0.5 rounded block mt-1.5 text-center">NEW</span>
+              )}
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 const DEFAULT_AUTO_HIDE = 0;
 
@@ -83,6 +146,117 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
         />
       </div>
     </div>
+  );
+}
+
+// 알림 구독(웹 푸시 + 이메일) 바 — 현재 선택된 지역/직종 필터를 그대로 구독 조건으로 쓴다.
+function SubscribeBar({ region, job }: { region: string; job: string }) {
+  const [pushOn, setPushOn] = useState(isPushMarkedSubscribed());
+  const [pushBusy, setPushBusy] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const filterLabel = [region !== '전체' ? region : '', job !== '전체' ? job : ''].filter(Boolean).join(' ') || '전체';
+
+  async function handlePushToggle() {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushOn) {
+        await unsubscribeFromPush();
+        setPushOn(false);
+      } else {
+        const result = await subscribeToPush(region, job);
+        if (result.ok) {
+          setPushOn(true);
+        } else if (result.error === 'unsupported') {
+          alert('이 브라우저는 푸시 알림을 지원하지 않아요.');
+        } else if (result.error === 'permission_denied') {
+          alert('알림 권한이 거부됐어요. 브라우저 설정에서 허용해주세요.');
+        } else {
+          alert('구독 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+        }
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleEmailSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || emailStatus === 'sending') return;
+    setEmailStatus('sending');
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), region, job }),
+      });
+      setEmailStatus(res.ok ? 'sent' : 'error');
+    } catch {
+      setEmailStatus('error');
+    }
+  }
+
+  return (
+    <section className="mb-2.5 bg-white rounded-[10px] border-[1.5px] border-gray-200 px-3 py-2.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-bold text-gray-700 shrink-0">
+          🔔 <b className="text-[#f97316]">{filterLabel}</b> 새 공고 알림받기
+        </span>
+        <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+          {isPushSupported() && (
+            <button
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${
+                pushOn
+                  ? 'bg-[#f97316] border-[#f97316] text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-[#f97316] hover:text-[#f97316]'
+              } ${pushBusy ? 'opacity-60 pointer-events-none' : ''}`}
+              onClick={handlePushToggle}
+            >
+              {pushOn ? '🔔 구독 중' : '🔕 브라우저 알림'}
+            </button>
+          )}
+          <button
+            className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-gray-200 text-gray-600 bg-white hover:border-[#f97316] hover:text-[#f97316] transition-all"
+            onClick={() => setEmailOpen((o) => !o)}
+          >
+            ✉️ 이메일로 받기
+          </button>
+        </div>
+      </div>
+      {emailOpen && (
+        <form onSubmit={handleEmailSubmit} className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
+          {emailStatus === 'sent' ? (
+            <span className="text-xs text-emerald-600 font-semibold">
+              ✅ 확인 메일을 보냈어요! 메일함에서 구독을 확정해주세요.
+            </span>
+          ) : (
+            <>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="이메일 주소"
+                className="flex-1 min-w-0 py-[7px] px-2.5 border-[1.5px] border-gray-200 rounded-lg text-xs outline-none focus:border-[#f97316]"
+              />
+              <button
+                type="submit"
+                disabled={emailStatus === 'sending'}
+                className="bg-[#f97316] text-white border-none py-[7px] px-3 rounded-lg text-xs font-bold cursor-pointer hover:bg-[#ea580c] disabled:opacity-60"
+              >
+                {emailStatus === 'sending' ? '전송 중…' : '구독'}
+              </button>
+            </>
+          )}
+          {emailStatus === 'error' && (
+            <span className="text-[11px] text-red-500 shrink-0">오류가 발생했어요. 다시 시도해주세요.</span>
+          )}
+        </form>
+      )}
+    </section>
   );
 }
 
@@ -537,6 +711,12 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
             ))}
           </div>
         </section>)}
+
+        {/* 실시간 인기 공고 (조회수 집계 기반) */}
+        <PopularJobsSection />
+
+        {/* 알림 구독 (웹 푸시 + 이메일, 현재 필터 기준) */}
+        <SubscribeBar region={state.region} job={state.job} />
 
         {/* 검색 + 필터 (sticky) */}
         <section
