@@ -396,3 +396,9 @@ export const INFO_ARTICLES: InfoArticle[] = [
 export function getArticle(slug: string): InfoArticle | undefined {
   return INFO_ARTICLES.find((a) => a.slug === slug);
 }
+
+// 아티클마다 AI로 생성한 헤더 이미지가 slug와 동일한 파일명으로 저장돼 있다.
+// (public/images/info/{slug}.webp) — 데이터에 경로를 일일이 적지 않고 여기서 파생시킨다.
+export function getArticleImage(slug: string): string {
+  return `/images/info/${slug}.webp`;
+}
