@@ -34,6 +34,7 @@ import {
   type SalaryCandidate, type ComplexSalaryResult,
 } from '@/lib/parseJob';
 import AdminProducts from '@/components/AdminProducts';
+import InfoEditPanel from '@/components/InfoEditPanel';
 import {
   getToken,
   setToken,
@@ -112,7 +113,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'settings' | 'stats' | 'threads';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'settings' | 'stats' | 'threads' | 'info_edit';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1412,6 +1413,7 @@ export default function Admin() {
               { key: 'products', label: '🛒 추천템' },
               { key: 'stats', label: '📊 방문 통계' },
               { key: 'threads', label: '🧵 홍보 초안' },
+              { key: 'info_edit', label: '✍️ 정보글 수정' },
               { key: 'settings', label: '⚙️ 설정' },
             ] as { key: Tab; label: string }[]
           ).map((t) => (
@@ -2408,6 +2410,8 @@ export default function Admin() {
         })()}
 
         {tab === 'threads' && <ThreadsDraftsPanel />}
+
+        {tab === 'info_edit' && <InfoEditPanel showToast={showToast} />}
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">

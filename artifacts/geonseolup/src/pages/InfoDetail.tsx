@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { getArticle, getArticleImage, INFO_ARTICLES } from '@/lib/infoData';
+import { useInfoArticles, getArticleImage } from '@/lib/infoData';
 
 interface Props {
   slug: string;
 }
 
 export default function InfoDetail({ slug }: Props) {
-  const article = getArticle(slug);
+  const articles = useInfoArticles();
+  const article = articles.find((a) => a.slug === slug);
 
   useEffect(() => {
     if (article) {
@@ -35,9 +36,9 @@ export default function InfoDetail({ slug }: Props) {
     );
   }
 
-  const currentIdx = INFO_ARTICLES.findIndex((a) => a.slug === slug);
-  const prevArticle = currentIdx > 0 ? INFO_ARTICLES[currentIdx - 1] : null;
-  const nextArticle = currentIdx < INFO_ARTICLES.length - 1 ? INFO_ARTICLES[currentIdx + 1] : null;
+  const currentIdx = articles.findIndex((a) => a.slug === slug);
+  const prevArticle = currentIdx > 0 ? articles[currentIdx - 1] : null;
+  const nextArticle = currentIdx < articles.length - 1 ? articles[currentIdx + 1] : null;
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>

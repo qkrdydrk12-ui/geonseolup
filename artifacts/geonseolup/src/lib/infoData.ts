@@ -215,6 +215,42 @@ export function getArticle(slug: string): InfoArticle | undefined {
   return INFO_ARTICLES.find((a) => a.slug === slug);
 }
 
+// 관리자가 수정한 내용(override)을 서버에서 받아 원본과 병합한다.
+// 서버 조회 실패 시에는 원본을 그대로 보여준다 (글이 안 보이는 것보단 낫다).
+import { useEffect, useState } from 'react';
+
+let _overridesCache: Record<string, InfoArticle> | null = null;
+
+export async function fetchInfoOverrides(): Promise<Record<string, InfoArticle>> {
+  if (_overridesCache) return _overridesCache;
+  try {
+    const res = await fetch('/api/info/overrides');
+    if (!res.ok) return {};
+    const data = await res.json();
+    _overridesCache = (data?.overrides ?? {}) as Record<string, InfoArticle>;
+    return _overridesCache;
+  } catch {
+    return {};
+  }
+}
+
+export function clearInfoOverridesCache() {
+  _overridesCache = null;
+}
+
+export function useInfoArticles(): InfoArticle[] {
+  const [articles, setArticles] = useState<InfoArticle[]>(INFO_ARTICLES);
+  useEffect(() => {
+    let alive = true;
+    fetchInfoOverrides().then((overrides) => {
+      if (!alive || !Object.keys(overrides).length) return;
+      setArticles(INFO_ARTICLES.map((a) => overrides[a.slug] ? { ...a, ...overrides[a.slug] } : a));
+    });
+    return () => { alive = false; };
+  }, []);
+  return articles;
+}
+
 // 아티클마다 AI로 생성한 헤더 이미지가 slug와 동일한 파일명으로 저장돼 있다.
 // (public/images/info/{slug}.webp) — 데이터에 경로를 일일이 적지 않고 여기서 파생시킨다.
 export function getArticleImage(slug: string): string {

@@ -9,6 +9,7 @@ import coupangRouter from "./coupang";
 import indexingRouter from "./indexing";
 import pushRouter from "./push";
 import subscribeRouter from "./subscribe";
+import infoRouter from "./info";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(coupangRouter);
 router.use(indexingRouter);
 router.use(pushRouter);
 router.use(subscribeRouter);
+router.use(infoRouter);
 
 export default router;

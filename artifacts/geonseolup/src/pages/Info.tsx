@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { INFO_ARTICLES, getArticleImage } from '@/lib/infoData';
+import { useInfoArticles, getArticleImage } from '@/lib/infoData';
 
 export default function Info() {
+  const articles = useInfoArticles();
   useEffect(() => {
     document.title = '정보/꿀팁 — 건설UP';
     let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
@@ -20,7 +21,7 @@ export default function Info() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {INFO_ARTICLES.map((article) => (
+          {articles.map((article) => (
             <Link
               key={article.slug}
               href={`/info/${article.slug}`}

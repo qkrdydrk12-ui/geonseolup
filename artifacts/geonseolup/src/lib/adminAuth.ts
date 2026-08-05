@@ -58,6 +58,41 @@ export async function apiVerify(): Promise<boolean> {
   }
 }
 
+export async function apiSaveInfoOverride(article: {
+  slug: string;
+  title: string;
+  description: string;
+  emoji: string;
+  body: { subtitle?: string; text: string }[];
+}): Promise<{ ok: boolean; message?: string }> {
+  const token = getToken();
+  if (!token) return { ok: false, message: '인증이 필요합니다' };
+  try {
+    const res = await fetch(`/api/admin/info/${article.slug}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(article),
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, message: '서버 오류가 발생했습니다' };
+  }
+}
+
+export async function apiResetInfoOverride(slug: string): Promise<{ ok: boolean; message?: string }> {
+  const token = getToken();
+  if (!token) return { ok: false, message: '인증이 필요합니다' };
+  try {
+    const res = await fetch(`/api/admin/info/${slug}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await res.json();
+  } catch {
+    return { ok: false, message: '서버 오류가 발생했습니다' };
+  }
+}
+
 export async function apiUpdateCreds(newId: string, newPw: string): Promise<{ ok: boolean; message?: string }> {
   const token = getToken();
   if (!token) return { ok: false, message: '인증이 필요합니다' };
