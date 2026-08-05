@@ -8,6 +8,9 @@ interface ThreadsDraft {
   linkUrl: string;
   status: string;
   createdAt: string;
+  imageStyle?: string | null;
+  imageCopy?: string | null;
+  imagePrompt?: string | null;
 }
 
 // 신규 공고 중 "홍보할 만한" 것이 뜨면 서버가 자동으로 초안을 만들어 큐에 쌓아둔다.
@@ -158,6 +161,26 @@ export default function ThreadsDraftsPanel() {
               <p className="text-[11px] text-gray-400 mb-3">
                 댓글로 자동 첨부될 링크: <span className="text-[#1e3a5f] font-semibold">{d.linkUrl}</span>
               </p>
+              {d.imageStyle && (
+                <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 mb-3">
+                  <p className="text-[11px] font-bold text-[#f97316] mb-1.5">
+                    🎨 이번 게시글 이미지 스타일: {d.imageStyle} (최근 10개와 겹치지 않게 자동 로테이션됨)
+                  </p>
+                  {d.imageCopy && (
+                    <p className="text-[11px] text-gray-600 mb-1">
+                      이미지 문구: <span className="font-semibold text-gray-800">{d.imageCopy}</span>
+                    </p>
+                  )}
+                  {d.imagePrompt && (
+                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                      AI 이미지 프롬프트: {d.imagePrompt}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-gray-400 mt-1.5">
+                    * 실제 이미지 파일은 자동 생성되지 않아요. 위 프롬프트로 이미지 생성 후 직접 첨부하거나, 챗에서 "이 초안 이미지 만들어줘"라고 요청하세요.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   disabled={busyId === d.id}
