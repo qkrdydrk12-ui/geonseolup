@@ -4,7 +4,7 @@ import { Router, type Request, type Response } from "express";
 import { requireAdmin } from "../lib/adminStore";
 import {
   isIndexingConfigured,
-  notifyGoogle,
+  notifyGoogleIndexing,
   type IndexingNotifyType,
 } from "../lib/googleIndexing";
 
@@ -42,14 +42,10 @@ router.post("/admin/indexing/notify", requireAdmin, async (req: Request, res: Re
     return;
   }
 
-  const results: Array<{ url: string; ok: boolean; status: number; message?: string }> = [];
+  const results: Array<{ url: string; ok: boolean }> = [];
   for (const url of list) {
-    try {
-      const r = await notifyGoogle(url, notifyType);
-      results.push({ url, ...r });
-    } catch (err) {
-      results.push({ url, ok: false, status: 0, message: String(err).slice(0, 200) });
-    }
+    const ok = await notifyGoogleIndexing(url, notifyType);
+    results.push({ url, ok });
   }
   const succeeded = results.filter((r) => r.ok).length;
   res.json({ ok: succeeded > 0, total: results.length, succeeded, results });
