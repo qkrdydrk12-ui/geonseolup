@@ -1,0 +1,129 @@
+import { useEffect, useState } from 'react';
+import { getToken } from '@/lib/adminAuth';
+
+interface ThreadsDraft {
+  id: number;
+  jobId: string;
+  text: string;
+  linkUrl: string;
+  status: string;
+  createdAt: string;
+}
+
+// 신규 공고 중 "홍보할 만한" 것이 뜨면 서버가 자동으로 초안을 만들어 큐에 쌓아둔다.
+// 여기서는 그 초안을 보고 그대로/수정해서 발행하거나 버릴 수만 있다 —
+// 실제 Threads 발행은 반드시 이 화면에서 "발행" 버튼을 눌러야만 일어난다.
+export default function ThreadsDraftsPanel() {
+  const [drafts, setDrafts] = useState<ThreadsDraft[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Record<number, string>>({});
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [msg, setMsg] = useState<{ id: number; text: string; ok: boolean } | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/threads/drafts', {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = (await res.json()) as { ok: boolean; drafts?: ThreadsDraft[] };
+      if (data.ok && data.drafts) setDrafts(data.drafts);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function handlePublish(id: number) {
+    if (!confirm('이 초안을 실제로 Threads에 발행할까요? 발행 후에는 되돌릴 수 없어요.')) return;
+    setBusyId(id);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/admin/threads/drafts/${id}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ text: editing[id] }),
+      });
+      const data = (await res.json()) as { ok: boolean; message?: string };
+      setMsg({ id, text: data.ok ? '✅ 발행 완료!' : `❌ ${data.message || '발행 실패'}`, ok: data.ok });
+      if (data.ok) setDrafts((prev) => prev.filter((d) => d.id !== id));
+    } catch (e) {
+      setMsg({ id, text: `❌ 네트워크 오류: ${String(e)}`, ok: false });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReject(id: number) {
+    setBusyId(id);
+    try {
+      await fetch(`/api/admin/threads/drafts/${id}/reject`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      setDrafts((prev) => prev.filter((d) => d.id !== id));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4 pb-2.5 border-b-2 border-gray-100">
+        <h2 className="text-lg font-bold text-[#1e3a5f]">🧵 Threads 홍보 초안</h2>
+        <button
+          className="text-xs font-bold text-gray-500 hover:text-[#f97316] cursor-pointer bg-transparent border-none"
+          onClick={load}
+        >
+          🔄 새로고침
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">
+        숙식 제공 또는 급여가 높은 신규 공고가 등록되면 자동으로 초안이 여기 쌓여요.
+        내용을 확인·수정한 뒤 발행 버튼을 눌러야만 실제로 Threads에 올라갑니다 (자동 발행 아님).
+      </p>
+
+      {loading ? (
+        <div className="text-center py-10 text-gray-400 text-sm">불러오는 중…</div>
+      ) : drafts.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 text-sm">대기 중인 초안이 없어요.</div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {drafts.map((d) => (
+            <div key={d.id} className="border border-gray-200 rounded-lg p-4">
+              <textarea
+                value={editing[d.id] ?? d.text}
+                onChange={(e) => setEditing((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                rows={4}
+                className="w-full text-sm border border-gray-200 rounded-lg p-2.5 mb-2 outline-none focus:border-[#f97316] font-[inherit]"
+              />
+              <p className="text-[11px] text-gray-400 mb-3">
+                댓글로 자동 첨부될 링크: <span className="text-[#1e3a5f] font-semibold">{d.linkUrl}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={busyId === d.id}
+                  className="bg-[#f97316] text-white border-none px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:bg-[#ea580c] disabled:opacity-60"
+                  onClick={() => handlePublish(d.id)}
+                >
+                  {busyId === d.id ? '처리 중…' : '🚀 발행하기'}
+                </button>
+                <button
+                  disabled={busyId === d.id}
+                  className="bg-white text-gray-500 border-[1.5px] border-gray-200 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:border-red-300 hover:text-red-500 disabled:opacity-60"
+                  onClick={() => handleReject(d.id)}
+                >
+                  삭제
+                </button>
+                {msg?.id === d.id && (
+                  <span className={`text-xs font-semibold ${msg.ok ? 'text-emerald-600' : 'text-red-500'}`}>{msg.text}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

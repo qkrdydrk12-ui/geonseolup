@@ -111,6 +111,20 @@ export async function subscribeEmail(
   return { ok: true };
 }
 
+export async function countEmailSubscribers(): Promise<{ confirmed: number; unconfirmed: number }> {
+  await ensureTable();
+  const result = await pgPool.query<{ confirmed: boolean; count: string }>(
+    `SELECT confirmed, COUNT(*) AS count FROM email_subscribers GROUP BY confirmed`
+  );
+  let confirmed = 0;
+  let unconfirmed = 0;
+  for (const row of result.rows) {
+    if (row.confirmed) confirmed = Number(row.count);
+    else unconfirmed = Number(row.count);
+  }
+  return { confirmed, unconfirmed };
+}
+
 export async function confirmSubscription(token: string): Promise<boolean> {
   await ensureTable();
   const result = await pgPool.query(
@@ -195,10 +209,27 @@ async function flushDigest(): Promise<void> {
   logger.info({ jobs: jobs.length, subscribers: subs.length }, "[email-subs] 다이제스트 발송 완료");
 }
 
+// 확인 메일을 7일 넘게 클릭하지 않은 미확정 구독은 봇/오타일 가능성이 높아
+// 자동 삭제한다 — 쌓이기만 하고 절대 발송되지 않는 쓰레기 데이터 방지.
+async function cleanupUnconfirmed(): Promise<void> {
+  await ensureTable();
+  try {
+    const result = await pgPool.query(
+      `DELETE FROM email_subscribers WHERE confirmed = false AND created_at < now() - interval '7 days'`
+    );
+    if ((result.rowCount ?? 0) > 0) {
+      logger.info({ deleted: result.rowCount }, "[email-subs] 미확인 구독 자동 정리");
+    }
+  } catch (err) {
+    logger.warn({ err: String(err) }, "[email-subs] 미확인 구독 정리 실패");
+  }
+}
+
 let _digestHandle: ReturnType<typeof setInterval> | null = null;
 export function startEmailDigestScheduler(): void {
   if (_digestHandle != null) return;
   _digestHandle = setInterval(() => {
     flushDigest().catch((err) => logger.error({ err: String(err) }, "[email-subs] 다이제스트 발송 실패"));
+    cleanupUnconfirmed().catch((err) => logger.error({ err: String(err) }, "[email-subs] 정리 루틴 실패"));
   }, DIGEST_INTERVAL_MS);
 }
