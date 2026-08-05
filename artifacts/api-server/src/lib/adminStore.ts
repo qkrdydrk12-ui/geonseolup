@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 
-const SESSION_DURATION_MS = 20 * 60 * 1000;
+const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30일 — 비활동 자동 로그아웃 없음
 
 export const adminStore = {
   adminId: "qkrdydrk12",

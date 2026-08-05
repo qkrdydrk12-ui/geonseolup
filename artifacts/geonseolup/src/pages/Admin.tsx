@@ -42,7 +42,6 @@ import {
   apiLogout,
   apiVerify,
   apiUpdateCreds,
-  startIdleTimer,
 } from '@/lib/adminAuth';
 
 
@@ -122,8 +121,14 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authChecking, setAuthChecking] = useState(true); // 토큰 검증 중
   const [adminId, setAdminId] = useState(() => localStorage.getItem('cj_saved_id') || '');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cj_saved_pw');
+      return saved ? atob(saved) : '';
+    } catch { return ''; }
+  });
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('cj_saved_id'));
+  const [rememberPw, setRememberPw] = useState(() => !!localStorage.getItem('cj_saved_pw'));
   const [pwError, setPwError] = useState(false);
   const [pwErrorMsg, setPwErrorMsg] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -345,9 +350,10 @@ export default function Admin() {
     if (result.ok && result.token) {
       if (rememberMe) localStorage.setItem('cj_saved_id', adminId);
       else localStorage.removeItem('cj_saved_id');
+      if (rememberPw) localStorage.setItem('cj_saved_pw', btoa(password));
+      else localStorage.removeItem('cj_saved_pw');
       setToken(result.token);
       setAuthed(true);
-      setPassword('');
       window.dispatchEvent(new Event('admin-login'));
     } else {
       setPwError(true);
@@ -359,7 +365,10 @@ export default function Admin() {
     await apiLogout();
     clearToken();
     setAuthed(false);
-    setPassword('');
+    try {
+      const saved = localStorage.getItem('cj_saved_pw');
+      setPassword(saved ? atob(saved) : '');
+    } catch { setPassword(''); }
     window.dispatchEvent(new Event('admin-logout'));
   }
 
@@ -438,16 +447,6 @@ export default function Admin() {
     }
     checkSession();
   }, []);
-
-  // 로그인 상태일 때 비활동 자동 로그아웃 타이머 시작
-  useEffect(() => {
-    if (!authed) return;
-    const cleanup = startIdleTimer(() => {
-      handleLogout();
-      alert('20분간 활동이 없어 자동 로그아웃됐습니다.');
-    });
-    return cleanup;
-  }, [authed]);
 
   useEffect(() => {
     if (authed) {
@@ -1248,6 +1247,19 @@ export default function Admin() {
                 className="w-4 h-4 accent-[#f97316] cursor-pointer"
               />
               <label htmlFor="rememberMe" className="text-sm text-gray-500 cursor-pointer select-none">아이디 기억하기</label>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                id="rememberPw"
+                type="checkbox"
+                checked={rememberPw}
+                onChange={(e) => {
+                  setRememberPw(e.target.checked);
+                  if (!e.target.checked) localStorage.removeItem('cj_saved_pw');
+                }}
+                className="w-4 h-4 accent-[#f97316] cursor-pointer"
+              />
+              <label htmlFor="rememberPw" className="text-sm text-gray-500 cursor-pointer select-none">비밀번호 기억하기</label>
             </div>
             {pwError && (
               <div className="bg-red-100 text-red-700 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold mb-3">
