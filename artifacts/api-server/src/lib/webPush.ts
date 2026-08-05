@@ -38,8 +38,8 @@ interface NewJobPayload {
 
 // ── 묶음(배치) 발송 ─────────────────────────────────────────────────────────
 // 공고가 연달아 여러 건 올라와도 구독자에게 알림이 1건씩 연속으로 가지 않도록,
-// 일정 시간(기본 5분) 동안 모았다가 한 번만 발송한다.
-const BATCH_DELAY_MS = Number(process.env["PUSH_BATCH_DELAY_MS"] ?? 5 * 60_000);
+// 일정 시간(기본 20분) 동안 모았다가 한 번만 발송한다.
+const BATCH_DELAY_MS = Number(process.env["PUSH_BATCH_DELAY_MS"] ?? 20 * 60_000);
 
 let _pending: NewJobPayload[] = [];
 let _flushTimer: ReturnType<typeof setTimeout> | null = null;
