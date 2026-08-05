@@ -108,9 +108,26 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     ]);
 
     if (!job) {
-      // 존재하지 않는/비공개 공고 — 원본 템플릿 그대로 내려줌 (React가 404 처리)
+      // 공고는 등록 2일 후 자동 삭제된다. 존재하지 않는 공고 ID는
+      // "없을 수도 있음"(404)이 아니라 "확실히 만료되어 사라짐" 상태이므로,
+      // 구글이 채용정보 만료 시 권장하는 410 Gone으로 명확히 응답한다.
+      // (200으로 홈 화면 껍데기를 내려주면 검색엔진이 "소프트 404"로 인식해 감점됨)
+      const expiredHtml = template
+        .replace(/<title>[^<]*<\/title>/, "<title>만료된 공고입니다 - 건설UP</title>")
+        .replace(
+          /<div id="root">[\s\S]*?<script type="module"/,
+          `
+    <div id="root">
+      <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6;text-align:center">
+        <h1 style="font-size:20px;font-weight:700;color:#f97316;margin:40px 0 8px">이 공고는 마감되었거나 만료되었어요</h1>
+        <p style="margin:0 0 20px;color:#334155">등록된 공고는 2일 뒤 자동으로 내려갑니다. 지금 올라와 있는 다른 공고를 확인해보세요.</p>
+        <p><a href="/" style="color:#f97316;font-weight:700;text-decoration:underline">건설UP 홈에서 다른 공고 보기 →</a></p>
+      </div>
+    </div>
+    <script type="module"`
+        );
       res.set("Content-Type", "text/html; charset=utf-8");
-      res.status(200).send(template);
+      res.status(410).send(expiredHtml);
       return;
     }
 
