@@ -122,7 +122,11 @@ router.get("/rss", async (_req: Request, res: Response) => {
         ].filter(Boolean);
         const desc = escapeXml(descParts.join(" | "));
 
-        const link = `${siteUrl}/#job-${id}`;
+        // 2026-08-05: 예전엔 #job-id 해시 프래그먼트를 썼는데, 이건 실제 문서가 아니라
+        // 검색엔진이 전부 홈페이지로만 인식해서 개별 공고가 색인되지 않았다.
+        // /detail/:id는 api-server의 seo.ts가 공고별 title/description/OG/JobPosting
+        // 구조화 데이터를 서버에서 채워주는 진짜 개별 URL이므로 이걸 링크해야 한다.
+        const link = `${siteUrl}/detail/${id}`;
         const pubDate = toRfc822(date || new Date().toISOString());
 
         return `    <item>
