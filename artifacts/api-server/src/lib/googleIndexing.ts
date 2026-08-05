@@ -15,10 +15,24 @@ let cachedToken: { token: string; expiresAt: number } | null = null;
 function getCreds(): { clientEmail: string; privateKey: string } | null {
   const clientEmail = process.env["GOOGLE_INDEXING_CLIENT_EMAIL"];
   let privateKey = process.env["GOOGLE_INDEXING_PRIVATE_KEY"];
-  if (!clientEmail || !privateKey) return null;
+  if (!privateKey) return null;
+  let emailFromJson: string | undefined;
+  // 시크릿에 서비스 계정 JSON 전체가 저장된 경우 private_key 필드만 추출
+  const trimmed = privateKey.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as { private_key?: string; client_email?: string };
+      if (parsed.private_key) privateKey = parsed.private_key;
+      if (parsed.client_email) emailFromJson = parsed.client_email;
+    } catch {
+      // JSON 파싱 실패 시 원본 그대로 사용
+    }
+  }
+  const email = clientEmail || emailFromJson;
+  if (!email) return null;
   // 시크릿에 \n 이 문자 그대로 저장된 경우 실제 개행으로 변환
   privateKey = privateKey.replace(/\\n/g, "\n");
-  return { clientEmail, privateKey };
+  return { clientEmail: email, privateKey };
 }
 
 export function isIndexingConfigured(): boolean {
