@@ -8,67 +8,6 @@ import { getToken, apiVerify } from '@/lib/adminAuth';
 import JobCard from '@/components/JobCard';
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, isPushMarkedSubscribed } from '@/lib/push';
 
-// 실시간 인기 공고 (조회수 집계 기반, 최근 7일 / 서버 API — 부가 기능이라 실패해도 무시)
-function usePopularJobs(): (Job & { views?: number })[] {
-  const [popular, setPopular] = useState<(Job & { views?: number })[]>([]);
-  useEffect(() => {
-    let active = true;
-    fetch('/api/jobs/popular?limit=8')
-      .then((r) => (r.ok ? r.json() : { jobs: [] }))
-      .then((data: { jobs?: (Job & { views?: number })[] }) => {
-        if (active && Array.isArray(data.jobs)) setPopular(data.jobs);
-      })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
-  return popular;
-}
-
-function PopularJobsSection() {
-  const [, setLocation] = useLocation();
-  const popular = usePopularJobs();
-  if (popular.length === 0) return null;
-  return (
-    <section className="mb-2.5">
-      <div className="text-xs font-extrabold text-gray-500 mb-1.5 flex items-center gap-1 uppercase tracking-wide">
-        👀 지금 많이 보고 있어요
-      </div>
-      <div className="flex gap-2.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: 'none' }}>
-        {popular.map((j) => {
-          const bg = JOB_ICON_BG[j.job] || '#f3f4f6';
-          return (
-            <a
-              key={j.id}
-              href={`/detail/${j.id}`}
-              className="shrink-0 w-[200px] bg-white rounded-[10px] border-[1.5px] border-gray-200 shadow-sm p-[13px] cursor-pointer hover:shadow-md hover:border-[#f97316] hover:-translate-y-0.5 transition-all no-underline text-gray-800 block"
-              onClick={(e) => { e.preventDefault(); setLocation(`/detail/${j.id}`); }}
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-8 h-8 rounded-[7px] flex items-center justify-center text-[15px]" style={{ background: bg }}>
-                  {getJobIcon(j.job)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold leading-snug line-clamp-2">{j.title}</div>
-                </div>
-              </div>
-              <span className="block text-[#f97316] text-[13px] font-extrabold mb-0.5">{j.salary || '협의'}</span>
-              <div className="flex items-center justify-between mt-1.5">
-                <span className="text-[10px] text-gray-500">📍 {j.region}</span>
-                {typeof j.views === 'number' && (
-                  <span className="text-[10px] text-gray-400">👀 {j.views}</span>
-                )}
-              </div>
-              {isNew(j.date) && (
-                <span className="text-[9px] font-bold bg-[#f97316] text-white px-[5px] py-0.5 rounded block mt-1.5 text-center">NEW</span>
-              )}
-            </a>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 const DEFAULT_AUTO_HIDE = 0;
 
 function getHomeSettings() {
@@ -384,25 +323,6 @@ interface HomeProps {
   initialJob?: string;
 }
 
-// 지역×직종 조합별 실제 공고 수를 세어, 공고가 있는 조합만 상위 N개 반환.
-// SEO 랜딩페이지(/jobs/:region/:job)로 향하는 실제 내부링크에 쓴다 —
-// 공고가 0건인 조합으로는 링크하지 않는다(빈 페이지로 링크하는 건 SEO에 오히려 해로움).
-function getTopRegionJobLinks(jobs: Job[], limit = 12): { region: string; job: string; count: number }[] {
-  const counts = new Map<string, number>();
-  for (const j of jobs) {
-    if (!j.region || !j.job || j.region === '전체' || j.job === '전체') continue;
-    const key = `${j.region}::${j.job}`;
-    counts.set(key, (counts.get(key) || 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .map(([key, count]) => {
-      const [region, job] = key.split('::');
-      return { region, job, count };
-    })
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
-}
-
 export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
   const [state, setState] = useState<AppState>(() => {
     const initial = {
@@ -712,9 +632,6 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
           </div>
         </section>)}
 
-        {/* 실시간 인기 공고 (조회수 집계 기반) */}
-        <PopularJobsSection />
-
         {/* 알림 구독 (웹 푸시 + 이메일, 현재 필터 기준) */}
         <SubscribeBar region={state.region} job={state.job} />
 
@@ -989,23 +906,6 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
 
       {/* 푸터 */}
       <footer style={{ background: '#1e3a5f' }} className="mt-4 py-6 text-center text-white">
-        {(() => {
-          const topLinks = getTopRegionJobLinks(state.allJobs);
-          if (topLinks.length === 0) return null;
-          return (
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 mb-4 px-4 text-xs text-white/60 max-w-[860px] mx-auto">
-              {topLinks.map(({ region, job, count }) => (
-                <a
-                  key={`${region}-${job}`}
-                  href={`/jobs/${encodeURIComponent(region)}/${encodeURIComponent(job)}`}
-                  className="hover:text-white no-underline transition-colors"
-                >
-                  {region} {job} 구인 ({count})
-                </a>
-              ))}
-            </div>
-          );
-        })()}
         <div className="flex flex-wrap items-center justify-center gap-4 mb-3 text-sm">
           <a href="/" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
             🏠 홈
