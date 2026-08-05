@@ -145,6 +145,12 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           🔔 <b className="text-[#f97316]">{filterLabel}</b> 새 공고 알림받기
         </span>
         <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+          <a
+            href="/info"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all no-underline"
+          >
+            💡 건설꿀팁!
+          </a>
           {isPushSupported() && (
             <button
               className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${
