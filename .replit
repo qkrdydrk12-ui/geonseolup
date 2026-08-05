@@ -38,3 +38,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 GOOGLE_INDEXING_CLIENT_EMAIL = "geonseolup-indexing@serious-house-495211-q4.iam.gserviceaccount.com"
+VAPID_PUBLIC_KEY = "BE_EJVaI7jDl5DBfHsieGvNrZ8qYp9L9_Au1kaRS4ey_na6F_bSYHAXEPD4sD_h-SYlf4vvJCfqf_1hFGxg_pls"
