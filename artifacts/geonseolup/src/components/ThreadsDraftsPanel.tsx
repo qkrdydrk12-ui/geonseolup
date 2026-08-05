@@ -20,6 +20,33 @@ export default function ThreadsDraftsPanel() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ id: number; text: string; ok: boolean } | null>(null);
 
+  // 자동 초안과 별개로, 직접 문구를 써서 즉시 발행 (테스트 + 자유 발행용)
+  const [composeText, setComposeText] = useState('');
+  const [composeLink, setComposeLink] = useState('');
+  const [composeBusy, setComposeBusy] = useState(false);
+  const [composeMsg, setComposeMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function handleComposePublish() {
+    if (!composeText.trim()) return;
+    if (!confirm('이 문구를 실제로 Threads에 발행할까요? 발행 후에는 되돌릴 수 없어요.')) return;
+    setComposeBusy(true);
+    setComposeMsg(null);
+    try {
+      const res = await fetch('/api/admin/threads/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ text: composeText.trim(), linkUrl: composeLink.trim() || undefined }),
+      });
+      const data = (await res.json()) as { ok: boolean; message?: string };
+      setComposeMsg({ text: data.ok ? '✅ 발행 완료!' : `❌ ${data.message || '발행 실패'}`, ok: data.ok });
+      if (data.ok) { setComposeText(''); setComposeLink(''); }
+    } catch (e) {
+      setComposeMsg({ text: `❌ 네트워크 오류: ${String(e)}`, ok: false });
+    } finally {
+      setComposeBusy(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     try {
@@ -84,10 +111,40 @@ export default function ThreadsDraftsPanel() {
         내용을 확인·수정한 뒤 발행 버튼을 눌러야만 실제로 Threads에 올라갑니다 (자동 발행 아님).
       </p>
 
+      {/* 직접 작성해서 발행 (테스트용 + 자유 발행) */}
+      <div className="border border-dashed border-gray-300 rounded-lg p-4 mb-5 bg-gray-50">
+        <p className="text-xs font-bold text-gray-600 mb-2">✍️ 직접 작성해서 바로 발행</p>
+        <textarea
+          value={composeText}
+          onChange={(e) => setComposeText(e.target.value)}
+          rows={3}
+          placeholder="발행할 문구를 입력하세요 (링크·전화번호는 본문에 넣지 마세요)"
+          className="w-full text-sm border border-gray-200 rounded-lg p-2.5 mb-2 outline-none focus:border-[#f97316] font-[inherit] bg-white"
+        />
+        <input
+          value={composeLink}
+          onChange={(e) => setComposeLink(e.target.value)}
+          placeholder="댓글로 붙일 링크 (선택, 예: https://geonseolup.com)"
+          className="w-full text-xs border border-gray-200 rounded-lg p-2 mb-2 outline-none focus:border-[#f97316] font-[inherit] bg-white"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            disabled={composeBusy || !composeText.trim()}
+            className="bg-[#f97316] text-white border-none px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:bg-[#ea580c] disabled:opacity-60"
+            onClick={handleComposePublish}
+          >
+            {composeBusy ? '처리 중…' : '🚀 발행하기'}
+          </button>
+          {composeMsg && (
+            <span className={`text-xs font-semibold ${composeMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>{composeMsg.text}</span>
+          )}
+        </div>
+      </div>
+
       {loading ? (
         <div className="text-center py-10 text-gray-400 text-sm">불러오는 중…</div>
       ) : drafts.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">대기 중인 초안이 없어요.</div>
+        <div className="text-center py-6 text-gray-400 text-sm">자동 생성된 대기 초안은 없어요. 위에서 직접 작성해 발행할 수 있어요.</div>
       ) : (
         <div className="flex flex-col gap-3">
           {drafts.map((d) => (

@@ -159,6 +159,27 @@ router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Resp
 // ── Threads 홍보 초안: 목록 조회 / 발행(승인) / 거절 — 전부 관리자 인증 필수 ──
 // 발행은 오직 이 라우트를 통해서만 일어난다 = 사람이 명시적으로 버튼을 눌러야만 나감.
 
+// POST /api/admin/threads/publish — 자동 초안이 아니라 관리자가 직접 쓴 문구를 즉시 발행
+// (테스트용 + 자동 조건에 안 걸리는 공고도 수동으로 홍보하고 싶을 때 사용).
+router.post("/admin/threads/publish", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    const linkUrl = typeof req.body?.linkUrl === "string" ? req.body.linkUrl.trim() : undefined;
+    if (!text) {
+      res.status(400).json({ ok: false, message: "문구를 입력해주세요" });
+      return;
+    }
+    const result = await publishToThreads(text, linkUrl || undefined);
+    if (!result.ok) {
+      res.status(502).json({ ok: false, message: result.error ?? "발행 실패" });
+      return;
+    }
+    res.json({ ok: true, postId: result.postId });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
 // GET /api/admin/threads/drafts — 대기 중인 초안 목록
 router.get("/admin/threads/drafts", requireAdmin, async (_req: Request, res: Response) => {
   try {
