@@ -118,6 +118,33 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   return `<script type="application/ld+json">${escapeJsonForScriptTag(JSON.stringify(ld))}</script>`;
 }
 
+// BreadcrumbList 구조화 데이터 — 검색결과에 "건설UP > 서울 > 조공" 같은
+// 경로 리치스니펫을 노출시켜 클릭률(CTR)을 높인다.
+function buildBreadcrumbLd(items: { name: string; url: string }[]): string {
+  const ld = {
+    "@context": "https://schema.org/",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+  return `<script type="application/ld+json">${escapeJsonForScriptTag(JSON.stringify(ld))}</script>`;
+}
+
+// <head>의 canonical 태그를 주어진 URL로 교체. index.html 원본엔 홈 URL이
+// 고정으로 박혀있어서, 이걸 안 바꾸면 모든 상세/랜딩 페이지가 "내가 원본이
+// 아니라 홈이 원본"이라고 구글에 잘못 신고하는 셈이 되어 개별 페이지가
+// 색인에서 홈으로 합쳐지거나 아예 빠질 수 있다 — SEO에 치명적인 버그였음.
+function setCanonical(html: string, url: string): string {
+  return html.replace(
+    /<link rel=["']canonical["'][^>]*\/>/,
+    `<link rel="canonical" href="${escapeHtmlAttr(url)}" />`
+  );
+}
+
 // 지역×직종 조합별 공고 수 집계 (공고가 있는 조합만) — sitemap과 랜딩페이지가 공유.
 function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string, number> {
   const counts = new Map<string, number>();
@@ -278,10 +305,20 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
       /(<meta[^>]*property=["']og:url["'][^>]*content=)["'][^"']*["']/,
       `$1"${pageUrl}"`
     );
+    // canonical — 원본 index.html엔 홈 URL이 고정 박혀있어 반드시 이 페이지 URL로 교체해야 함.
+    html = setCanonical(html, pageUrl);
 
     // JobPosting 구조화 데이터 삽입 (Google 채용정보 검색 노출 자격 부여)
     const jobPostingLd = buildJobPostingLd(job, id);
-    html = html.replace("</head>", `  ${jobPostingLd}\n  </head>`);
+    // BreadcrumbList: 홈 > (지역 직종 랜딩페이지) > 공고 상세
+    const breadcrumbLd = buildBreadcrumbLd([
+      { name: "건설UP", url: SITE_URL },
+      ...(region && jobType
+        ? [{ name: `${region} ${jobType}`, url: `${SITE_URL}/jobs/${encodeURIComponent(region)}/${encodeURIComponent(jobType)}` }]
+        : []),
+      { name: pageTitle.replace(/ - 건설UP$/, ""), url: pageUrl },
+    ]);
+    html = html.replace("</head>", `  ${jobPostingLd}\n  ${breadcrumbLd}\n  </head>`);
 
     // <div id="root"> 안의 정적 폴백 본문(크롤러/JS 미실행 환경용)을
     // 이 공고 전용 내용으로 교체 — React가 mount되면 어차피 덮어써지므로
@@ -375,6 +412,14 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
       /<link rel=["']alternate["'] type=["']application\/rss\+xml["'][^>]*\/>/,
       `<link rel="alternate" type="application/rss+xml" title="${escapeHtmlAttr(`건설UP ${region} ${jobType} 구인 공고`)}" href="${regionJobRssUrl}" />`
     );
+    // canonical — 홈 URL 고정값을 이 랜딩페이지 URL로 교체 (동일한 버그, 동일한 이유로 수정).
+    html = setCanonical(html, pageUrl);
+    // BreadcrumbList: 홈 > 지역 직종 구인 공고
+    const breadcrumbLd = buildBreadcrumbLd([
+      { name: "건설UP", url: SITE_URL },
+      { name: `${region} ${jobType} 구인 공고`, url: pageUrl },
+    ]);
+    html = html.replace("</head>", `  ${breadcrumbLd}\n  </head>`);
 
     // 크롤러용 폴백 본문: 실제 매칭 공고 목록(제목+급여+링크)을 그대로 나열.
     // 실사용자는 React가 mount되면서 동일 필터가 적용된 실제 UI로 바로 교체됨.

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import ThreadsDraftsPanel from '@/components/ThreadsDraftsPanel';
 import type { Job, PendingJob, JobReport } from '@/lib/firebase';
 import {
   fbLoadJobs,
@@ -112,7 +113,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'settings' | 'stats';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'settings' | 'stats' | 'threads';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1398,6 +1399,7 @@ export default function Admin() {
               { key: 'reports', label: `🚩 신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
               { key: 'products', label: '🛒 추천템' },
               { key: 'stats', label: '📊 방문 통계' },
+              { key: 'threads', label: '🧵 홍보 초안' },
               { key: 'settings', label: '⚙️ 설정' },
             ] as { key: Tab; label: string }[]
           ).map((t) => (
@@ -2392,6 +2394,8 @@ export default function Admin() {
             </div>
           );
         })()}
+
+        {tab === 'threads' && <ThreadsDraftsPanel />}
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">

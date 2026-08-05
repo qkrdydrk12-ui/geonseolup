@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /api/admin
 
 Sitemap: https://geonseolup.com/sitemap.xml
 

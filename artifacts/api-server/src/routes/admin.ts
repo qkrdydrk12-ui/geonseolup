@@ -13,6 +13,8 @@ import { getPopularJobIds } from "../lib/jobViews.js";
 import { countSubscriptions } from "../lib/pushSubscriptions.js";
 import { countEmailSubscribers } from "../lib/emailSubscribers.js";
 import { getCurrentThreadsToken } from "../lib/threadsToken.js";
+import { listPendingDrafts, markDraftPublished, markDraftRejected, getDraftById } from "../lib/threadsDrafts.js";
+import { publishToThreads } from "../lib/threadsPublish.js";
 
 const router = Router();
 
@@ -123,12 +125,13 @@ router.delete(
 // 공고 수, 구독자 수(푸시/이메일), 인기 공고, Threads 토큰 상태를 한 번에 반환.
 router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const [{ jobs }, popular, pushCount, emailCount, threadsToken] = await Promise.all([
+    const [{ jobs }, popular, pushCount, emailCount, threadsToken, pendingDrafts] = await Promise.all([
       getPublicJobs(),
       getPopularJobIds(5, 7),
       countSubscriptions(),
       countEmailSubscribers(),
       getCurrentThreadsToken(),
+      listPendingDrafts(),
     ]);
 
     res.json({
@@ -146,7 +149,54 @@ router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Resp
             daysLeft: Math.floor((threadsToken.expiresAt.getTime() - Date.now()) / 86400000),
           }
         : { configured: false },
+      threadsPendingDrafts: pendingDrafts.length,
     });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// ── Threads 홍보 초안: 목록 조회 / 발행(승인) / 거절 — 전부 관리자 인증 필수 ──
+// 발행은 오직 이 라우트를 통해서만 일어난다 = 사람이 명시적으로 버튼을 눌러야만 나감.
+
+// GET /api/admin/threads/drafts — 대기 중인 초안 목록
+router.get("/admin/threads/drafts", requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const drafts = await listPendingDrafts();
+    res.json({ ok: true, drafts });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// POST /api/admin/threads/drafts/:id/publish — 관리자가 승인 버튼을 눌렀을 때만 호출
+router.post("/admin/threads/drafts/:id/publish", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params["id"]);
+    const draft = await getDraftById(id);
+    if (!draft || draft.status !== "pending") {
+      res.status(404).json({ ok: false, message: "초안을 찾을 수 없거나 이미 처리됨" });
+      return;
+    }
+    // 편집된 문구를 보냈다면 그걸 우선 사용 (관리자가 발행 전 수정 가능)
+    const text = typeof req.body?.text === "string" && req.body.text.trim() ? req.body.text.trim() : draft.text;
+    const result = await publishToThreads(text, draft.linkUrl);
+    if (!result.ok) {
+      res.status(502).json({ ok: false, message: result.error ?? "발행 실패" });
+      return;
+    }
+    await markDraftPublished(id);
+    res.json({ ok: true, postId: result.postId });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// POST /api/admin/threads/drafts/:id/reject — 마음에 안 들면 그냥 버리기
+router.post("/admin/threads/drafts/:id/reject", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await markDraftRejected(Number(req.params["id"]));
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, message: String(err) });
   }
