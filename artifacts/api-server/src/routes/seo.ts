@@ -138,7 +138,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
   try {
     const { jobs } = await getPublicJobs();
 
-    const staticUrls = [
+    const staticUrls: Array<{ loc: string; changefreq: string; priority: string; lastmod?: string }> = [
       { loc: "/", changefreq: "daily", priority: "1.0" },
       { loc: "/post", changefreq: "monthly", priority: "0.7" },
       { loc: "/shop", changefreq: "weekly", priority: "0.5" },
@@ -161,6 +161,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
         loc: `/jobs/${encodeURIComponent(region)}/${encodeURIComponent(jobType)}`,
         changefreq: "daily",
         priority: "0.5",
+        lastmod: undefined as string | undefined,
       };
     });
 
@@ -197,7 +198,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
 // title/description/OG/Twitter 태그를 서버에서 미리 채워넣는다.
 // (모든 방문자에게 동일한 내용 — 봇 전용 분기 없음. 클로킹 아님.)
 router.get("/detail/:id", async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   try {
     const [template, job] = await Promise.all([
       getIndexTemplate(),
@@ -325,8 +326,8 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
 // 겨냥한 전용 URL. React 쪽 Home 컴포넌트가 동일 필터로 렌더링하므로 실제 방문자
 // 경험은 동일하고, 여기서는 <head>와 크롤러용 폴백 본문만 채워준다.
 router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
-  const region = decodeURIComponent(req.params.region);
-  const jobType = decodeURIComponent(req.params.job);
+  const region = decodeURIComponent(String(req.params.region));
+  const jobType = decodeURIComponent(String(req.params.job));
   try {
     const [template, { jobs }] = await Promise.all([getIndexTemplate(), getPublicJobs()]);
 
