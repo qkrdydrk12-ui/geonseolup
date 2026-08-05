@@ -51,19 +51,76 @@ function isPromotable(job: NewJobPayload, salaryNum?: number): boolean {
   return bothProvided || highPay;
 }
 
+// ── Threads 문구 생성 규칙 (C:\20260804\쓰레드 건설파일\CLAUDE_GUIDE.md 반영) ──
+// 광고처럼 안 보이면서 스크롤을 멈추게 만드는 게 목표. 금지: "모집합니다",
+// "지원하세요", "지금 확인하세요", "아래 링크", 손가락/숙소/불꽃/사이렌 이모지,
+// 과도한 이모지. 첫 문장은 호기심·돈정보·현장분위기·경험담 중 하나로 시작하고
+// 매번 다르게. 구조: 훅 → 현장조건 → 궁금해할 부분 → 지원 전 알아둘 점 →
+// 자연스러운 마무리(CTA) 순서. 8~15줄, 와디즈/토스/당근마켓 톤(담백하고 세련되게).
+
+const HOOK_TEMPLATES: ((j: NewJobPayload) => string)[] = [
+  () => "생각보다 이 조건을 모르는 사람이 많습니다.",
+  () => "이 공고는 조건보다 근무 방식이 더 눈에 들어옵니다.",
+  (j) => `${j.region ?? "이"} 지역 현장인데도 문의가 꾸준한 이유가 있습니다.`,
+  () => "일당만 보면 놓치기 쉬운 조건이 하나 있습니다.",
+  (j) => `${j.job ?? "이 직종"} 공고 중에서도 눈에 띄는 조건입니다.`,
+];
+
+const CLOSING_TEMPLATES = [
+  "조건이 궁금하다면 공고를 한번 살펴보세요.",
+  "실제 근무 조건은 건설UP 공고에서 확인할 수 있습니다.",
+  "관심 있는 분들은 상세 조건을 비교해보세요.",
+];
+
+// 문자열을 안정적인 정수로 바꿔 "랜덤처럼 보이지만 같은 공고엔 항상 같은 문구"가
+// 나오게 한다 (매번 새로고침할 때마다 문구가 바뀌면 관리자가 검토하기 혼란스러움).
+function stableIndex(seed: string, length: number): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return h % length;
+}
+
 function buildDraftText(job: NewJobPayload): string {
-  const titleParts = [job.region, job.job, job.salary].filter(Boolean).join(" · ");
-  const perks = [job.meal?.includes("제공") && "🍚 식사제공", job.lodging?.includes("제공") && "🏠 숙소제공"]
-    .filter(Boolean)
-    .join(" ");
-  return [
-    `${job.region ?? ""} ${job.job ?? ""} 구인 중!`,
-    titleParts,
-    perks || undefined,
-    "지금 건설UP에서 상세 조건 확인하세요 👇",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const region = job.region || "";
+  const jobType = job.job || "";
+  const salary = job.salary || "";
+  const mealProvided = Boolean(job.meal?.includes("제공"));
+  const lodgingProvided = Boolean(job.lodging?.includes("제공"));
+
+  const lines: string[] = [];
+
+  // 1. 훅 — 공고 id 기반으로 매번 다른 문장 선택 (직전 글과 반복되지 않도록)
+  lines.push(HOOK_TEMPLATES[stableIndex(job.id, HOOK_TEMPLATES.length)](job));
+  lines.push("");
+
+  // 2. 현장 조건
+  if (salary) {
+    lines.push(`${region} ${jobType} 현장인데`, `일당 ${salary} 수준입니다.`);
+  } else {
+    lines.push(`${region} ${jobType} 현장 공고입니다.`);
+  }
+  lines.push("");
+
+  // 3. 사람들이 궁금해할 부분 (숙식 조건 — 있을 때만)
+  if (lodgingProvided && mealProvided) {
+    lines.push("숙소와 식사가 함께 제공돼서", "타지역에서도 문의가 들어오는 공고입니다.");
+    lines.push("");
+  } else if (lodgingProvided) {
+    lines.push("숙소가 제공돼서", "타지역에서도 지원이 가능한 조건입니다.");
+    lines.push("");
+  } else if (mealProvided) {
+    lines.push("식사가 제공되는 현장이라", "생활비 부담이 상대적으로 적은 편입니다.");
+    lines.push("");
+  }
+
+  // 4. 지원 전에 알아둘 점
+  lines.push("다만 현장마다 요구하는 경력과 이수증 조건이 다르니", "지원 전 상세 조건을 꼭 확인하는 게 좋습니다.");
+  lines.push("");
+
+  // 5. 자연스러운 마무리 (CTA)
+  lines.push(CLOSING_TEMPLATES[stableIndex(job.id + "cta", CLOSING_TEMPLATES.length)]);
+
+  return lines.join("\n");
 }
 
 export async function maybeCreateDraft(job: NewJobPayload, salaryNum?: number): Promise<void> {
