@@ -64,7 +64,6 @@ export default function InfoDetail({ slug }: Props) {
             />
           </div>
           <div className="p-6 sm:p-8">
-            <div className="text-4xl mb-4">{article.emoji}</div>
             <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
               {article.title}
             </h1>
