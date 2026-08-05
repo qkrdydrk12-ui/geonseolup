@@ -45,6 +45,79 @@ function escapeHtmlAttr(str: string): string {
     .replace(/>/g, "&gt;");
 }
 
+// JSON을 <script type="application/ld+json"> 안에 안전하게 삽입하기 위한 이스케이프.
+// "</script" 시퀀스가 JSON 문자열 값 안에 있으면 실제로 스크립트가 조기 종료되므로 반드시 처리해야 한다.
+function escapeJsonForScriptTag(json: string): string {
+  return json.replace(/<\/script/gi, "<\\/script");
+}
+
+// ── 채용공고 JobPosting 구조화 데이터 (Google 채용정보 검색 노출용) ─────────────
+// https://developers.google.com/search/docs/appearance/structured-data/job-posting
+function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
+  const region = typeof job.region === "string" ? job.region : "";
+  const jobType = typeof job.job === "string" ? job.job : "";
+  const salary = typeof job.salary === "string" ? job.salary : "";
+  const salaryNum = typeof job.salaryNum === "number" ? job.salaryNum : undefined;
+  const detail = typeof job.detail === "string" ? job.detail : "";
+  const rawTitle = typeof job.title === "string" ? job.title : "";
+  const company = typeof job.company === "string" && job.company ? job.company : "건설UP";
+  const dateVal = typeof job.date === "string" ? job.date : undefined;
+
+  const posted = dateVal && !isNaN(new Date(dateVal).getTime()) ? new Date(dateVal) : new Date();
+  // 공고는 등록 2일 후 자동 삭제되므로 유효기간도 그에 맞춘다.
+  const validThrough = new Date(posted.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+  const descriptionParts = [
+    `[${region}] ${jobType} 모집`,
+    salary && `일당 ${salary}`,
+    detail,
+  ].filter(Boolean);
+  const description = descriptionParts.join(". ") || `건설 현장 ${jobType || "인력"} 구인 공고`;
+
+  const ld: Record<string, unknown> = {
+    "@context": "https://schema.org/",
+    "@type": "JobPosting",
+    title: rawTitle || `${region} ${jobType} 모집`.trim(),
+    description,
+    identifier: {
+      "@type": "PropertyValue",
+      name: "건설UP",
+      value: id,
+    },
+    datePosted: posted.toISOString(),
+    validThrough: validThrough.toISOString(),
+    employmentType: "CONTRACTOR",
+    hiringOrganization: {
+      "@type": "Organization",
+      name: company,
+      sameAs: SITE_URL,
+    },
+    jobLocation: {
+      "@type": "Place",
+      address: {
+        "@type": "PostalAddress",
+        addressRegion: region || "대한민국",
+        addressCountry: "KR",
+      },
+    },
+    directApply: true,
+  };
+
+  if (salaryNum && salaryNum > 0) {
+    ld.baseSalary = {
+      "@type": "MonetaryAmount",
+      currency: "KRW",
+      value: {
+        "@type": "QuantitativeValue",
+        value: salaryNum,
+        unitText: "DAY",
+      },
+    };
+  }
+
+  return `<script type="application/ld+json">${escapeJsonForScriptTag(JSON.stringify(ld))}</script>`;
+}
+
 // ── GET /sitemap.xml ─────────────────────────────────────────────────────────
 // 정적 sitemap.xml(홈 + /post 2개)을 대체. 공개된 모든 공고 상세페이지를 포함한다.
 router.get("/sitemap.xml", async (_req: Request, res: Response) => {
@@ -180,6 +253,10 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
       /(<meta[^>]*property=["']og:url["'][^>]*content=)["'][^"']*["']/,
       `$1"${pageUrl}"`
     );
+
+    // JobPosting 구조화 데이터 삽입 (Google 채용정보 검색 노출 자격 부여)
+    const jobPostingLd = buildJobPostingLd(job, id);
+    html = html.replace("</head>", `  ${jobPostingLd}\n  </head>`);
 
     // <div id="root"> 안의 정적 폴백 본문(크롤러/JS 미실행 환경용)을
     // 이 공고 전용 내용으로 교체 — React가 mount되면 어차피 덮어써지므로
