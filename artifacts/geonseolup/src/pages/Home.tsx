@@ -203,12 +203,38 @@ function filterAndSort(jobs: Job[], state: AppState): Job[] {
   return list;
 }
 
-export default function Home() {
+interface HomeProps {
+  // /jobs/:region/:job SEO 랜딩 라우트에서 넘어오는 초기 필터값.
+  // 지정 안 하면 기존과 동일하게 '전체'/'전체'로 시작.
+  initialRegion?: string;
+  initialJob?: string;
+}
+
+// 지역×직종 조합별 실제 공고 수를 세어, 공고가 있는 조합만 상위 N개 반환.
+// SEO 랜딩페이지(/jobs/:region/:job)로 향하는 실제 내부링크에 쓴다 —
+// 공고가 0건인 조합으로는 링크하지 않는다(빈 페이지로 링크하는 건 SEO에 오히려 해로움).
+function getTopRegionJobLinks(jobs: Job[], limit = 12): { region: string; job: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const j of jobs) {
+    if (!j.region || !j.job || j.region === '전체' || j.job === '전체') continue;
+    const key = `${j.region}::${j.job}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([key, count]) => {
+      const [region, job] = key.split('::');
+      return { region, job, count };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
   const [state, setState] = useState<AppState>(() => {
     const initial = {
       keyword: '',
-      region: '전체',
-      job: '전체',
+      region: initialRegion || '전체',
+      job: initialJob || '전체',
       weldSub: '전체',
       sort: 'newest',
       page: 1,
@@ -243,6 +269,17 @@ export default function Home() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // /jobs/:region/:job 랜딩페이지로 들어온 경우 브라우저 탭 제목도 맞춰준다.
+  // (서버 프리렌더는 api-server가 별도로 처리 — 이건 SPA 내 클라이언트 네비게이션용)
+  useEffect(() => {
+    if (initialRegion || initialJob) {
+      const parts = [initialRegion, initialJob, '구인 공고'].filter((p) => p && p !== '전체');
+      document.title = `${parts.join(' ')} - 건설UP`;
+    } else {
+      document.title = '건설UP - 건설 현장 일자리 정보';
+    }
+  }, [initialRegion, initialJob]);
 
   // 관리자 상태 실시간 감지 — 서버 토큰 검증 후에만 isAdmin=true
   // getToken() 값이 있어도 apiVerify() 실패하면 false 유지 (stale 토큰 방지)
@@ -772,6 +809,23 @@ export default function Home() {
 
       {/* 푸터 */}
       <footer style={{ background: '#1e3a5f' }} className="mt-4 py-6 text-center text-white">
+        {(() => {
+          const topLinks = getTopRegionJobLinks(state.allJobs);
+          if (topLinks.length === 0) return null;
+          return (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 mb-4 px-4 text-xs text-white/60 max-w-[860px] mx-auto">
+              {topLinks.map(({ region, job, count }) => (
+                <a
+                  key={`${region}-${job}`}
+                  href={`/jobs/${encodeURIComponent(region)}/${encodeURIComponent(job)}`}
+                  className="hover:text-white no-underline transition-colors"
+                >
+                  {region} {job} 구인 ({count})
+                </a>
+              ))}
+            </div>
+          );
+        })()}
         <div className="flex flex-wrap items-center justify-center gap-4 mb-3 text-sm">
           <a href="/" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
             🏠 홈

@@ -145,6 +145,17 @@ function Router() {
           </>
         )}
       </Route>
+      <Route path="/jobs/:region/:job">
+        {(params) => (
+          <>
+            <Header />
+            <Home
+              initialRegion={decodeURIComponent(params.region)}
+              initialJob={decodeURIComponent(params.job)}
+            />
+          </>
+        )}
+      </Route>
       <Route path="/post">
         <Header />
         <Post />
