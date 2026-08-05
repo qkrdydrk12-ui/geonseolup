@@ -10,6 +10,7 @@ import indexingRouter from "./indexing";
 import pushRouter from "./push";
 import subscribeRouter from "./subscribe";
 import infoRouter from "./info";
+import threadsImageRouter from "./threadsImage";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(indexingRouter);
 router.use(pushRouter);
 router.use(subscribeRouter);
 router.use(infoRouter);
+router.use(threadsImageRouter);
 
 export default router;
