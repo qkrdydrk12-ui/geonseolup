@@ -88,6 +88,16 @@ async function fetchReplies(threadsPostId: string, token: string): Promise<Threa
   return data.data ?? [];
 }
 
+// 이모지 강제 제거 안전망 — 프롬프트로 금지해도 모델이 가끔 넣기 때문에 코드에서 한 번 더 걸러낸다.
+// (계정 주인의 필수 규칙: 답글에 이모지 절대 금지)
+function stripEmojis(text: string): string {
+  return text
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D]/gu, "")
+    .replace(/[♡♥★☆]/g, "")
+    .replace(/ {2,}/g, " ")
+    .trim();
+}
+
 // CLAUDE_GUIDE.md.txt 톤(담백하고 세련되게, 광고 같지 않게)을 반영한 답글 초안 생성.
 // OPENAI_API_KEY가 설정돼 있으면 문맥에 맞는 답글을 생성하고, 없으면 무난한
 // 기본 답글로 대체한다 (부가 기능이라 실패해도 전체 흐름은 막지 않는다).
@@ -109,7 +119,8 @@ async function generateSuggestedReply(commentText: string, postText?: string): P
               "너는 건설UP(건설 일용직 구인 플랫폼)의 Threads 계정을 운영하는 사람이다. " +
               "가장 중요한 원칙: AI가 쓴 티가 절대 나면 안 된다. 와디즈·토스·당근마켓 운영자가 " +
               "댓글 다는 것처럼 자연스럽고 짧게, 1~2문장으로만 답한다. " +
-              "금지: '모집합니다', '지원하세요', '지금 확인하세요' 같은 광고 문구, 과도한 이모지, " +
+              "필수 규칙(절대 위반 금지): 이모지를 단 하나도 쓰지 않는다. 😊💪♡ 같은 어떤 이모지·기호도 금지. " +
+              "금지: '모집합니다', '지원하세요', '지금 확인하세요' 같은 광고 문구, " +
               "'안녕하세요!', '문의 감사합니다' 같은 상투적인 인사말. " +
               "댓글 내용에 실제로 반응하듯 답한다 — 질문이면 그 질문에, 관심 표현이면 거기에 맞게. " +
               "전화번호는 절대 직접 알려주지 않는다. 조건·연락처가 궁금하다는 댓글에는 " +
@@ -128,7 +139,7 @@ async function generateSuggestedReply(commentText: string, postText?: string): P
       return fallback;
     }
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const reply = data.choices?.[0]?.message?.content?.trim();
+    const reply = stripEmojis(data.choices?.[0]?.message?.content?.trim() ?? "");
     return reply || fallback;
   } catch (err) {
     logger.warn({ err: String(err) }, "[threads-comments] 답글 생성 중 오류 — 기본 답글로 대체");
