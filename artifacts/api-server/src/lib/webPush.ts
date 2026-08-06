@@ -6,6 +6,7 @@
 import webpush from "web-push";
 import { logger } from "./logger.js";
 import { getMatchingSubscriptions, removeSubscription, type PushSubscriptionRow } from "./pushSubscriptions.js";
+import { scheduleAtSlots } from "./digestSlots.js";
 
 const VAPID_SUBJECT = "mailto:qkrdydrk12@gmail.com";
 
@@ -36,27 +37,32 @@ interface NewJobPayload {
   salary?: string;
 }
 
-// ── 묶음(배치) 발송 ─────────────────────────────────────────────────────────
-// 공고가 연달아 여러 건 올라와도 구독자에게 알림이 1건씩 연속으로 가지 않도록,
-// 일정 시간(기본 20분) 동안 모았다가 한 번만 발송한다.
-const BATCH_DELAY_MS = Number(process.env["PUSH_BATCH_DELAY_MS"] ?? 20 * 60_000);
-
+// ── 취합(다이제스트) 발송 ───────────────────────────────────────────────────
+// 공고가 올라올 때마다 즉시 알리지 않고 큐에 모았다가, 하루 3회
+// (KST 06:00 / 11:30 / 18:30 — digestSlots.ts) 취합해서 1건으로 발송한다.
 let _pending: NewJobPayload[] = [];
-let _flushTimer: ReturnType<typeof setTimeout> | null = null;
+const _seenIds = new Set<string>();
+let _schedulerStarted = false;
 
-// 신규 공고를 발송 대기열에 추가. 첫 건이 들어온 시점부터 BATCH_DELAY_MS 후 일괄 발송.
+function ensureSlotScheduler(): void {
+  if (_schedulerStarted) return;
+  _schedulerStarted = true;
+  scheduleAtSlots(() => {
+    const jobs = _pending;
+    _pending = [];
+    _seenIds.clear();
+    flushPushBatch(jobs).catch((err) => {
+      logger.warn({ err: String(err) }, "[push] 취합 발송 실패");
+    });
+  });
+}
+
+// 신규 공고를 발송 대기열에 추가. 다음 발송 시각에 일괄 발송된다.
 export function notifyPushSubscribers(payload: NewJobPayload): Promise<void> {
+  if (_seenIds.has(payload.id)) return Promise.resolve();
+  _seenIds.add(payload.id);
   _pending.push(payload);
-  if (!_flushTimer) {
-    _flushTimer = setTimeout(() => {
-      const jobs = _pending;
-      _pending = [];
-      _flushTimer = null;
-      flushPushBatch(jobs).catch((err) => {
-        logger.warn({ err: String(err) }, "[push] 묶음 발송 실패");
-      });
-    }, BATCH_DELAY_MS);
-  }
+  ensureSlotScheduler();
   return Promise.resolve();
 }
 

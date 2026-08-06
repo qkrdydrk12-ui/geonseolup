@@ -10,10 +10,11 @@
 import { randomBytes } from "crypto";
 import { Resend } from "resend";
 import { pgPool } from "./db.js";
+import { scheduleAtSlots } from "./digestSlots.js";
 import { logger } from "./logger.js";
 
 const SITE_URL = "https://geonseolup.com";
-const DIGEST_INTERVAL_MS = 15 * 60_000; // 15분
+const CLEANUP_INTERVAL_MS = 60 * 60_000; // 미확인 구독 정리 주기 (1시간)
 
 interface NewJobPayload {
   id: string;
@@ -225,11 +226,15 @@ async function cleanupUnconfirmed(): Promise<void> {
   }
 }
 
-let _digestHandle: ReturnType<typeof setInterval> | null = null;
+let _started = false;
 export function startEmailDigestScheduler(): void {
-  if (_digestHandle != null) return;
-  _digestHandle = setInterval(() => {
+  if (_started) return;
+  _started = true;
+  // 다이제스트는 하루 3회 (KST 06:00 / 11:30 / 18:30 — digestSlots.ts) 취합 발송
+  scheduleAtSlots(() => {
     flushDigest().catch((err) => logger.error({ err: String(err) }, "[email-subs] 다이제스트 발송 실패"));
+  });
+  setInterval(() => {
     cleanupUnconfirmed().catch((err) => logger.error({ err: String(err) }, "[email-subs] 정리 루틴 실패"));
-  }, DIGEST_INTERVAL_MS);
+  }, CLEANUP_INTERVAL_MS);
 }
