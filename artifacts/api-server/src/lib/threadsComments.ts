@@ -60,6 +60,22 @@ interface ThreadsReply {
   timestamp?: string;
 }
 
+// 내 계정 username — 내 계정이 단 댓글(링크 댓글, 승인된 답글 등)을
+// "새 댓글"로 오인해 답글 초안을 만드는 것을 막기 위해 필요하다.
+let _ownUsername: string | null = null;
+async function getOwnUsername(token: string): Promise<string | null> {
+  if (_ownUsername) return _ownUsername;
+  try {
+    const res = await fetch(`${GRAPH_BASE}/me?fields=username&access_token=${encodeURIComponent(token)}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { username?: string };
+    _ownUsername = data.username ?? null;
+    return _ownUsername;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchReplies(threadsPostId: string, token: string): Promise<ThreadsReply[]> {
   const url = `${GRAPH_BASE}/${threadsPostId}/replies?fields=id,text,username,timestamp&access_token=${encodeURIComponent(token)}`;
   const res = await fetch(url);
@@ -133,9 +149,18 @@ export async function pollForNewComments(): Promise<void> {
      ORDER BY published_at DESC LIMIT 50`
   );
 
+  const ownUsername = await getOwnUsername(tokenInfo.token);
+  if (!ownUsername) {
+    // 내 계정 확인 실패 시 폴링을 건너뜀 — 내 링크 댓글에 답글 초안을 만드는 오작동 방지.
+    logger.warn("[threads-comments] 내 계정(username) 확인 실패 — 이번 폴링 건너뜀");
+    return;
+  }
+
   for (const post of posts.rows) {
     const replies = await fetchReplies(post.threads_post_id, tokenInfo.token);
     for (const reply of replies) {
+      // 내 계정이 단 댓글(링크 댓글·승인된 답글)은 건너뜀 — 자기 댓글에 답글을 달면 안 된다.
+      if (ownUsername && reply.username === ownUsername) continue;
       // 이미 큐에 있거나 처리된 댓글은 건너뜀 (comment_id UNIQUE 제약으로도 이중 방지됨).
       try {
         const suggested = await generateSuggestedReply(reply.text ?? "", post.source_text ?? undefined);
