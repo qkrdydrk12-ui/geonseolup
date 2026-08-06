@@ -322,7 +322,8 @@ export async function getDraftById(id: number): Promise<ThreadsDraft | null> {
   const result = await pgPool.query(
     `SELECT id, job_id AS "jobId", text, link_url AS "linkUrl", status,
             created_at AS "createdAt", published_at AS "publishedAt",
-            image_style AS "imageStyle", image_copy AS "imageCopy", image_prompt AS "imagePrompt"
+            image_style AS "imageStyle", image_copy AS "imageCopy", image_prompt AS "imagePrompt",
+            (image_data IS NOT NULL) AS "hasImage"
      FROM threads_drafts WHERE id = $1`,
     [id]
   );
