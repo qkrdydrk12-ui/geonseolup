@@ -15,6 +15,7 @@ import { countEmailSubscribers } from "../lib/emailSubscribers.js";
 import { getCurrentThreadsToken } from "../lib/threadsToken.js";
 import { listPendingDrafts, markDraftPublished, markDraftRejected, getDraftById, generateDraftImage, deleteLegacyPendingDrafts } from "../lib/threadsDrafts.js";
 import { publishToThreads } from "../lib/threadsPublish.js";
+import { recordPublishedPost, listPendingComments, approveAndReply, dismissComment, pollForNewComments } from "../lib/threadsComments.js";
 
 const router = Router();
 
@@ -174,6 +175,7 @@ router.post("/admin/threads/publish", requireAdmin, async (req: Request, res: Re
       res.status(502).json({ ok: false, message: result.error ?? "발행 실패" });
       return;
     }
+    if (result.postId) await recordPublishedPost(result.postId, text);
     res.json({ ok: true, postId: result.postId });
   } catch (err) {
     res.status(500).json({ ok: false, message: String(err) });
@@ -218,6 +220,7 @@ router.post("/admin/threads/drafts/:id/publish", requireAdmin, async (req: Reque
       res.status(502).json({ ok: false, message: result.error ?? "발행 실패" });
       return;
     }
+    if (result.postId) await recordPublishedPost(result.postId, text);
     await markDraftPublished(id);
     res.json({ ok: true, postId: result.postId });
   } catch (err) {
@@ -245,6 +248,60 @@ router.post("/admin/threads/drafts/:id/generate-image", requireAdmin, async (req
 router.post("/admin/threads/drafts/:id/reject", requireAdmin, async (req: Request, res: Response) => {
   try {
     await markDraftRejected(Number(req.params["id"]));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// ── Threads 댓글 자동 감지 + 답글 승인 ──────────────────────────────────────
+// 댓글 감시·답글 초안 생성은 자동(10분마다 폴링)이지만, 실제 답글 발행은
+// 반드시 이 라우트를 통해 관리자가 명시적으로 승인해야만 나간다.
+
+// GET /api/admin/threads/comments — 대기 중인 댓글(+제안 답글) 목록
+router.get("/admin/threads/comments", requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const comments = await listPendingComments();
+    res.json({ ok: true, comments });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// POST /api/admin/threads/comments/poll-now — 지금 바로 한 번 확인 (10분 대기 없이 테스트용)
+router.post("/admin/threads/comments/poll-now", requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    await pollForNewComments();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// POST /api/admin/threads/comments/:id/reply — 관리자가 승인 버튼을 눌렀을 때만 실제 답글 발행
+router.post("/admin/threads/comments/:id/reply", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params["id"]);
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (!text) {
+      res.status(400).json({ ok: false, message: "답글 내용을 입력해주세요" });
+      return;
+    }
+    const result = await approveAndReply(id, text);
+    if (!result.ok) {
+      res.status(502).json({ ok: false, message: result.error ?? "답글 발행 실패" });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// POST /api/admin/threads/comments/:id/dismiss — 답글 안 달고 넘어가기
+router.post("/admin/threads/comments/:id/dismiss", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await dismissComment(Number(req.params["id"]));
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, message: String(err) });

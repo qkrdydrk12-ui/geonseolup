@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { startEmailDigestScheduler } from "./lib/emailSubscribers";
 import { startThreadsTokenScheduler } from "./lib/threadsToken";
+import { startCommentPolling } from "./lib/threadsComments";
 
 const rawPort = process.env["PORT"];
 
@@ -30,6 +31,8 @@ app.listen(port, (err) => {
   startEmailDigestScheduler();
   // Threads 장기 토큰 자동 갱신 — THREADS_ACCESS_TOKEN_SEED 없으면 내부에서 조용히 스킵.
   startThreadsTokenScheduler();
+  // Threads 댓글 감지(10분마다) — 답글 초안만 자동 생성, 실제 발행은 항상 사람 승인 필요.
+  startCommentPolling();
   // 스케줄러(예약 발행 + 자동숨김/삭제 정리)는 Firestore를 주기적으로 읽는다.
   // 개발 환경과 운영 환경이 같은 Firestore 프로젝트를 공유하므로, 둘 다 켜면
   // 무료 읽기 한도를 두 배로 소진한다. 운영(NODE_ENV=production)에서만 켜고,

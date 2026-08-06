@@ -94,3 +94,24 @@ export async function publishToThreads(text: string, linkUrl?: string, imageUrl?
   logger.info({ postId: mainResult.id, hasImage: Boolean(imageUrl) }, "[threads-publish] 발행 완료");
   return { ok: true, postId: mainResult.id };
 }
+
+// 특정 게시물/댓글에 답글을 단다 — 관리자가 "답글 발행" 버튼을 눌렀을 때만 호출된다.
+// (threadsComments.ts에서 사용. 여기도 무인 자동 호출 절대 금지 원칙 동일 적용.)
+export async function publishReply(text: string, replyToId: string): Promise<PublishResult> {
+  const userId = process.env["THREADS_USER_ID"];
+  if (!userId) return { ok: false, error: "THREADS_USER_ID 미설정" };
+
+  const tokenInfo = await getCurrentThreadsToken();
+  if (!tokenInfo) return { ok: false, error: "저장된 Threads 토큰 없음 (THREADS_ACCESS_TOKEN_SEED 미설정)" };
+  if (tokenInfo.expiresAt.getTime() < Date.now()) {
+    return { ok: false, error: "Threads 토큰이 만료됨 — 재발급 필요" };
+  }
+
+  const result = await createAndPublishContainer(userId, tokenInfo.token, text, { replyToId });
+  if (!result.ok || !result.id) {
+    logger.error({ error: result.error }, "[threads-publish] 답글 발행 실패");
+    return { ok: false, error: result.error };
+  }
+  logger.info({ postId: result.id, replyToId }, "[threads-publish] 답글 발행 완료");
+  return { ok: true, postId: result.id };
+}
