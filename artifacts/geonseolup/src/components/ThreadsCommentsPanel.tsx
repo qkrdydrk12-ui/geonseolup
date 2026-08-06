@@ -12,8 +12,8 @@ interface PendingComment {
   createdAt: string;
 }
 
-// Threads 댓글은 10분마다 서버가 자동으로 감시하고, 새 댓글이 오면 답글 초안을
-// 만들어 여기 쌓아둔다. 여기서 확인·수정 후 "답글 발행"을 눌러야만 실제로
+// Threads 댓글은 10분마다 서버가 자동으로 감시하고, 새 댓글이 오면 AI 답글을
+// 만들어 즉시 자동 발행한다. 자동 발행에 실패한 건만 여기 남아, 수정 후
 // Threads에 답글이 달린다 — 절대 자동으로 나가지 않는다.
 export default function ThreadsCommentsPanel() {
   const [comments, setComments] = useState<PendingComment[]>([]);
@@ -107,8 +107,8 @@ export default function ThreadsCommentsPanel() {
         </div>
       </div>
       <p className="text-xs text-gray-500 mb-4">
-        발행한 글에 달린 새 댓글을 10분마다 자동으로 확인해 답글 초안을 만들어둬요. 내용을 확인·수정한 뒤
-        "답글 발행"을 눌러야만 실제로 Threads에 올라갑니다 (자동 발행 아님).
+        발행한 글에 달린 새 댓글을 10분마다 자동으로 확인해 AI 답글을 만들어 <b>바로 자동 발행</b>해요.
+        자동 발행에 실패한 댓글만 여기 남으니, 내용을 확인·수정한 뒤 직접 발행해주세요.
       </p>
 
       {loading ? (

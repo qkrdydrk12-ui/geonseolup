@@ -1,7 +1,7 @@
-// Threads 댓글 자동 감지 + 답글 초안 생성.
-// 절대 무인으로 답글을 발행하지 않는다 — 새 댓글을 감지하면 답글 "초안"만
-// 만들어 큐에 쌓아두고, 관리자가 /admin에서 확인 후 "답글 발행" 버튼을
-// 눌러야만 실제로 Threads에 나간다 (기존 홍보 초안 시스템과 동일한 원칙).
+// Threads 댓글 자동 감지 + 답글 "자동 발행".
+// 계정 주인의 명시적 요청(2026-08)으로, 새 댓글을 감지하면 AI가 답글을 만들어
+// 사람 승인 없이 바로 발행한다. 발행 이력은 threads_comment_replies에 남고
+// 관리자 페이지에서 확인할 수 있다. 실패한 건은 pending으로 남아 수동 발행 가능.
 
 import { getCurrentThreadsToken } from "./threadsToken.js";
 import { publishReply } from "./threadsPublish.js";
@@ -133,8 +133,8 @@ async function generateSuggestedReply(commentText: string, postText?: string): P
   }
 }
 
-// 감시 중인 게시물들의 새 댓글을 확인하고, 신규 댓글마다 답글 초안을 생성해 큐에 쌓는다.
-// 사람이 승인하기 전까지는 절대 실제 답글을 달지 않는다.
+// 감시 중인 게시물들의 새 댓글을 확인하고, 신규 댓글마다 답글을 생성해
+// 즉시 자동 발행한다 (계정 주인의 명시적 요청). 발행 실패 시 pending으로 남긴다.
 export async function pollForNewComments(): Promise<void> {
   await ensureTables();
   const tokenInfo = await getCurrentThreadsToken();
@@ -164,15 +164,30 @@ export async function pollForNewComments(): Promise<void> {
       // 이미 큐에 있거나 처리된 댓글은 건너뜀 (comment_id UNIQUE 제약으로도 이중 방지됨).
       try {
         const suggested = await generateSuggestedReply(reply.text ?? "", post.source_text ?? undefined);
-        const inserted = await pgPool.query(
+        const inserted = await pgPool.query<{ id: number }>(
           `INSERT INTO threads_comment_replies (threads_post_id, comment_id, commenter_username, comment_text, suggested_reply)
            VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (comment_id) DO NOTHING
            RETURNING id`,
           [post.threads_post_id, reply.id, reply.username ?? null, reply.text ?? null, suggested]
         );
-        if ((inserted.rowCount ?? 0) > 0) {
-          logger.info({ commentId: reply.id, username: reply.username }, "[threads-comments] 새 댓글 감지 — 답글 초안 생성");
+        const insertedRow = inserted.rows[0];
+        if (!insertedRow) continue; // 이미 처리된 댓글
+
+        // 새 댓글 → 사람 승인 없이 바로 자동 발행 (계정 주인의 명시적 요청).
+        const publishResult = await publishReply(suggested, reply.id);
+        if (publishResult.ok) {
+          await pgPool.query(
+            `UPDATE threads_comment_replies SET status = 'replied', replied_at = now() WHERE id = $1`,
+            [insertedRow.id]
+          );
+          logger.info({ commentId: reply.id, username: reply.username }, "[threads-comments] 새 댓글 감지 — 답글 자동 발행 완료");
+        } else {
+          // 발행 실패 시 pending으로 남겨 관리자 페이지에서 수동 발행 가능하게 한다.
+          logger.warn(
+            { commentId: reply.id, error: publishResult.error },
+            "[threads-comments] 답글 자동 발행 실패 — 대기 목록에 남김"
+          );
         }
       } catch (err) {
         logger.warn({ err: String(err), commentId: reply.id }, "[threads-comments] 댓글 처리 실패");
