@@ -13,7 +13,7 @@ import { getPopularJobIds } from "../lib/jobViews.js";
 import { countSubscriptions } from "../lib/pushSubscriptions.js";
 import { countEmailSubscribers } from "../lib/emailSubscribers.js";
 import { getCurrentThreadsToken } from "../lib/threadsToken.js";
-import { listPendingDrafts, markDraftPublished, markDraftRejected, getDraftById, generateDraftImage } from "../lib/threadsDrafts.js";
+import { listPendingDrafts, markDraftPublished, markDraftRejected, getDraftById, generateDraftImage, deleteLegacyPendingDrafts } from "../lib/threadsDrafts.js";
 import { publishToThreads } from "../lib/threadsPublish.js";
 
 const router = Router();
@@ -185,6 +185,17 @@ router.get("/admin/threads/drafts", requireAdmin, async (_req: Request, res: Res
   try {
     const drafts = await listPendingDrafts();
     res.json({ ok: true, drafts });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// POST /api/admin/threads/drafts/cleanup-legacy — 이미지 생성 기능이 없던 시절의
+// 구형 대기 초안(이미지 프롬프트 없음)을 한 번에 정리. 이미지 생성 가능한 초안은 남긴다.
+router.post("/admin/threads/drafts/cleanup-legacy", requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const deleted = await deleteLegacyPendingDrafts();
+    res.json({ ok: true, deleted });
   } catch (err) {
     res.status(500).json({ ok: false, message: String(err) });
   }

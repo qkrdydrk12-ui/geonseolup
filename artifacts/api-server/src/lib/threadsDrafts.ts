@@ -310,6 +310,16 @@ export async function markDraftRejected(id: number): Promise<void> {
   await pgPool.query(`UPDATE threads_drafts SET status = 'rejected' WHERE id = $1`, [id]);
 }
 
+// 이미지 생성 기능이 붙기 전에 만들어진 "구형" 대기 초안을 일괄 삭제.
+// (image_prompt가 없는 pending 초안만 대상 — 이미지 생성 가능한 초안은 보존)
+export async function deleteLegacyPendingDrafts(): Promise<number> {
+  await ensureTable();
+  const result = await pgPool.query(
+    `DELETE FROM threads_drafts WHERE status = 'pending' AND image_prompt IS NULL`
+  );
+  return result.rowCount ?? 0;
+}
+
 export async function getDraftById(id: number): Promise<ThreadsDraft | null> {
   await ensureTable();
   const result = await pgPool.query(

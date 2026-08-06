@@ -99,6 +99,26 @@ export default function ThreadsDraftsPanel() {
     }
   }
 
+  // 이미지 생성 기능이 없던 시절의 구형 초안(이미지 프롬프트 없음)을 한 번에 정리.
+  async function handleCleanupLegacy() {
+    if (!confirm('이미지 생성이 안 되는 예전 초안들을 모두 삭제할까요? (이미지 생성 가능한 초안은 남습니다)')) return;
+    try {
+      const res = await fetch('/api/admin/threads/drafts/cleanup-legacy', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = (await res.json()) as { ok: boolean; deleted?: number };
+      if (data.ok) {
+        alert(`예전 초안 ${data.deleted ?? 0}건을 삭제했습니다.`);
+        load();
+      } else {
+        alert('삭제에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      }
+    } catch {
+      alert('네트워크 오류가 발생했습니다.');
+    }
+  }
+
   // 자동으로 만들지 않고, 필요한 초안만 골라서 이미지를 생성한다 (비용은 여기서만 발생).
   async function handleGenerateImage(id: number) {
     setBusyId(id);
@@ -125,12 +145,20 @@ export default function ThreadsDraftsPanel() {
     <div className="bg-white rounded-xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4 pb-2.5 border-b-2 border-gray-100">
         <h2 className="text-lg font-bold text-[#1e3a5f]">🧵 Threads 홍보 초안</h2>
-        <button
-          className="text-xs font-bold text-gray-500 hover:text-[#f97316] cursor-pointer bg-transparent border-none"
-          onClick={load}
-        >
-          🔄 새로고침
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            className="text-xs font-bold text-gray-400 hover:text-red-500 cursor-pointer bg-transparent border-none"
+            onClick={handleCleanupLegacy}
+          >
+            🧹 이전 초안 정리
+          </button>
+          <button
+            className="text-xs font-bold text-gray-500 hover:text-[#f97316] cursor-pointer bg-transparent border-none"
+            onClick={load}
+          >
+            🔄 새로고침
+          </button>
+        </div>
       </div>
       <p className="text-xs text-gray-500 mb-4">
         숙식 제공 또는 급여가 높은 신규 공고가 등록되면 자동으로 초안이 여기 쌓여요.
