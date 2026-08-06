@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
 import ThreadsDraftsPanel from '@/components/ThreadsDraftsPanel';
+import ThreadsCommentsPanel from '@/components/ThreadsCommentsPanel';
 import type { Job, PendingJob, JobReport } from '@/lib/firebase';
 import {
   fbLoadJobs,
@@ -2395,7 +2396,12 @@ export default function Admin() {
           );
         })()}
 
-        {tab === 'threads' && <ThreadsDraftsPanel />}
+        {tab === 'threads' && (
+          <>
+            <ThreadsDraftsPanel />
+            <ThreadsCommentsPanel />
+          </>
+        )}
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">
