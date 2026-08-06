@@ -91,11 +91,21 @@ async function fetchReplies(threadsPostId: string, token: string): Promise<Threa
 // 이모지 강제 제거 안전망 — 프롬프트로 금지해도 모델이 가끔 넣기 때문에 코드에서 한 번 더 걸러낸다.
 // (계정 주인의 필수 규칙: 답글에 이모지 절대 금지)
 function stripEmojis(text: string): string {
-  return text
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D]/gu, "")
-    .replace(/[♡♥★☆]/g, "")
-    .replace(/ {2,}/g, " ")
-    .trim();
+  return (
+    text
+      // 그림 이모지 전반 (유니코드 속성 기반 — 대부분의 이모지를 포괄)
+      .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, "")
+      // 서로게이트 페어 영역 전체 (U+10000 이상 — 이모지 대부분이 여기 속함)
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+      // 화살표·기호류: 화살표, 잡기호, 딩뱃, 기타 기호/화살표 블록
+      .replace(/[\u2190-\u21FF\u2300-\u23FF\u25A0-\u27BF\u2900-\u297F\u2B00-\u2BFF]/g, "")
+      // 변형 선택자(이모지 스타일 지정), ZWJ(이모지 결합), 조합용 기호
+      .replace(/[\uFE0E\uFE0F\u200D\u20E3]/g, "")
+      // 하트·별 등 장식 특수기호
+      .replace(/[♡♥★☆■□●○◆◇▲△▼▽]/g, "")
+      .replace(/ {2,}/g, " ")
+      .trim()
+  );
 }
 
 // CLAUDE_GUIDE.md.txt 톤(담백하고 세련되게, 광고 같지 않게)을 반영한 답글 초안 생성.
