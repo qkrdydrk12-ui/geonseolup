@@ -118,6 +118,21 @@ type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'settings' | 's
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
+interface SourceRow { source: string; label: string; count: number; }
+
+// 유입 경로별 표시 스타일 — 순서·색은 카테고리별로 고정(값 순위에 따라 바뀌지 않음)
+const SOURCE_STYLE: Record<string, { label: string; color: string; icon: string }> = {
+  threads:   { label: 'Threads',    color: '#2a78d6', icon: '🧵' },
+  google:    { label: 'Google',     color: '#eb6834', icon: '🔎' },
+  naver:     { label: 'Naver',      color: '#1baf7a', icon: 'N' },
+  band:      { label: '네이버 밴드', color: '#008300', icon: '🥁' },
+  instagram: { label: 'Instagram',  color: '#e87ba4', icon: '📸' },
+  facebook:  { label: 'Facebook',   color: '#4a3aa7', icon: 'f' },
+  kakao:     { label: '카카오',      color: '#eda100', icon: '💬' },
+  twitter:   { label: 'X(트위터)',   color: '#e34948', icon: '✕' },
+  direct:    { label: '직접 방문',   color: '#898781', icon: '🔗' },
+  other:     { label: '기타',        color: '#c3c2b7', icon: '❔' },
+};
 
 export default function Admin() {
   const [authed, setAuthed] = useState(false);
@@ -169,6 +184,8 @@ export default function Admin() {
   const [visitorTotals, setVisitorTotals] = useState<VisitorTotals | null>(null);
   const [statsDate, setStatsDate] = useState(() => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
   const [statsLoading, setStatsLoading] = useState(false);
+  const [sourceData, setSourceData] = useState<SourceRow[]>([]);
+  const [sourceDays, setSourceDays] = useState<1 | 7>(1);
   const [settings, setSettings] = useState({
     adminPw: localStorage.getItem('cj_admin_pw') || 'wns585426!@',
     contactEmail: localStorage.getItem('cj_contact_email') || 'qkrdydrk@naver.com',
@@ -321,22 +338,29 @@ export default function Admin() {
     toastRef.current = setTimeout(() => setToast(''), 2600);
   }
 
-  const loadHourlyStats = useCallback(async (date: string) => {
+  const loadHourlyStats = useCallback(async (date: string, days: 1 | 7 = sourceDays) => {
     setStatsLoading(true);
     try {
       const token = getToken();
-      const [hourly, totals] = await Promise.all([
+      const [hourly, totals, sources] = await Promise.all([
         fetch(`/api/stats/hourly?date=${date}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
         fetch('/api/stats/visitors', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(`/api/stats/sources?date=${date}&days=${days}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
       setHourlyData(hourly.rows ?? []);
       setVisitorTotals(totals);
+      setSourceData(sources.rows ?? []);
     } catch {
       showToast('통계 조회 실패');
     } finally {
       setStatsLoading(false);
     }
-  }, []);
+  }, [sourceDays]);
+
+  function handleSourceDaysChange(days: 1 | 7) {
+    setSourceDays(days);
+    loadHourlyStats(statsDate, days);
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -2392,6 +2416,61 @@ export default function Admin() {
                   </div>
                 </div>
               )}
+
+              {/* 유입 경로 */}
+              <div className="bg-white rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <h2 className="text-base font-bold text-[#1e3a5f]">🌐 유입 경로</h2>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleSourceDaysChange(1)}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-semibold border cursor-pointer font-[inherit] ${sourceDays === 1 ? 'bg-[#f97316] text-white border-[#f97316]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#f97316]'}`}>
+                      선택한 날짜
+                    </button>
+                    <button onClick={() => handleSourceDaysChange(7)}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-semibold border cursor-pointer font-[inherit] ${sourceDays === 7 ? 'bg-[#f97316] text-white border-[#f97316]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#f97316]'}`}>
+                      최근 7일
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mb-4">
+                  {sourceDays === 1 ? statsDate : `${statsDate} 기준 최근 7일 합계`} · 같은 IP는 같은 유입경로로 하루 1회만 집계
+                </p>
+
+                {statsLoading ? (
+                  <div className="flex items-center justify-center h-32 text-gray-400 text-sm">불러오는 중...</div>
+                ) : sourceData.length === 0 ? (
+                  <div className="flex items-center justify-center h-32 text-gray-400 text-sm">이 기간엔 방문 기록이 없어요</div>
+                ) : (() => {
+                  const maxCount = Math.max(...sourceData.map((r) => r.count));
+                  const totalSource = sourceData.reduce((s, r) => s + r.count, 0);
+                  return (
+                    <div className="flex flex-col gap-2.5">
+                      {sourceData.map((r) => {
+                        const style = SOURCE_STYLE[r.source] ?? SOURCE_STYLE['other'];
+                        const pct = totalSource ? Math.round((r.count / totalSource) * 100) : 0;
+                        const barPct = maxCount ? Math.max((r.count / maxCount) * 100, 4) : 0;
+                        return (
+                          <div key={r.source} className="flex items-center gap-3">
+                            <span className="w-[104px] shrink-0 text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                              <span aria-hidden className="inline-flex items-center justify-center w-4 text-center">{style.icon}</span>
+                              {style.label}
+                            </span>
+                            <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${barPct}%`, backgroundColor: style.color }}
+                              />
+                            </div>
+                            <span className="w-[92px] shrink-0 text-right text-xs font-bold text-gray-700 tabular-nums">
+                              {r.count.toLocaleString()}명 <span className="text-gray-400 font-normal">({pct}%)</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           );
         })()}

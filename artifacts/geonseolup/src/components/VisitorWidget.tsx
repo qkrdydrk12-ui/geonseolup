@@ -51,9 +51,14 @@ export default function VisitorWidget() {
     setLoading(false);
   }, []);
 
-  // 방문 기록 (인증 불필요 — 모든 사용자 집계)
+  // 방문 기록 (인증 불필요 — 모든 사용자 집계). 유입 경로(referrer/utm_source)도 함께 보낸다.
   useEffect(() => {
-    fetch('/api/visit', { method: 'POST' }).catch(() => {});
+    const utmSource = new URLSearchParams(window.location.search).get('utm_source') ?? undefined;
+    fetch('/api/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ referrer: document.referrer || undefined, utmSource }),
+    }).catch(() => {});
   }, []);
 
   // 관리자 로그인/로그아웃 이벤트 감지
