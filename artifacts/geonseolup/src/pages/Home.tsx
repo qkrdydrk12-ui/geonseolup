@@ -110,7 +110,12 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
         if (result.ok) {
           setPushOn(true);
         } else if (result.error === 'unsupported') {
-          alert('이 브라우저는 푸시 알림을 지원하지 않아요.');
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+          alert(
+            isIOS
+              ? '아이폰에서는 사파리 하단의 공유 버튼 → "홈 화면에 추가"로 앱처럼 설치한 뒤 알림 구독이 가능해요.\n\n또는 "이메일로 받기"를 이용해주세요!'
+              : '이 브라우저는 푸시 알림을 지원하지 않아요. "이메일로 받기"를 이용해주세요!'
+          );
         } else if (result.error === 'permission_denied') {
           alert('알림 권한이 거부됐어요. 브라우저 설정에서 허용해주세요.');
         } else {
@@ -151,18 +156,16 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             💡 건설꿀팁!
           </a>
-          {isPushSupported() && (
-            <button
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${
-                pushOn
-                  ? 'bg-[#f97316] border-[#f97316] text-white'
-                  : 'bg-white border-gray-200 text-gray-600 hover:border-[#f97316] hover:text-[#f97316]'
-              } ${pushBusy ? 'opacity-60 pointer-events-none' : ''}`}
-              onClick={handlePushToggle}
-            >
-              {pushOn ? '🔔 구독 중' : '🔕 브라우저 알림'}
-            </button>
-          )}
+          <button
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${
+              pushOn
+                ? 'bg-[#f97316] border-[#f97316] text-white'
+                : 'bg-white border-gray-200 text-gray-600 hover:border-[#f97316] hover:text-[#f97316]'
+            } ${pushBusy ? 'opacity-60 pointer-events-none' : ''}`}
+            onClick={handlePushToggle}
+          >
+            {pushOn ? '🔔 구독 중' : '🔕 브라우저 알림'}
+          </button>
           <button
             className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-gray-200 text-gray-600 bg-white hover:border-[#f97316] hover:text-[#f97316] transition-all"
             onClick={() => setEmailOpen((o) => !o)}
