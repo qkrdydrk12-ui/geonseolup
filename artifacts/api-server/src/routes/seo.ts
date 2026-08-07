@@ -539,7 +539,7 @@ router.get("/info", async (_req: Request, res: Response) => {
       image: `${SITE_URL}/og-image.png?v=2`,
     });
     res.set("Content-Type", "text/html; charset=utf-8");
-    res.set("Cache-Control", "public, max-age=300");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
     res.send(html);
   } catch (err) {
     logger.error({ err }, "[info-seo] 목록 렌더링 실패");
@@ -570,7 +570,7 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       image: meta ? `${SITE_URL}/images/info/${encodeURIComponent(slug)}.webp` : `${SITE_URL}/og-image.png?v=2`,
     });
     res.set("Content-Type", "text/html; charset=utf-8");
-    res.set("Cache-Control", "public, max-age=300");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
     // 존재하지 않는 글은 404로 응답 (SPA 셸은 그대로 렌더링되므로 사용자 경험 동일, 검색엔진 오염 방지).
     res.status(meta ? 200 : 404).send(html);
   } catch (err) {
