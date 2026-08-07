@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { getArticle, getArticleImage, INFO_ARTICLES } from '@/lib/infoData';
+import { useMergedArticles } from '@/lib/useMergedArticles';
 
 interface Props {
   slug: string;
 }
 
 export default function InfoDetail({ slug }: Props) {
-  const article = getArticle(slug);
+  const { articles, loading } = useMergedArticles();
+  const article = articles.find((a) => a.slug === slug);
 
   useEffect(() => {
     if (article) {
@@ -21,6 +22,14 @@ export default function InfoDetail({ slug }: Props) {
   }, [article]);
 
   if (!article) {
+    if (loading) {
+      return (
+        <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
+          <Header />
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">불러오는 중...</div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
         <Header />
@@ -35,9 +44,9 @@ export default function InfoDetail({ slug }: Props) {
     );
   }
 
-  const currentIdx = INFO_ARTICLES.findIndex((a) => a.slug === slug);
-  const prevArticle = currentIdx > 0 ? INFO_ARTICLES[currentIdx - 1] : null;
-  const nextArticle = currentIdx < INFO_ARTICLES.length - 1 ? INFO_ARTICLES[currentIdx + 1] : null;
+  const currentIdx = articles.findIndex((a) => a.slug === slug);
+  const prevArticle = currentIdx > 0 ? articles[currentIdx - 1] : null;
+  const nextArticle = currentIdx < articles.length - 1 ? articles[currentIdx + 1] : null;
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -57,7 +66,7 @@ export default function InfoDetail({ slug }: Props) {
         <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="relative aspect-[16/9] bg-gray-100">
             <img
-              src={getArticleImage(article.slug)}
+              src={article.imageSrc}
               alt=""
               className="w-full h-full object-cover"
             />

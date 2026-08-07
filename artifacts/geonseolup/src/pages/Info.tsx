@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { INFO_ARTICLES, getArticleImage } from '@/lib/infoData';
+import { useMergedArticles } from '@/lib/useMergedArticles';
 
 function WageBanner() {
   return (
@@ -23,6 +23,8 @@ function WageBanner() {
 }
 
 export default function Info() {
+  const { articles } = useMergedArticles();
+
   useEffect(() => {
     document.title = '정보/꿀팁 — 건설UP';
     let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
@@ -41,7 +43,7 @@ export default function Info() {
         <WageBanner />
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {INFO_ARTICLES.map((article) => (
+          {articles.map((article) => (
             <Link
               key={article.slug}
               href={`/info/${article.slug}`}
@@ -50,7 +52,7 @@ export default function Info() {
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer h-full flex flex-col">
                 <div className="relative aspect-[16/9] bg-gray-100 overflow-hidden">
                   <img
-                    src={getArticleImage(article.slug)}
+                    src={article.imageSrc}
                     alt=""
                     loading="lazy"
                     className="w-full h-full object-cover"

@@ -37,6 +37,7 @@ import {
 import AdminProducts from '@/components/AdminProducts';
 import AdminWageRates from '@/components/AdminWageRates';
 import AdminSiteNews from '@/components/AdminSiteNews';
+import AdminBlogArticles from '@/components/AdminBlogArticles';
 import {
   getToken,
   setToken,
@@ -116,7 +117,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news' | 'settings' | 'stats' | 'threads';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news' | 'blog' | 'settings' | 'stats' | 'threads';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1427,6 +1428,7 @@ export default function Admin() {
               { key: 'products', label: '🛒 추천템' },
               { key: 'wages', label: '💰 일당 시세' },
               { key: 'news', label: '📰 현장 소식' },
+              { key: 'blog', label: '📚 건설 꿀팁' },
               { key: 'stats', label: '📊 방문 통계' },
               { key: 'threads', label: '🧵 홍보 초안' },
               { key: 'settings', label: '⚙️ 설정' },
@@ -2299,6 +2301,8 @@ export default function Admin() {
         {tab === 'wages' && <AdminWageRates showToast={showToast} />}
 
         {tab === 'news' && <AdminSiteNews showToast={showToast} />}
+
+        {tab === 'blog' && <AdminBlogArticles showToast={showToast} />}
 
         {tab === 'pending' && (
           <div className="bg-white rounded-xl p-6 shadow-sm">
