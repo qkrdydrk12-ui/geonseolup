@@ -388,7 +388,8 @@ export function clearInfoOverridesCache() {
 // 같은 위치의 원본 블록 이미지를 유지한다. 이미지가 사라지는 사고 방지.
 function mergeWithOverride(base: InfoArticle, ov: InfoArticle): InfoArticle {
   const merged = { ...base, ...ov };
-  if (Array.isArray(ov.body) && Array.isArray(base.body)) {
+  // 블록 수가 다르면(블록 추가/삭제된 편집) 위치가 어긋나 엉뚱한 이미지가 붙을 수 있으므로 건너뜀.
+  if (Array.isArray(ov.body) && Array.isArray(base.body) && ov.body.length === base.body.length) {
     merged.body = ov.body.map((b, i) =>
       !b.image && base.body[i]?.image ? { ...b, image: base.body[i].image } : b
     );
