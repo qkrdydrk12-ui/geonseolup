@@ -463,4 +463,110 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET /info, /info/:slug ──────────────────────────────────────────────────
+// 정보/꿀팁 글 공유 미리보기(OG 태그) 대응. SPA라서 크롤러가 대표 이미지만 보던 문제를
+// 서버에서 글별 제목·설명·헤더 이미지로 치환해 해결한다.
+// 글 데이터 원본은 프론트(infoData.ts)에 있으므로, 그 파일을 읽어 slug/title/description만
+// 추출해 캐시한다 (새 글이 추가돼도 별도 작업 없이 자동 반영).
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+interface InfoMeta { slug: string; title: string; description: string; }
+let _infoMetaCache: { list: InfoMeta[]; fetchedAt: number } | null = null;
+const INFO_META_TTL_MS = 5 * 60_000;
+
+async function getInfoMeta(): Promise<InfoMeta[]> {
+  const now = Date.now();
+  if (_infoMetaCache && now - _infoMetaCache.fetchedAt < INFO_META_TTL_MS) {
+    return _infoMetaCache.list;
+  }
+  // 실행 위치가 워크스페이스 루트일 수도, artifacts/api-server일 수도 있어 둘 다 시도한다.
+  const candidates = [
+    path.resolve(process.cwd(), "artifacts/geonseolup/src/lib/infoData.ts"),
+    path.resolve(process.cwd(), "../geonseolup/src/lib/infoData.ts"),
+  ];
+  let src = "";
+  let lastErr: unknown;
+  for (const p of candidates) {
+    try {
+      src = await readFile(p, "utf8");
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!src) throw lastErr;
+  const list: InfoMeta[] = [];
+  const re = /slug:\s*'([^']+)',\s*\n\s*title:\s*'([^']+)',\s*\n\s*description:\s*'([^']+)'/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    list.push({ slug: m[1]!, title: m[2]!, description: m[3]! });
+  }
+  _infoMetaCache = { list, fetchedAt: now };
+  return list;
+}
+
+function replaceMetaTags(template: string, opts: { title: string; desc: string; url: string; image: string }): string {
+  const title = escapeHtmlAttr(opts.title);
+  const desc = escapeHtmlAttr(opts.desc);
+  let html = template;
+  html = html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
+  html = html.replace(/(<meta[^>]*name=["']description["'][^>]*content=)["'][^"']*["']/, `$1"${desc}"`);
+  html = html.replace(/(<meta[^>]*property=["']og:description["'][^>]*content=)["'][^"']*["']/, `$1"${desc}"`);
+  html = html.replace(/(<meta[^>]*name=["']twitter:description["'][^>]*content=)["'][^"']*["']/, `$1"${desc}"`);
+  html = html.replace(/(<meta[^>]*property=["']og:title["'][^>]*content=)["'][^"']*["']/, `$1"${title}"`);
+  html = html.replace(/(<meta[^>]*name=["']twitter:title["'][^>]*content=)["'][^"']*["']/, `$1"${title}"`);
+  html = html.replace(/(<meta[^>]*property=["']og:url["'][^>]*content=)["'][^"']*["']/, `$1"${opts.url}"`);
+  html = html.replace(/(<meta[^>]*property=["']og:image["'][^>]*content=)["'][^"']*["']/, `$1"${opts.image}"`);
+  html = html.replace(/(<meta[^>]*name=["']twitter:image["'][^>]*content=)["'][^"']*["']/, `$1"${opts.image}"`);
+  html = setCanonical(html, opts.url);
+  return html;
+}
+
+router.get("/info", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "정보/꿀팁 — 건설UP",
+      desc: "건설 현장 일자리 초보 가이드, 안전수칙, 일당 시세 등 실용 정보를 모았습니다.",
+      url: `${SITE_URL}/info`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", "public, max-age=300");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[info-seo] 목록 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/info/:slug", async (req: Request, res: Response) => {
+  const slug = String(req.params.slug);
+  try {
+    const [template, metaList] = await Promise.all([getIndexTemplate(), getInfoMeta()]);
+    const meta = metaList.find((a) => a.slug === slug);
+    const pageUrl = `${SITE_URL}/info/${encodeURIComponent(slug)}`;
+    const html = replaceMetaTags(template, {
+      title: meta ? `${meta.title} — 건설UP` : "정보/꿀팁 — 건설UP",
+      desc: meta ? meta.description : "건설 현장 일자리 실용 정보를 모았습니다.",
+      url: pageUrl,
+      // 글별 헤더 이미지는 slug와 동일한 파일명으로 저장돼 있다 (프론트 getArticleImage와 동일 규칙).
+      image: meta ? `${SITE_URL}/images/info/${encodeURIComponent(slug)}.webp` : `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", "public, max-age=300");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err, slug }, "[info-seo] 렌더링 실패");
+    try {
+      const template = await getIndexTemplate();
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(template);
+    } catch {
+      res.status(500).send("Internal Server Error");
+    }
+  }
+});
+
 export default router;
