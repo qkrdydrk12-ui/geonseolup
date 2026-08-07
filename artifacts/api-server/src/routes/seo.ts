@@ -165,10 +165,36 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
   try {
     const { jobs } = await getPublicJobs();
 
+    // 건설꿀팁 아티클 slug 목록 — geonseolup/src/lib/infoData.ts와 수동 동기화한다.
+    // (패키지가 분리돼 있어 직접 import 불가. 새 글 추가 시 여기도 같이 추가할 것 — 2026-08-07 SEO 점검 중 발견)
+    const infoSlugs = [
+      "p5-guide-worker-guide",
+      "ecard-tag-guide",
+      "unemployment-benefit-guide",
+      "guide1",
+      "guide2",
+      "guide3",
+      "guide4",
+      "guide5",
+      "wage-gyeonggi-202608",
+      "insurance-4major",
+      "retirement-pay-guide",
+      "wage-delay-response",
+      "welding-types-guide",
+      "fire-watch-guide",
+      "summer-heat-safety",
+      "basic-safety-education",
+      "industrial-accident-guide",
+      "plumbing-job-guide",
+    ];
+
     const staticUrls: Array<{ loc: string; changefreq: string; priority: string; lastmod?: string }> = [
       { loc: "/", changefreq: "daily", priority: "1.0" },
       { loc: "/post", changefreq: "monthly", priority: "0.7" },
       { loc: "/shop", changefreq: "weekly", priority: "0.5" },
+      { loc: "/wages", changefreq: "daily", priority: "0.8" },
+      { loc: "/info", changefreq: "weekly", priority: "0.7" },
+      ...infoSlugs.map((slug) => ({ loc: `/info/${slug}`, changefreq: "monthly", priority: "0.6" })),
     ];
 
     const jobUrls = jobs
