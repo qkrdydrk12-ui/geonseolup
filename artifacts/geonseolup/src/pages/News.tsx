@@ -24,6 +24,7 @@ function formatDate(iso: string): string {
 export default function News() {
   const [rows, setRows] = useState<SiteNews[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<number | null>(null);
 
   useEffect(() => {
     document.title = '건설업 현장 소식 — 건설UP';
@@ -39,6 +40,8 @@ export default function News() {
       .finally(() => setLoading(false));
   }, []);
 
+  const isEmpty = !loading && rows.length === 0 && NEWS_NEWEST_FIRST.length === 0;
+
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
       <Header />
@@ -48,16 +51,18 @@ export default function News() {
           <p className="text-sm text-gray-500">대형 현장 착공·투자·안전 소식을 현장 근로자 시각에서 정리했습니다.</p>
         </div>
 
-        {/* 심층 기사 (장문, 상세 페이지로 연결) */}
-        {NEWS_NEWEST_FIRST.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 mb-8">
+        {isEmpty ? (
+          <div className="text-center py-16 text-gray-400 text-sm bg-white rounded-2xl border border-gray-200">아직 등록된 소식이 없습니다.</div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 items-start">
+            {/* 심층 기사 (장문, 상세 페이지로 연결) */}
             {NEWS_NEWEST_FIRST.map((article) => (
               <Link
                 key={article.slug}
                 href={`/news/${article.slug}`}
                 className="block no-underline"
               >
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer h-full flex flex-col">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col">
                   <div className="relative aspect-[16/9] overflow-hidden" style={{ background: '#0d0d0d' }}>
                     <img
                       src={getNewsImage(article.slug)}
@@ -81,44 +86,50 @@ export default function News() {
                 </div>
               </Link>
             ))}
-          </div>
-        )}
 
-        {/* 짧은 소식 (관리자 패널에서 발행) */}
-        {loading ? (
-          <div className="text-center py-16 text-gray-400 text-sm bg-white rounded-2xl border border-gray-200">불러오는 중...</div>
-        ) : rows.length === 0 ? (
-          NEWS_NEWEST_FIRST.length === 0 ? (
-            <div className="text-center py-16 text-gray-400 text-sm bg-white rounded-2xl border border-gray-200">아직 등록된 소식이 없습니다.</div>
-          ) : null
-        ) : (
-          <div className="flex flex-col gap-4">
-            {rows.map((r) => (
-              <article key={r.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                {r.imageUrl && (
-                  <div className="aspect-[16/9]" style={{ background: '#0d0d0d' }}>
-                    <img src={r.imageUrl} alt={r.title} className="w-full h-full object-contain" />
+            {/* 짧은 소식 (관리자 패널에서 발행) — 같은 크기 카드, 누르면 전문 펼침 */}
+            {rows.map((r) => {
+              const open = openId === r.id;
+              return (
+                <article
+                  key={r.id}
+                  className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer flex flex-col"
+                  onClick={() => setOpenId(open ? null : r.id)}
+                >
+                  {r.imageUrl && (
+                    <div className="relative aspect-[16/9] overflow-hidden" style={{ background: '#0d0d0d' }}>
+                      <img src={r.imageUrl} alt={r.title} loading="lazy" className="w-full h-full object-contain" />
+                    </div>
+                  )}
+                  <div className="p-5 flex-1 flex flex-col">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className="text-[11px] text-gray-400">{formatDate(r.publishedAt)}</span>
+                      {r.sourceLabel && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-[#f97316] shrink-0">{r.sourceLabel}</span>
+                      )}
+                    </div>
+                    <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">{r.title}</h2>
+                    <p className={`text-xs text-gray-500 leading-relaxed whitespace-pre-line ${open ? '' : 'line-clamp-2'}`}>
+                      {r.body}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#f97316]">{open ? '접기 ↑' : '내용 보기 ↓'}</span>
+                      {r.sourceUrl && (
+                        <a
+                          href={r.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-[#f97316] font-semibold no-underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          원문 보기 →
+                        </a>
+                      )}
+                    </div>
                   </div>
-                )}
-                <div className="p-5">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <h2 className="text-base font-bold text-gray-900">{r.title}</h2>
-                    {r.sourceLabel && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-[#f97316] shrink-0">{r.sourceLabel}</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{r.body}</p>
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                    <span className="text-xs text-gray-400">{formatDate(r.publishedAt)}</span>
-                    {r.sourceUrl && (
-                      <a href={r.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#f97316] font-semibold no-underline">
-                        원문 보기 →
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
 
