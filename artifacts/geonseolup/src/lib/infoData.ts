@@ -384,13 +384,25 @@ export function clearInfoOverridesCache() {
   _overridesCache = null;
 }
 
+// 관리자 override의 본문 블록에 이미지 정보가 빠져 있으면 (예: 이미지가 나중에 추가된 글)
+// 같은 위치의 원본 블록 이미지를 유지한다. 이미지가 사라지는 사고 방지.
+function mergeWithOverride(base: InfoArticle, ov: InfoArticle): InfoArticle {
+  const merged = { ...base, ...ov };
+  if (Array.isArray(ov.body) && Array.isArray(base.body)) {
+    merged.body = ov.body.map((b, i) =>
+      !b.image && base.body[i]?.image ? { ...b, image: base.body[i].image } : b
+    );
+  }
+  return merged;
+}
+
 export function useInfoArticles(): InfoArticle[] {
   const [articles, setArticles] = useState<InfoArticle[]>(INFO_ARTICLES_NEWEST_FIRST);
   useEffect(() => {
     let alive = true;
     fetchInfoOverrides().then((overrides) => {
       if (!alive || !Object.keys(overrides).length) return;
-      setArticles(INFO_ARTICLES_NEWEST_FIRST.map((a) => overrides[a.slug] ? { ...a, ...overrides[a.slug] } : a));
+      setArticles(INFO_ARTICLES_NEWEST_FIRST.map((a) => overrides[a.slug] ? mergeWithOverride(a, overrides[a.slug]) : a));
     });
     return () => { alive = false; };
   }, []);
