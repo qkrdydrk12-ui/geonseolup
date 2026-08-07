@@ -83,7 +83,7 @@ export default function InfoDetail({ slug }: Props) {
                     className="w-full max-w-[440px] mx-auto block rounded-xl border border-gray-200 mb-3"
                   />
                 )}
-                <p>{block.text}</p>
+                <p className="whitespace-pre-line">{block.text}</p>
               </div>
             ))}
           </div>
