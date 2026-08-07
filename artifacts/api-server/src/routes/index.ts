@@ -10,6 +10,7 @@ import pushRouter from "./push";
 import subscribeRouter from "./subscribe";
 import threadsImageRouter from "./threadsImage";
 import wageRatesRouter from "./wageRates";
+import siteNewsRouter from "./siteNews";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(pushRouter);
 router.use(subscribeRouter);
 router.use(threadsImageRouter);
 router.use(wageRatesRouter);
+router.use(siteNewsRouter);
 
 export default router;

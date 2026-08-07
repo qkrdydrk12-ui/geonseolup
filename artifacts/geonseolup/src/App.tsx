@@ -12,6 +12,7 @@ import Info from '@/pages/Info';
 import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
 import Wages from '@/pages/Wages';
+import News from '@/pages/News';
 import VisitorWidget from '@/components/VisitorWidget';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 
@@ -176,6 +177,9 @@ function Router() {
       </Route>
       <Route path="/wages">
         <Wages />
+      </Route>
+      <Route path="/news">
+        <News />
       </Route>
       <Route path="/terms">
         <Terms />

@@ -193,6 +193,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/post", changefreq: "monthly", priority: "0.7" },
       { loc: "/shop", changefreq: "weekly", priority: "0.5" },
       { loc: "/wages", changefreq: "daily", priority: "0.8" },
+      { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
       ...infoSlugs.map((slug) => ({ loc: `/info/${slug}`, changefreq: "monthly", priority: "0.6" })),
     ];
