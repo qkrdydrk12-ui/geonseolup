@@ -1,7 +1,8 @@
-// Threads 댓글 자동 감지 + 답글 "자동 발행".
-// 계정 주인의 명시적 요청(2026-08)으로, 새 댓글을 감지하면 AI가 답글을 만들어
-// 사람 승인 없이 바로 발행한다. 발행 이력은 threads_comment_replies에 남고
-// 관리자 페이지에서 확인할 수 있다. 실패한 건은 pending으로 남아 수동 발행 가능.
+// Threads 댓글 자동 감지 + 답글 자동 발행.
+// 2026-08-06 사용자 지시로 변경: 새 댓글을 감지하면 답글을 생성해 그 자리에서
+// 바로 Threads에 발행한다 (기존엔 관리자 승인 필수였으나, 계정 소유자 본인이
+// "댓글 달면 자동으로 답글 달아달라"고 명시적으로 요청해 변경함).
+// 발행에 실패한 경우에만 'pending'으로 남아 /admin 큐에서 수동 처리 가능.
 
 import { getCurrentThreadsToken } from "./threadsToken.js";
 import { publishReply } from "./threadsPublish.js";
@@ -60,22 +61,6 @@ interface ThreadsReply {
   timestamp?: string;
 }
 
-// 내 계정 username — 내 계정이 단 댓글(링크 댓글, 승인된 답글 등)을
-// "새 댓글"로 오인해 답글 초안을 만드는 것을 막기 위해 필요하다.
-let _ownUsername: string | null = null;
-async function getOwnUsername(token: string): Promise<string | null> {
-  if (_ownUsername) return _ownUsername;
-  try {
-    const res = await fetch(`${GRAPH_BASE}/me?fields=username&access_token=${encodeURIComponent(token)}`);
-    if (!res.ok) return null;
-    const data = (await res.json()) as { username?: string };
-    _ownUsername = data.username ?? null;
-    return _ownUsername;
-  } catch {
-    return null;
-  }
-}
-
 async function fetchReplies(threadsPostId: string, token: string): Promise<ThreadsReply[]> {
   const url = `${GRAPH_BASE}/${threadsPostId}/replies?fields=id,text,username,timestamp&access_token=${encodeURIComponent(token)}`;
   const res = await fetch(url);
@@ -88,27 +73,20 @@ async function fetchReplies(threadsPostId: string, token: string): Promise<Threa
   return data.data ?? [];
 }
 
-// 이모지 강제 제거 안전망 — 프롬프트로 금지해도 모델이 가끔 넣기 때문에 코드에서 한 번 더 걸러낸다.
-// (계정 주인의 필수 규칙: 답글에 이모지 절대 금지)
-function stripEmojis(text: string): string {
-  return (
-    text
-      // 그림 이모지 전반 (유니코드 속성 기반 — 대부분의 이모지를 포괄)
-      .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, "")
-      // 서로게이트 페어 영역 전체 (U+10000 이상 — 이모지 대부분이 여기 속함)
-      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
-      // 화살표·기호류: 화살표, 잡기호, 딩뱃, 기타 기호/화살표 블록
-      .replace(/[\u2190-\u21FF\u2300-\u23FF\u25A0-\u27BF\u2900-\u297F\u2B00-\u2BFF]/g, "")
-      // 변형 선택자(이모지 스타일 지정), ZWJ(이모지 결합), 조합용 기호
-      .replace(/[\uFE0E\uFE0F\u200D\u20E3]/g, "")
-      // 하트·별 등 장식 특수기호
-      .replace(/[♡♥★☆■□●○◆◇▲△▼▽]/g, "")
-      .replace(/ {2,}/g, " ")
-      .trim()
-  );
+// 모델이 지침을 어기고 이모지를 넣는 경우에 대비한 안전망 — 어떤 이모지든 무조건 제거.
+// (2026-08-06 사용자 지시: "이모지 달지 말아줘 ... 필수로" — 프롬프트만으로는 완전히
+//  보장되지 않으므로 후처리로 한 번 더 강제 제거한다.)
+function stripEmoji(s: string | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/️/g, "")
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "") // 서로게이트 페어 이모지(대부분의 이모지)
+    .replace(/[☀-➿⬀-⯿←-⇿⌀-⏿]/g, "") // 기호/화살표/기타 심볼
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
-// CLAUDE_GUIDE.md.txt 톤(담백하고 세련되게, 광고 같지 않게)을 반영한 답글 초안 생성.
+// CLAUDE_GUIDE.md.txt 톤(담백하고 세련되게, 광고 같지 않게)을 반영한 답글 생성.
 // OPENAI_API_KEY가 설정돼 있으면 문맥에 맞는 답글을 생성하고, 없으면 무난한
 // 기본 답글로 대체한다 (부가 기능이라 실패해도 전체 흐름은 막지 않는다).
 async function generateSuggestedReply(commentText: string, postText?: string): Promise<string> {
@@ -126,18 +104,17 @@ async function generateSuggestedReply(commentText: string, postText?: string): P
           {
             role: "system",
             content:
-              "너는 건설UP(건설 일용직 구인 플랫폼)의 Threads 계정을 운영하는 사람이다. " +
-              "가장 중요한 원칙: AI가 쓴 티가 절대 나면 안 된다. 와디즈·토스·당근마켓 운영자가 " +
-              "댓글 다는 것처럼 자연스럽고 짧게, 1~2문장으로만 답한다. " +
-              "★★ 필수 규칙 — 예외 없음, 절대 위반 금지 ★★: 이모지·이모티콘을 전면 금지한다. " +
-              "😊💪♡❤️👍🙏 같은 그림 이모지, ^^ :) 같은 텍스트 이모티콘, ♡♥★☆ 같은 특수기호 장식까지 " +
-              "단 하나도 쓰지 않는다. 어떤 상황에서도, 댓글에 이모지가 있어도, 답글에는 절대 넣지 않는다. " +
-              "이 규칙은 다른 모든 지시보다 우선한다. " +
-              "금지: '모집합니다', '지원하세요', '지금 확인하세요' 같은 광고 문구, " +
-              "'안녕하세요!', '문의 감사합니다' 같은 상투적인 인사말. " +
-              "댓글 내용에 실제로 반응하듯 답한다 — 질문이면 그 질문에, 관심 표현이면 거기에 맞게. " +
-              "전화번호는 절대 직접 알려주지 않는다. 조건·연락처가 궁금하다는 댓글에는 " +
-              "게시글 댓글의 링크(건설UP)에서 확인할 수 있다고 자연스럽게 안내한다.",
+              "너는 건설UP(건설 일용직 구인 플랫폼)의 Threads 계정을 운영하는 실제 사람이다. " +
+              "AI가 쓴 티가 절대 나면 안 된다 — 와디즈·토스·당근마켓 운영자가 댓글 다는 것처럼, " +
+              "짧고 자연스럽고 사람 냄새 나게 쓴다.\n" +
+              "🚫 필수 규칙(예외 없음): 이모지·이모티콘을 단 하나도 쓰지 않는다. 손가락·불꽃·하트·웃음 등 " +
+              "종류를 막론하고 이모지 전면 금지. 텍스트만으로 자연스럽게 쓴다.\n" +
+              "금지: '모집합니다·지원하세요·지금 확인하세요·아래 링크' 같은 광고 문구, " +
+              "딱딱한 안내문 말투, '~해주셔서 감사합니다' 식 상투적 인사로 시작하는 것.\n" +
+              "댓글 내용에 실제로 반응하듯 자연스럽게 받아친다(예: 질문이면 답하고, 공감이면 맞장구치고). " +
+              "절대 전화번호를 직접 알려주지 않고, 구체적인 조건이 궁금하다고 하면 " +
+              "'게시글에 달린 링크(또는 건설UP)에서 확인해보세요' 정도로 자연스럽게 안내한다. " +
+              "1~2문장, 길어도 3문장 이내로 짧게.",
           },
           {
             role: "user",
@@ -152,16 +129,16 @@ async function generateSuggestedReply(commentText: string, postText?: string): P
       return fallback;
     }
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const reply = stripEmojis(data.choices?.[0]?.message?.content?.trim() ?? "");
-    return reply || fallback;
+    const reply = data.choices?.[0]?.message?.content?.trim();
+    return stripEmoji(reply) || fallback;
   } catch (err) {
     logger.warn({ err: String(err) }, "[threads-comments] 답글 생성 중 오류 — 기본 답글로 대체");
     return fallback;
   }
 }
 
-// 감시 중인 게시물들의 새 댓글을 확인하고, 신규 댓글마다 답글을 생성해
-// 즉시 자동 발행한다 (계정 주인의 명시적 요청). 발행 실패 시 pending으로 남긴다.
+// 감시 중인 게시물들의 새 댓글을 확인하고, 신규 댓글마다 답글을 생성해 바로 발행한다.
+// 발행 성공 시 status='replied', 실패 시에만 'pending'으로 남아 /admin에서 수동 재시도 가능.
 export async function pollForNewComments(): Promise<void> {
   await ensureTables();
   const tokenInfo = await getCurrentThreadsToken();
@@ -176,44 +153,35 @@ export async function pollForNewComments(): Promise<void> {
      ORDER BY published_at DESC LIMIT 50`
   );
 
-  const ownUsername = await getOwnUsername(tokenInfo.token);
-  if (!ownUsername) {
-    // 내 계정 확인 실패 시 폴링을 건너뜀 — 내 링크 댓글에 답글 초안을 만드는 오작동 방지.
-    logger.warn("[threads-comments] 내 계정(username) 확인 실패 — 이번 폴링 건너뜀");
-    return;
-  }
-
   for (const post of posts.rows) {
     const replies = await fetchReplies(post.threads_post_id, tokenInfo.token);
     for (const reply of replies) {
-      // 내 계정이 단 댓글(링크 댓글·승인된 답글)은 건너뜀 — 자기 댓글에 답글을 달면 안 된다.
-      if (ownUsername && reply.username === ownUsername) continue;
       // 이미 큐에 있거나 처리된 댓글은 건너뜀 (comment_id UNIQUE 제약으로도 이중 방지됨).
       try {
         const suggested = await generateSuggestedReply(reply.text ?? "", post.source_text ?? undefined);
-        const inserted = await pgPool.query<{ id: number }>(
+        const inserted = await pgPool.query(
           `INSERT INTO threads_comment_replies (threads_post_id, comment_id, commenter_username, comment_text, suggested_reply)
            VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (comment_id) DO NOTHING
            RETURNING id`,
           [post.threads_post_id, reply.id, reply.username ?? null, reply.text ?? null, suggested]
         );
-        const insertedRow = inserted.rows[0];
-        if (!insertedRow) continue; // 이미 처리된 댓글
+        const newId = inserted.rows[0]?.id as number | undefined;
+        if (newId == null) continue; // 이미 처리된 댓글
 
-        // 새 댓글 → 사람 승인 없이 바로 자동 발행 (계정 주인의 명시적 요청).
+        logger.info({ commentId: reply.id, username: reply.username }, "[threads-comments] 새 댓글 감지 — 답글 자동 발행 시도");
         const publishResult = await publishReply(suggested, reply.id);
         if (publishResult.ok) {
           await pgPool.query(
             `UPDATE threads_comment_replies SET status = 'replied', replied_at = now() WHERE id = $1`,
-            [insertedRow.id]
+            [newId]
           );
-          logger.info({ commentId: reply.id, username: reply.username }, "[threads-comments] 새 댓글 감지 — 답글 자동 발행 완료");
+          logger.info({ commentId: reply.id, username: reply.username }, "[threads-comments] 답글 자동 발행 완료");
         } else {
-          // 발행 실패 시 pending으로 남겨 관리자 페이지에서 수동 발행 가능하게 한다.
+          // 발행 실패 시엔 'pending'으로 남겨 /admin 큐에서 수동으로 재시도할 수 있게 둔다.
           logger.warn(
             { commentId: reply.id, error: publishResult.error },
-            "[threads-comments] 답글 자동 발행 실패 — 대기 목록에 남김"
+            "[threads-comments] 답글 자동 발행 실패 — 관리자 큐에 대기 상태로 남김"
           );
         }
       } catch (err) {
