@@ -51,8 +51,10 @@ export default function VisitorWidget() {
     setLoading(false);
   }, []);
 
-  // 방문 기록 (인증 불필요 — 모든 사용자 집계). 유입 경로(referrer/utm_source)도 함께 보낸다.
+  // 방문 기록 (인증 불필요). 유입 경로(referrer/utm_source)도 함께 보낸다.
+  // 관리자(내) 브라우저는 집계에서 제외 — 로그인 토큰이 있으면 기록 자체를 보내지 않는다.
   useEffect(() => {
+    if (getToken()) return;
     const utmSource = new URLSearchParams(window.location.search).get('utm_source') ?? undefined;
     fetch('/api/visit', {
       method: 'POST',
