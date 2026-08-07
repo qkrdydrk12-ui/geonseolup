@@ -84,7 +84,7 @@ export default function Shop() {
     if (category !== '전체') list = list.filter((p) => p.category === category);
     const kw = keyword.trim().toLowerCase();
     if (kw) list = list.filter((p) => p.name.toLowerCase().includes(kw) || p.category.toLowerCase().includes(kw));
-    // 전체 보기: 카테고리 순서(생활물품 → 안전화 → …)대로 묶어서, 그 안에서 관리자 지정 순서
+    // 전체 보기: 카테고리 순서(안전화 → 생활물품 → …)대로 묶어서, 그 안에서 관리자 지정 순서
     const catIdx = (p: Product) => {
       const i = PRODUCT_CATEGORIES.indexOf(p.category);
       return i === -1 ? PRODUCT_CATEGORIES.length : i;
