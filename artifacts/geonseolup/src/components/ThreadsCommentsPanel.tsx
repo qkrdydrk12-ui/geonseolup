@@ -107,14 +107,15 @@ export default function ThreadsCommentsPanel() {
         </div>
       </div>
       <p className="text-xs text-gray-500 mb-4">
-        발행한 글에 달린 새 댓글을 10분마다 자동으로 확인해 답글 초안을 만들어둬요. 내용을 확인·수정한 뒤
-        "답글 발행"을 눌러야만 실제로 Threads에 올라갑니다 (자동 발행 아님).
+        발행한 글에 달린 새 댓글을 10분마다 자동으로 확인해서 답글까지 바로 자동 발행해요.
+        아래 목록은 <b>발행에 실패해서 대기 중인 건</b>만 보여요 — 내용을 확인·수정한 뒤
+        "답글 발행"을 눌러 수동으로 재시도할 수 있습니다.
       </p>
 
       {loading ? (
         <div className="text-center py-10 text-gray-400 text-sm">불러오는 중…</div>
       ) : comments.length === 0 ? (
-        <div className="text-center py-6 text-gray-400 text-sm">대기 중인 댓글이 없어요.</div>
+        <div className="text-center py-6 text-gray-400 text-sm">대기 중인 댓글이 없어요 (새 댓글은 자동 발행됨).</div>
       ) : (
         <div className="flex flex-col gap-3">
           {comments.map((c) => (

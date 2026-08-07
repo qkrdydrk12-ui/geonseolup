@@ -182,6 +182,28 @@ router.post("/admin/threads/publish", requireAdmin, async (req: Request, res: Re
   }
 });
 
+// POST /api/admin/threads/track-post — 이미 (다른 경로로) 발행된 Threads 게시물을
+// 댓글 자동감지 대상에 등록만 한다. 실제 발행은 하지 않는다.
+// (2026-08-07: 매일 자동화가 Claude in Chrome으로 threads.net에 직접 게시하는데,
+//  이 경로는 publishToThreads()를 안 거치므로 recordPublishedPost가 호출된 적이
+//  없었음 — 그래서 자동 답글 시스템이 그 글들의 댓글을 전혀 몰랐던 것. 자동화가
+//  게시 직후 이 엔드포인트를 호출해 threads_posts에 등록하면 그 후로는 기존
+//  10분 주기 폴링이 정상적으로 댓글을 감지해 답글을 단다.)
+router.post("/admin/threads/track-post", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const postId = typeof req.body?.postId === "string" ? req.body.postId.trim() : "";
+    const text = typeof req.body?.text === "string" ? req.body.text : undefined;
+    if (!postId) {
+      res.status(400).json({ ok: false, message: "postId가 필요합니다" });
+      return;
+    }
+    await recordPublishedPost(postId, text);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
 // GET /api/admin/threads/drafts — 대기 중인 초안 목록
 router.get("/admin/threads/drafts", requireAdmin, async (_req: Request, res: Response) => {
   try {
