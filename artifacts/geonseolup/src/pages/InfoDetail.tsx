@@ -75,15 +75,15 @@ export default function InfoDetail({ slug }: Props) {
                 {block.subtitle && (
                   <h2 className="text-base font-bold text-[#1e3a5f] mb-1.5">{block.subtitle}</h2>
                 )}
-                <p>{block.text}</p>
                 {block.image && (
                   <img
                     src={block.image}
                     alt=""
                     loading="lazy"
-                    className="w-full rounded-xl border border-gray-200 mt-3"
+                    className="w-full max-w-[440px] mx-auto block rounded-xl border border-gray-200 mb-3"
                   />
                 )}
+                <p>{block.text}</p>
               </div>
             ))}
           </div>
