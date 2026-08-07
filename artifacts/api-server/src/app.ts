@@ -28,8 +28,9 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 기본 100kb 제한으로는 현장소식(site-news) 이미지 base64 업로드가 413로 막혀서 상향
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use(rssRouter);
 app.use(seoRouter);
