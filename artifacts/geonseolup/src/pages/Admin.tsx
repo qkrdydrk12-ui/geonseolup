@@ -36,6 +36,7 @@ import {
 } from '@/lib/parseJob';
 import AdminProducts from '@/components/AdminProducts';
 import InfoEditPanel from '@/components/InfoEditPanel';
+import AdminWageRates from '@/components/AdminWageRates';
 import {
   getToken,
   setToken,
@@ -114,7 +115,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'settings' | 'stats' | 'threads' | 'info_edit';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'settings' | 'stats' | 'threads' | 'info_edit';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1436,6 +1437,7 @@ export default function Admin() {
               { key: 'pending', label: `📥 신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
               { key: 'reports', label: `🚩 신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
               { key: 'products', label: '🛒 추천템' },
+              { key: 'wages', label: '💰 일당 시세' },
               { key: 'stats', label: '📊 방문 통계' },
               { key: 'threads', label: '🧵 홍보 초안' },
               { key: 'info_edit', label: '✍️ 정보글 수정' },
@@ -2305,6 +2307,8 @@ export default function Admin() {
         )}
 
         {tab === 'products' && <AdminProducts showToast={showToast} />}
+
+        {tab === 'wages' && <AdminWageRates showToast={showToast} />}
 
         {tab === 'pending' && (
           <div className="bg-white rounded-xl p-6 shadow-sm">
