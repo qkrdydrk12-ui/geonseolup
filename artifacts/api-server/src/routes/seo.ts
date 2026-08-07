@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { getPublicJobs, getPublicJobById } from "../lib/jobsCache.js";
 import { logger } from "../lib/logger.js";
+import { getAllInfoOverrides } from "../lib/infoOverrides.js";
 
 const router = Router();
 
@@ -497,10 +498,12 @@ async function getInfoMeta(): Promise<InfoMeta[]> {
   }
   if (!src) throw lastErr;
   const list: InfoMeta[] = [];
-  const re = /slug:\s*'([^']+)',\s*\n\s*title:\s*'([^']+)',\s*\n\s*description:\s*'([^']+)'/g;
+  // 작은따옴표 문자열 내 이스케이프(\')도 허용해 제목/설명에 아포스트로피가 있어도 안전하게 추출.
+  const re = /slug:\s*'((?:\\'|[^'])+)',\s*\n\s*title:\s*'((?:\\'|[^'])+)',\s*\n\s*description:\s*'((?:\\'|[^'])+)'/g;
+  const unescape = (s: string) => s.replace(/\\'/g, "'").replace(/\\\\/g, "\\");
   let m: RegExpExecArray | null;
   while ((m = re.exec(src)) !== null) {
-    list.push({ slug: m[1]!, title: m[2]!, description: m[3]! });
+    list.push({ slug: unescape(m[1]!), title: unescape(m[2]!), description: unescape(m[3]!) });
   }
   _infoMetaCache = { list, fetchedAt: now };
   return list;
@@ -544,19 +547,29 @@ router.get("/info", async (_req: Request, res: Response) => {
 router.get("/info/:slug", async (req: Request, res: Response) => {
   const slug = String(req.params.slug);
   try {
-    const [template, metaList] = await Promise.all([getIndexTemplate(), getInfoMeta()]);
-    const meta = metaList.find((a) => a.slug === slug);
+    const [template, metaList, overrides] = await Promise.all([
+      getIndexTemplate(),
+      getInfoMeta(),
+      // 관리자가 글 제목/설명을 수정했을 수 있으므로 덮어쓰기를 병합 (실패해도 원본으로 진행).
+      getAllInfoOverrides().catch(() => ({}) as Record<string, { title: string; description: string }>),
+    ]);
+    const base = metaList.find((a) => a.slug === slug);
+    const ov = overrides[slug];
+    const meta = base
+      ? { title: ov?.title || base.title, description: ov?.description || base.description }
+      : undefined;
     const pageUrl = `${SITE_URL}/info/${encodeURIComponent(slug)}`;
     const html = replaceMetaTags(template, {
       title: meta ? `${meta.title} — 건설UP` : "정보/꿀팁 — 건설UP",
       desc: meta ? meta.description : "건설 현장 일자리 실용 정보를 모았습니다.",
-      url: pageUrl,
+      url: meta ? pageUrl : `${SITE_URL}/info`,
       // 글별 헤더 이미지는 slug와 동일한 파일명으로 저장돼 있다 (프론트 getArticleImage와 동일 규칙).
       image: meta ? `${SITE_URL}/images/info/${encodeURIComponent(slug)}.webp` : `${SITE_URL}/og-image.png?v=2`,
     });
     res.set("Content-Type", "text/html; charset=utf-8");
     res.set("Cache-Control", "public, max-age=300");
-    res.send(html);
+    // 존재하지 않는 글은 404로 응답 (SPA 셸은 그대로 렌더링되므로 사용자 경험 동일, 검색엔진 오염 방지).
+    res.status(meta ? 200 : 404).send(html);
   } catch (err) {
     logger.error({ err, slug }, "[info-seo] 렌더링 실패");
     try {
