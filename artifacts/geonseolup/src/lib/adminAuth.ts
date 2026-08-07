@@ -1,21 +1,15 @@
-const TOKEN_KEY = 'cj_admin_token'; // localStorage — 브라우저를 닫아도 로그인 유지
+const TOKEN_KEY = 'cj_admin_token'; // sessionStorage → 탭/브라우저 닫으면 자동 삭제
+const IDLE_TIMEOUT_MS = 20 * 60 * 1000; // 20분
 
 export function getToken(): string | null {
-  // 과거 sessionStorage에 저장된 토큰이 있으면 localStorage로 이전
-  const legacy = sessionStorage.getItem(TOKEN_KEY);
-  if (legacy) {
-    localStorage.setItem(TOKEN_KEY, legacy);
-    sessionStorage.removeItem(TOKEN_KEY);
-  }
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
@@ -58,41 +52,6 @@ export async function apiVerify(): Promise<boolean> {
   }
 }
 
-export async function apiSaveInfoOverride(article: {
-  slug: string;
-  title: string;
-  description: string;
-  emoji: string;
-  body: { subtitle?: string; text: string }[];
-}): Promise<{ ok: boolean; message?: string }> {
-  const token = getToken();
-  if (!token) return { ok: false, message: '인증이 필요합니다' };
-  try {
-    const res = await fetch(`/api/admin/info/${article.slug}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(article),
-    });
-    return await res.json();
-  } catch {
-    return { ok: false, message: '서버 오류가 발생했습니다' };
-  }
-}
-
-export async function apiResetInfoOverride(slug: string): Promise<{ ok: boolean; message?: string }> {
-  const token = getToken();
-  if (!token) return { ok: false, message: '인증이 필요합니다' };
-  try {
-    const res = await fetch(`/api/admin/info/${slug}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return await res.json();
-  } catch {
-    return { ok: false, message: '서버 오류가 발생했습니다' };
-  }
-}
-
 export async function apiUpdateCreds(newId: string, newPw: string): Promise<{ ok: boolean; message?: string }> {
   const token = getToken();
   if (!token) return { ok: false, message: '인증이 필요합니다' };
@@ -106,4 +65,26 @@ export async function apiUpdateCreds(newId: string, newPw: string): Promise<{ ok
   } catch {
     return { ok: false, message: '서버 오류가 발생했습니다' };
   }
+}
+
+// 비활동 자동 로그아웃 관리
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function startIdleTimer(onTimeout: () => void) {
+  clearIdleTimer();
+  const reset = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(onTimeout, IDLE_TIMEOUT_MS);
+  };
+  const events = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'click'];
+  events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+  reset();
+  return () => {
+    clearIdleTimer();
+    events.forEach((e) => window.removeEventListener(e, reset));
+  };
+}
+
+export function clearIdleTimer() {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
