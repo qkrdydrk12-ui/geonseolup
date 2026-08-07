@@ -302,6 +302,9 @@ export function getArticle(slug: string): InfoArticle | undefined {
   return INFO_ARTICLES.find((a) => a.slug === slug);
 }
 
+// 목록 표시용: 새 글일수록 배열 뒤에 추가되므로, 뒤집어서 최신 글이 맨 위에 오게 한다.
+export const INFO_ARTICLES_NEWEST_FIRST: InfoArticle[] = [...INFO_ARTICLES].reverse();
+
 // 관리자가 수정한 내용(override)을 서버에서 받아 원본과 병합한다.
 // 서버 조회 실패 시에는 원본을 그대로 보여준다 (글이 안 보이는 것보단 낫다).
 import { useEffect, useState } from 'react';
@@ -326,12 +329,12 @@ export function clearInfoOverridesCache() {
 }
 
 export function useInfoArticles(): InfoArticle[] {
-  const [articles, setArticles] = useState<InfoArticle[]>(INFO_ARTICLES);
+  const [articles, setArticles] = useState<InfoArticle[]>(INFO_ARTICLES_NEWEST_FIRST);
   useEffect(() => {
     let alive = true;
     fetchInfoOverrides().then((overrides) => {
       if (!alive || !Object.keys(overrides).length) return;
-      setArticles(INFO_ARTICLES.map((a) => overrides[a.slug] ? { ...a, ...overrides[a.slug] } : a));
+      setArticles(INFO_ARTICLES_NEWEST_FIRST.map((a) => overrides[a.slug] ? { ...a, ...overrides[a.slug] } : a));
     });
     return () => { alive = false; };
   }, []);
