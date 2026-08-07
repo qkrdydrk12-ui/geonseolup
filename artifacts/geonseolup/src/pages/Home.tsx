@@ -156,6 +156,12 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             💡 건설꿀팁!
           </a>
+          <a
+            href="/news"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all no-underline"
+          >
+            🏗️ 현장 소식
+          </a>
           <button
             className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${
               pushOn
@@ -926,6 +932,10 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
           <span className="text-white/30">|</span>
           <a href="/info" className="text-white/80 hover:text-white no-underline transition-colors">
             정보/꿀팁
+          </a>
+          <span className="text-white/30">|</span>
+          <a href="/news" className="text-white/80 hover:text-white no-underline transition-colors">
+            현장 소식
           </a>
           <span className="text-white/30">|</span>
           <a href="/terms" className="text-white/80 hover:text-white no-underline transition-colors">

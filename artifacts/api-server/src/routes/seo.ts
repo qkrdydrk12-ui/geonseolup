@@ -585,4 +585,84 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET /news, /news/:slug ──────────────────────────────────────────────────
+// 건설업 현장 소식 공유 미리보기. 데이터 원본은 프론트 newsData.ts (info와 동일한 방식).
+let _newsMetaCache: { list: InfoMeta[]; fetchedAt: number } | null = null;
+
+async function getNewsMeta(): Promise<InfoMeta[]> {
+  const now = Date.now();
+  if (_newsMetaCache && now - _newsMetaCache.fetchedAt < INFO_META_TTL_MS) {
+    return _newsMetaCache.list;
+  }
+  const candidates = [
+    path.resolve(process.cwd(), "artifacts/geonseolup/src/lib/newsData.ts"),
+    path.resolve(process.cwd(), "../geonseolup/src/lib/newsData.ts"),
+  ];
+  let src = "";
+  let lastErr: unknown;
+  for (const p of candidates) {
+    try {
+      src = await readFile(p, "utf8");
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!src) throw lastErr;
+  const list: InfoMeta[] = [];
+  const re = /slug:\s*'((?:\\'|[^'])+)',\s*\n\s*title:\s*\n?\s*'((?:\\'|[^'])+)',\s*\n\s*description:\s*\n?\s*'((?:\\'|[^'])+)'/g;
+  const unescape = (s: string) => s.replace(/\\'/g, "'").replace(/\\\\/g, "\\");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    list.push({ slug: unescape(m[1]!), title: unescape(m[2]!), description: unescape(m[3]!) });
+  }
+  _newsMetaCache = { list, fetchedAt: now };
+  return list;
+}
+
+router.get("/news", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설업 현장 소식 — 건설UP",
+      desc: "대형 현장 착공, 투자, 인력 수요 등 건설업계 소식을 현장 근로자 시각에서 정리했습니다.",
+      url: `${SITE_URL}/news`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[news-seo] 목록 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/news/:slug", async (req: Request, res: Response) => {
+  const slug = String(req.params.slug);
+  try {
+    const [template, metaList] = await Promise.all([getIndexTemplate(), getNewsMeta()]);
+    const meta = metaList.find((a) => a.slug === slug);
+    const pageUrl = `${SITE_URL}/news/${encodeURIComponent(slug)}`;
+    const html = replaceMetaTags(template, {
+      title: meta ? `${meta.title} — 건설UP` : "건설업 현장 소식 — 건설UP",
+      desc: meta ? meta.description : "건설업계 소식을 현장 근로자 시각에서 정리했습니다.",
+      url: meta ? pageUrl : `${SITE_URL}/news`,
+      image: meta ? `${SITE_URL}/images/news/${encodeURIComponent(slug)}.webp` : `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.status(meta ? 200 : 404).send(html);
+  } catch (err) {
+    logger.error({ err, slug }, "[news-seo] 렌더링 실패");
+    try {
+      const template = await getIndexTemplate();
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(template);
+    } catch {
+      res.status(500).send("Internal Server Error");
+    }
+  }
+});
+
 export default router;
