@@ -11,7 +11,6 @@ import {
   fbLoadPending,
   fbUpdatePending,
   fbDeletePending,
-  fbAutoHideOldJobs,
   fbPurgeOldHiddenJobs,
   fbAutoDeleteOldJobs,
   fbAddReservedJob,
@@ -505,12 +504,16 @@ export default function Admin() {
 
     async function runCleanup() {
       const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
-      const autoHideHours: number = stored.autoHideHours ?? 48;
       const autoDeleteHours: number = stored.autoDeleteHours ?? 0;
       const all = await fbLoadJobs();
-      await fbAutoHideOldJobs(all, autoHideHours);
+      // 자동숨김(fbAutoHideOldJobs)은 더 이상 호출하지 않는다 —
+      // "등록 48시간 후 모집마감"은 서버가 등록일 기준으로 자동 판정하며,
+      // hidden 처리하면 마감 공고의 상세 페이지(30일 유지)까지 사라져 SEO에 해롭다.
       const purged = await fbPurgeOldHiddenJobs(all);
-      const deleted = await fbAutoDeleteOldJobs(all, autoDeleteHours);
+      // 완전 삭제는 최소 32일(활성 2일 + 마감 상태 30일 유지) 이후에만 —
+      // 관리자 설정값이 더 짧아도 상세 페이지 유지 기간을 침범하지 않게 하한을 둔다.
+      const MIN_DELETE_HOURS = 32 * 24;
+      const deleted = await fbAutoDeleteOldJobs(all, Math.max(autoDeleteHours || MIN_DELETE_HOURS, MIN_DELETE_HOURS));
       if (purged > 0 || deleted > 0) {
         loadJobs();
       }

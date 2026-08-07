@@ -10,6 +10,7 @@ import { notifyPushSubscribers } from "./webPush.js";
 import { notifyNewJobSubscribers } from "./emailSubscribers.js";
 import { pingSearchEngines } from "./searchEnginePing.js";
 import { maybeCreateDraft } from "./threadsDrafts.js";
+import { isJobClosed, isJobExpired } from "./jobLifecycle.js";
 
 export interface PublicJob {
   id: string;
@@ -59,8 +60,14 @@ function isPublic(j: PublicJob): boolean {
 }
 
 // 공개적으로 노출 가능한 공고만 남긴다.
+// (마감 후 30일이 지나 완전히 만료된 공고는 캐시에서도 제외 — 410 처리 대상)
 function toPublic(all: PublicJob[]): PublicJob[] {
-  return all.filter(isPublic);
+  return all.filter((j) => isPublic(j) && !isJobExpired(j));
+}
+
+// 활성(모집 중) 공고만 — 목록/알림/사이트맵용. 마감(closed) 공고는 제외.
+export function filterActiveJobs(jobs: PublicJob[]): PublicJob[] {
+  return jobs.filter((j) => !isJobClosed(j));
 }
 
 async function refresh(): Promise<PublicJob[]> {
@@ -81,7 +88,8 @@ async function refresh(): Promise<PublicJob[]> {
   // 새로 나타난 공고는 구글에 색인 알림을 보낸다 (JobPosting 페이지 전용, 부가 기능이라 실패해도 무시).
   // previousIds가 비어있는 최초 갱신(서버 재시작 직후)에는 전체를 "새 글"로 오인하지 않도록 건너뛴다.
   if (previousIds.size > 0) {
-    const newlyAdded = pub.filter((j) => !previousIds.has(j.id));
+    // 이미 마감된 공고(예: 오래된 공고가 캐시에 뒤늦게 잡힌 경우)는 새 공고 알림 대상이 아니다.
+    const newlyAdded = pub.filter((j) => !previousIds.has(j.id) && !isJobClosed(j));
     if (newlyAdded.length > 0) {
       pingSearchEngines().catch(() => {});
     }
@@ -175,6 +183,8 @@ export async function getPublicJobById(id: string): Promise<PublicJob | null> {
   // 갱신 쿨다운 중에는 추가 읽기를 피해 쿼터 소진을 연장하지 않는다.
   if (Date.now() - _lastFailAt < FAIL_COOLDOWN_MS) return null;
   try {
+    // 만료(expired) 여부는 여기서 거르지 않는다 — 호출부(라우트)가 만료 공고를
+    // 404(모름)가 아닌 410(확실히 사라짐)으로 구분 응답해야 하기 때문.
     const doc = (await getDocument("jobs", id)) as PublicJob | null;
     if (doc && isPublic(doc)) return doc;
     return null;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbGetPublicJob, fbLoadPublicJobs } from '@/lib/firebase';
+import { fbGetPublicJob, fbLoadPublicJobs, isJobActive } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { formatDate, getJobIcon, JOB_ICON_BG, JOB_BADGE_COLOR, isNew, markViewed } from '@/lib/utils';
 
@@ -13,7 +13,7 @@ interface Props {
 // 단순 "같은 직종만" 필터보다 실제로 더 관련성 높은 공고를 상단에 보여준다.
 function rankRelated(pool: Job[], id: string, region: string, job: string, limit = 10): Job[] {
   return pool
-    .filter((j) => j.id !== id && !j.hidden)
+    .filter((j) => j.id !== id && !j.hidden && isJobActive(j))
     .map((j) => {
       let score = 0;
       if (job && j.job === job) score += 2;
@@ -78,6 +78,25 @@ export default function Detail({ id }: Props) {
     load();
   }, [id]);
 
+  // 브라우저 제목/설명을 공고 내용에 맞춰 갱신 (서버 SEO 태그와 동일한 규칙)
+  useEffect(() => {
+    if (!job) return;
+    const mealYes = !!job.meal?.includes('제공') && !job.meal?.includes('미제공');
+    const lodgYes = !!job.lodging?.includes('제공') && !job.lodging?.includes('미제공');
+    const stay = mealYes && lodgYes
+      ? '숙식 제공'
+      : [lodgYes && '숙소 제공', mealYes && '식사 제공'].filter(Boolean).join(' · ');
+    const core =
+      [job.region && `[${job.region}]`, job.job, job.salary && `일당 ${job.salary}`, stay]
+        .filter(Boolean)
+        .join(' ') || job.title;
+    const closedNow =
+      job.closed === true ||
+      (job.closed === undefined && !!job.date && Date.now() - new Date(job.date).getTime() >= 48 * 3600 * 1000);
+    document.title = `${closedNow ? '[모집마감] ' : ''}${core} - 건설UP`;
+    return () => { document.title = '건설UP - 건설 현장 일자리 정보'; };
+  }, [job]);
+
   async function doShare() {
     const url = location.href;
     const title = job ? `${job.title} - 건설UP` : '건설UP';
@@ -132,6 +151,13 @@ export default function Detail({ id }: Props) {
     );
   }
 
+  // 모집마감 여부 — 서버 파생 필드(closed)를 우선하되, 로컬 캐시 폴백 등
+  // 서버 필드가 없는 경로에서도 등록 48시간 경과로 동일하게 판정한다.
+  const ACTIVE_MS = 48 * 3600 * 1000;
+  const isClosed =
+    job.closed === true ||
+    (job.closed === undefined && !!job.date && Date.now() - new Date(job.date).getTime() >= ACTIVE_MS);
+
   const jobBg = JOB_ICON_BG[job.job] || '#f3f4f6';
   const jobBadge = JOB_BADGE_COLOR[job.job] || { bg: '#f3f4f6', text: '#374151' };
   const hasPhone = !!(job.contact && /\d{2,4}-\d{3,4}-\d{4}/.test(job.contact));
@@ -168,6 +194,19 @@ export default function Detail({ id }: Props) {
             💛 카카오 공유
           </button>
         </div>
+
+        {/* 모집마감 안내 배너 */}
+        {isClosed && (
+          <div className="flex items-start gap-2.5 rounded-xl border-[1.5px] border-red-300 bg-red-50 px-4 py-3.5 mb-4">
+            <span className="text-xl shrink-0">⏰</span>
+            <div>
+              <div className="text-sm font-extrabold text-red-700">이 공고는 모집이 마감되었습니다</div>
+              <div className="text-xs text-red-600 mt-0.5">
+                아래 '비슷한 일자리'에서 지금 지원 가능한 공고를 확인해보세요.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 상세 카드 */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden mb-5">
@@ -281,7 +320,7 @@ export default function Detail({ id }: Props) {
         {related.length > 0 && (
           <section className="mb-5">
             <h2 className="text-[15px] font-extrabold text-[#1e3a5f] mb-3 pb-[7px] border-b-2 border-gray-200 flex items-center gap-1.5">
-              🔍 비슷한 일자리
+              🔍 {isClosed ? '지금 지원 가능한 비슷한 일자리' : '비슷한 일자리'}
               <span className="ml-auto text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                 {related.length}
               </span>
@@ -342,7 +381,11 @@ export default function Detail({ id }: Props) {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="max-w-[860px] mx-auto grid grid-cols-2 gap-2.5 px-4 py-3">
-          {hasPhone ? (
+          {isClosed ? (
+            <div className="col-span-2 flex items-center justify-center gap-1.5 bg-gray-300 text-gray-600 rounded-xl py-[15px] text-base font-bold cursor-not-allowed select-none">
+              ⏰ 모집이 마감된 공고입니다
+            </div>
+          ) : hasPhone ? (
             <>
               <a
                 href={telHref}

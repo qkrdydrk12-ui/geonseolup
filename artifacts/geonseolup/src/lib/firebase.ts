@@ -109,6 +109,9 @@ export interface Job {
   lastRetryAt?: string;
   publishedAt?: string;
   failReason?: string;
+  // 서버가 /api/jobs/:id 응답에 붙여주는 파생 필드 (등록 48시간 경과 = 모집마감)
+  closed?: boolean;
+  closesAt?: string | null;
 }
 
 export interface PendingJob extends Omit<Job, 'id' | 'status'> {
@@ -191,6 +194,17 @@ export async function fbGetJob(id: string): Promise<Job | null> {
 // 공개 화면(홈/상세)은 서버가 캐시한 /api/jobs 를 공유해서 읽는다.
 const PUBLIC_JOBS_CACHE_KEY = 'cj_public_jobs_cache';
 
+// 공고 활성(모집 중) 여부 — 서버(jobLifecycle)와 동일 규칙: 등록 후 48시간.
+// 서버 API는 이미 활성만 내려주지만, 로컬 캐시/저장본 폴백 경로에는 마감 공고가
+// 남아 있을 수 있으므로 폴백 반환 전 반드시 이 필터를 거친다.
+const JOB_ACTIVE_MS = 48 * 3600 * 1000;
+export function isJobActive(j: Job): boolean {
+  if (!j.date) return true;
+  const t = new Date(j.date).getTime();
+  if (isNaN(t)) return true;
+  return Date.now() - t < JOB_ACTIVE_MS;
+}
+
 export async function fbLoadPublicJobs(): Promise<Job[]> {
   try {
     const res = await fetch('/api/jobs', { headers: { Accept: 'application/json' }, cache: 'no-store' });
@@ -203,15 +217,16 @@ export async function fbLoadPublicJobs(): Promise<Job[]> {
     }
     // 서버 캐시가 비어 있음(콜드 스타트/읽기 쿼터 소진 등) → 빈 목록 대신
     // 이 기기가 마지막으로 받은 실제 공고를 보여준다 (샘플 폴백보다 우선).
-    const lastGood = readPublicJobsCache();
+    // 폴백에는 마감된 공고가 섞여 있을 수 있으므로 활성만 남긴다.
+    const lastGood = readPublicJobsCache().filter(isJobActive);
     if (lastGood.length > 0) return lastGood;
     return jobs;
   } catch (e) {
     console.warn('[api] fbLoadPublicJobs failed:', e);
-    // 서버 미응답 시: 직전 캐시 → 로컬 저장본 순으로 폴백
-    const lastGood = readPublicJobsCache();
+    // 서버 미응답 시: 직전 캐시 → 로컬 저장본 순으로 폴백 (활성 공고만)
+    const lastGood = readPublicJobsCache().filter(isJobActive);
     if (lastGood.length > 0) return lastGood;
-    return localLoadJobs();
+    return localLoadJobs().filter(isJobActive);
   }
 }
 
@@ -237,7 +252,7 @@ function readPublicJobsCache(): Job[] {
 export async function fbGetPublicJob(id: string): Promise<Job | null> {
   try {
     const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
-    if (res.status === 404) return null;
+    if (res.status === 404 || res.status === 410) return null; // 410 = 마감 후 30일 지나 만료
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as Job;
   } catch (e) {

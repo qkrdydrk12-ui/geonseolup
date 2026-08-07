@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { getPublicJobs, getPublicJobById } from "../lib/jobsCache.js";
+import { getPublicJobs, getPublicJobById, filterActiveJobs } from "../lib/jobsCache.js";
+import { getClosesAt, getPostedAt, isJobClosed, isJobExpired, ACTIVE_HOURS } from "../lib/jobLifecycle.js";
 import { logger } from "../lib/logger.js";
 import { getAllInfoOverrides } from "../lib/infoOverrides.js";
 
@@ -68,12 +69,17 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const dateVal = typeof job.date === "string" ? job.date : undefined;
 
   const posted = dateVal && !isNaN(new Date(dateVal).getTime()) ? new Date(dateVal) : new Date();
-  // 공고는 등록 2일 후 자동 삭제되므로 유효기간도 그에 맞춘다.
-  const validThrough = new Date(posted.getTime() + 2 * 24 * 60 * 60 * 1000);
+  // 공고는 등록 48시간 뒤 모집마감된다. 구조화 데이터의 validThrough는
+  // 화면에 표시되는 마감 상태와 반드시 일치해야 한다 (jobLifecycle.getClosesAt와 동일 규칙).
+  const validThrough = getClosesAt(job) ?? new Date(posted.getTime() + ACTIVE_HOURS * 3600_000);
 
+  const meal = typeof job.meal === "string" ? job.meal : "";
+  const lodging = typeof job.lodging === "string" ? job.lodging : "";
   const descriptionParts = [
     `[${region}] ${jobType} 모집`,
     salary && `일당 ${salary}`,
+    meal && `식사 ${meal}`,
+    lodging && `숙박 ${lodging}`,
     detail,
   ].filter(Boolean);
   const description = descriptionParts.join(". ") || `건설 현장 ${jobType || "인력"} 구인 공고`;
@@ -167,7 +173,10 @@ function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string,
 // 실제 공고가 있는 지역×직종 랜딩페이지를 포함한다.
 router.get("/sitemap.xml", async (_req: Request, res: Response) => {
   try {
-    const { jobs } = await getPublicJobs();
+    const { jobs: cachedJobs } = await getPublicJobs();
+    // 사이트맵에는 활성(모집 중) 공고만 포함 — 마감 공고는 제외해 검색엔진이
+    // 만료된 채용정보를 새로 색인하지 않게 한다.
+    const jobs = filterActiveJobs(cachedJobs);
 
     // 건설꿀팁 아티클 slug 목록 — geonseolup/src/lib/infoData.ts와 수동 동기화한다.
     // (패키지가 분리돼 있어 직접 import 불가. 새 글 추가 시 여기도 같이 추가할 것 — 2026-08-07 SEO 점검 중 발견)
@@ -264,8 +273,8 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
       getPublicJobById(id),
     ]);
 
-    if (!job) {
-      // 공고는 등록 2일 후 자동 삭제된다. 존재하지 않는 공고 ID는
+    if (!job || isJobExpired(job)) {
+      // 마감 후 30일 유지 기간까지 지난 공고(또는 존재하지 않는 ID)는
       // "없을 수도 있음"(404)이 아니라 "확실히 만료되어 사라짐" 상태이므로,
       // 구글이 채용정보 만료 시 권장하는 410 Gone으로 명확히 응답한다.
       // (200으로 홈 화면 껍데기를 내려주면 검색엔진이 "소프트 404"로 인식해 감점됨)
@@ -276,8 +285,8 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
           `
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6;text-align:center">
-        <h1 style="font-size:20px;font-weight:700;color:#f97316;margin:40px 0 8px">이 공고는 마감되었거나 만료되었어요</h1>
-        <p style="margin:0 0 20px;color:#334155">등록된 공고는 2일 뒤 자동으로 내려갑니다. 지금 올라와 있는 다른 공고를 확인해보세요.</p>
+        <h1 style="font-size:20px;font-weight:700;color:#f97316;margin:40px 0 8px">이 공고는 만료되어 내려갔어요</h1>
+        <p style="margin:0 0 20px;color:#334155">모집이 끝난 공고는 30일이 지나면 삭제됩니다. 지금 올라와 있는 다른 공고를 확인해보세요.</p>
         <p><a href="/" style="color:#f97316;font-weight:700;text-decoration:underline">건설UP 홈에서 다른 공고 보기 →</a></p>
       </div>
     </div>
@@ -288,21 +297,50 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
       return;
     }
 
+    const closed = isJobClosed(job);
+
     const region = typeof job.region === "string" ? job.region : "";
     const jobType = typeof job.job === "string" ? job.job : "";
     const salary = typeof job.salary === "string" ? job.salary : "";
     const detail = typeof job.detail === "string" ? job.detail : "";
     const rawTitle = typeof job.title === "string" ? job.title : "";
+    const meal = typeof job.meal === "string" ? job.meal : "";
+    const lodging = typeof job.lodging === "string" ? job.lodging : "";
 
-    const titleParts = [region, jobType, salary].filter(Boolean);
-    const pageTitle = escapeHtmlAttr(
-      `${rawTitle || titleParts.join(" · ") || "건설 구인 공고"} - 건설UP`
-    );
+    // 숙식 요약: "숙식 제공" / "숙소 제공" / "식사 제공" / "숙식 미제공" 등
+    const mealYes = meal.includes("제공") && !meal.includes("미제공");
+    const lodgYes = lodging.includes("제공") && !lodging.includes("미제공");
+    const stay =
+      mealYes && lodgYes
+        ? "숙식 제공"
+        : [lodgYes && "숙소 제공", mealYes && "식사 제공"].filter(Boolean).join(" · ") ||
+          ((meal || lodging) ? "숙식 문의" : "");
 
-    const descParts = [region && `지역: ${region}`, jobType && `직종: ${jobType}`, salary && `급여: ${salary}`, detail]
-      .filter(Boolean);
+    // 브라우저 제목 — 지역·직종·급여·숙식이 모두 들어간 공고별 고유 제목.
+    const titleCore =
+      [region && `[${region}]`, jobType, salary && `일당 ${salary}`, stay]
+        .filter(Boolean)
+        .join(" ") || rawTitle || "건설 구인 공고";
+    const closedPrefix = closed ? "[모집마감] " : "";
+    const pageTitle = escapeHtmlAttr(`${closedPrefix}${titleCore} - 건설UP`);
+
+    const descParts = closed
+      ? [
+          "이 공고는 모집이 마감되었습니다.",
+          region && `지역: ${region}`,
+          jobType && `직종: ${jobType}`,
+          "같은 지역·직종의 진행 중인 공고를 건설UP에서 확인하세요.",
+        ]
+      : [
+          region && `지역: ${region}`,
+          jobType && `직종: ${jobType}`,
+          salary && `급여: ${salary}`,
+          meal && `식사: ${meal}`,
+          lodging && `숙박: ${lodging}`,
+          detail,
+        ];
     const pageDesc = escapeHtmlAttr(
-      (descParts.join(" | ") || "전국 건설 현장 실시간 구인구직 정보").slice(0, 160)
+      (descParts.filter(Boolean).join(" | ") || "전국 건설 현장 실시간 구인구직 정보").slice(0, 160)
     );
 
     const pageUrl = `${SITE_URL}/detail/${encodeURIComponent(id)}`;
@@ -340,8 +378,9 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     // canonical — 원본 index.html엔 홈 URL이 고정 박혀있어 반드시 이 페이지 URL로 교체해야 함.
     html = setCanonical(html, pageUrl);
 
-    // JobPosting 구조화 데이터 삽입 (Google 채용정보 검색 노출 자격 부여)
-    const jobPostingLd = buildJobPostingLd(job, id);
+    // JobPosting 구조화 데이터 삽입 (Google 채용정보 검색 노출 자격 부여).
+    // 등록일이 없거나 깨진 공고는 datePosted/validThrough를 지어낼 수 없으므로 생략한다.
+    const jobPostingLd = getPostedAt(job) ? buildJobPostingLd(job, id) : "";
     // BreadcrumbList: 홈 > (지역 직종 랜딩페이지) > 공고 상세
     const breadcrumbLd = buildBreadcrumbLd([
       { name: "건설UP", url: SITE_URL },
@@ -355,12 +394,14 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     // <div id="root"> 안의 정적 폴백 본문(크롤러/JS 미실행 환경용)을
     // 이 공고 전용 내용으로 교체 — React가 mount되면 어차피 덮어써지므로
     // 실제 사용자 경험에는 영향이 없다.
-    const meal = typeof job.meal === "string" ? job.meal : "";
-    const lodging = typeof job.lodging === "string" ? job.lodging : "";
+    const closedBanner = closed
+      ? `<p style="margin:0 0 16px;padding:12px 14px;border-radius:10px;background:#fef2f2;border:1.5px solid #fca5a5;color:#b91c1c;font-weight:700">이 공고는 모집이 마감되었습니다. 아래에서 진행 중인 다른 공고를 확인해보세요.</p>`
+      : "";
     const fallbackBody = `
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
-        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(rawTitle || titleParts.join(" · ") || "건설 구인 공고")}</h1>
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(closedPrefix + (rawTitle || titleCore))}</h1>
+        ${closedBanner}
         <p style="margin:0 0 16px;color:#334155">
           ${[region && `지역: ${escapeHtmlAttr(region)}`, jobType && `직종: ${escapeHtmlAttr(jobType)}`, salary && `급여: ${escapeHtmlAttr(salary)}`, meal && `식사: ${escapeHtmlAttr(meal)}`, lodging && `숙박: ${escapeHtmlAttr(lodging)}`].filter(Boolean).join(" · ")}
         </p>

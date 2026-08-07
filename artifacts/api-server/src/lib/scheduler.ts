@@ -12,6 +12,11 @@ import {
   isPermissionError,
 } from "./firestoreClient.js";
 import { logger } from "./logger.js";
+import { ACTIVE_HOURS, RETENTION_DAYS_AFTER_CLOSE } from "./jobLifecycle.js";
+
+// 완전 삭제 하한: 활성 48시간 + 마감 상태 30일 유지 = 32일.
+// 관리자 설정(autoDeleteHours)이 이보다 짧아도 상세 페이지 유지 기간을 침범하지 않는다.
+const MIN_DELETE_HOURS = ACTIVE_HOURS + RETENTION_DAYS_AFTER_CLOSE * 24;
 
 const INTERVAL_MS = 60 * 1000; // 1분
 
@@ -41,10 +46,11 @@ async function loadDupSettings(): Promise<DupSettings> {
   }
 }
 
-// 자동숨김 + 자동삭제 정리 실행
+// 정리 실행 — 자동숨김은 하지 않는다.
+// "등록 48시간 후 모집마감"은 API가 등록일(date) 기준으로 파생 판정하며(jobLifecycle),
+// hidden 처리하면 마감 공고의 상세 페이지(30일 유지·SEO)까지 사라지므로 금지.
 async function runCleanup(): Promise<{ hidden: number; purged: number; deleted: number }> {
   const settings = await loadDupSettings();
-  const autoHideHours = settings.autoHideHours ?? 48;
   const autoDeleteHours = settings.autoDeleteHours ?? 0;
   const now = Date.now();
 
@@ -60,31 +66,11 @@ async function runCleanup(): Promise<{ hidden: number; purged: number; deleted: 
     { field: "hidden", op: "EQUAL", value: true },
   ])) as Job[];
 
-  let hidden = 0;
+  const hidden = 0; // 자동숨김 제거됨 — 마감 판정은 jobLifecycle이 date 기준으로 파생
   let purged = 0;
   let deleted = 0;
 
-  // ── 1. 자동숨김: date 기준 autoHideHours 초과한 노출 공고 → hidden=true ──
-  if (autoHideHours > 0) {
-    const cutoff = now - autoHideHours * 3600000;
-    const toHide = visibleJobs.filter(
-      (j) =>
-        j.status !== "reserved" &&
-        j.status !== "failed" &&
-        j.date != null &&
-        new Date(j.date).getTime() < cutoff
-    );
-    for (const j of toHide) {
-      try {
-        await updateDocument("jobs", j.id, { hidden: true, hiddenAt: now });
-        hidden++;
-      } catch (err) {
-        logger.warn({ jobId: j.id, err: String(err) }, "정리 루틴: 자동숨김 실패");
-      }
-    }
-  }
-
-  // ── 2. 24시간 이상 숨김 상태인 공고 하드삭제 (기존 fbPurgeOldHiddenJobs 동작과 동일) ──
+  // ── 1. 24시간 이상 숨김 상태인 공고 하드삭제 (관리자가 수동 숨김한 공고 정리) ──
   {
     const cutoff = now - 24 * 3600000;
     const toPurge = hiddenJobs.filter(
@@ -100,9 +86,11 @@ async function runCleanup(): Promise<{ hidden: number; purged: number; deleted: 
     }
   }
 
-  // ── 3. 자동삭제: date 기준 autoDeleteHours 초과 → 완전 삭제 (예약/실패 제외) ──
-  if (autoDeleteHours > 0) {
-    const cutoff = now - autoDeleteHours * 3600000;
+  // ── 2. 자동삭제: date 기준 초과 → 완전 삭제 (예약/실패 제외) ──
+  // 설정값과 무관하게 최소 32일(활성 2일 + 마감 30일)은 보존한다.
+  {
+    const effectiveHours = Math.max(autoDeleteHours || MIN_DELETE_HOURS, MIN_DELETE_HOURS);
+    const cutoff = now - effectiveHours * 3600000;
     const all = [...visibleJobs, ...hiddenJobs];
     const toDelete = all.filter(
       (j) =>
@@ -121,10 +109,10 @@ async function runCleanup(): Promise<{ hidden: number; purged: number; deleted: 
     }
   }
 
-  if (hidden > 0 || purged > 0 || deleted > 0) {
+  if (purged > 0 || deleted > 0) {
     logger.info(
-      { hidden, purged, deleted, autoHideHours, autoDeleteHours },
-      "정리 루틴: 자동숨김/삭제 완료"
+      { purged, deleted, autoDeleteHours },
+      "정리 루틴: 삭제 완료 (자동숨김 없음 — 마감은 등록일 기준 파생)"
     );
   }
   return { hidden, purged, deleted };
