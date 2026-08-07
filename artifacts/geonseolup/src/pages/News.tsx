@@ -63,7 +63,7 @@ export default function News() {
                       src={getNewsImage(article.slug)}
                       alt=""
                       loading="lazy"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   </div>
                   <div className="p-5 flex-1 flex flex-col">
@@ -96,7 +96,9 @@ export default function News() {
             {rows.map((r) => (
               <article key={r.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 {r.imageUrl && (
-                  <img src={r.imageUrl} alt={r.title} className="w-full aspect-square object-cover" />
+                  <div className="aspect-[16/9]" style={{ background: '#0d0d0d' }}>
+                    <img src={r.imageUrl} alt={r.title} className="w-full h-full object-contain" />
+                  </div>
                 )}
                 <div className="p-5">
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
