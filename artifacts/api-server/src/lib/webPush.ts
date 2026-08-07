@@ -39,7 +39,7 @@ interface NewJobPayload {
 
 // ── 취합(다이제스트) 발송 ───────────────────────────────────────────────────
 // 공고가 올라올 때마다 즉시 알리지 않고 큐에 모았다가, 하루 3회
-// (KST 06:00 / 11:30 / 18:30 — digestSlots.ts) 취합해서 1건으로 발송한다.
+// (KST 06:00 / 11:30 / 19:00 — digestSlots.ts) 취합해서 1건으로 발송한다.
 let _pending: NewJobPayload[] = [];
 const _seenIds = new Set<string>();
 let _schedulerStarted = false;

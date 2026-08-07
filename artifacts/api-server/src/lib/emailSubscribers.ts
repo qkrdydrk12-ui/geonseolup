@@ -230,7 +230,7 @@ let _started = false;
 export function startEmailDigestScheduler(): void {
   if (_started) return;
   _started = true;
-  // 다이제스트는 하루 3회 (KST 06:00 / 11:30 / 18:30 — digestSlots.ts) 취합 발송
+  // 다이제스트는 하루 3회 (KST 06:00 / 11:30 / 19:00 — digestSlots.ts) 취합 발송
   scheduleAtSlots(() => {
     flushDigest().catch((err) => logger.error({ err: String(err) }, "[email-subs] 다이제스트 발송 실패"));
   });
