@@ -35,9 +35,9 @@ import {
   type SalaryCandidate, type ComplexSalaryResult,
 } from '@/lib/parseJob';
 import AdminProducts from '@/components/AdminProducts';
-import InfoEditPanel from '@/components/InfoEditPanel';
 import AdminWageRates from '@/components/AdminWageRates';
 import AdminSiteNews from '@/components/AdminSiteNews';
+import AdminBlogArticles from '@/components/AdminBlogArticles';
 import {
   getToken,
   setToken,
@@ -46,6 +46,7 @@ import {
   apiLogout,
   apiVerify,
   apiUpdateCreds,
+  startIdleTimer,
 } from '@/lib/adminAuth';
 
 
@@ -116,7 +117,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news' | 'settings' | 'stats' | 'threads' | 'info_edit';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news' | 'blog' | 'settings' | 'stats' | 'threads';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -140,14 +141,8 @@ export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authChecking, setAuthChecking] = useState(true); // 토큰 검증 중
   const [adminId, setAdminId] = useState(() => localStorage.getItem('cj_saved_id') || '');
-  const [password, setPassword] = useState(() => {
-    try {
-      const saved = localStorage.getItem('cj_saved_pw');
-      return saved ? atob(saved) : '';
-    } catch { return ''; }
-  });
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('cj_saved_id'));
-  const [rememberPw, setRememberPw] = useState(() => !!localStorage.getItem('cj_saved_pw'));
   const [pwError, setPwError] = useState(false);
   const [pwErrorMsg, setPwErrorMsg] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -378,10 +373,9 @@ export default function Admin() {
     if (result.ok && result.token) {
       if (rememberMe) localStorage.setItem('cj_saved_id', adminId);
       else localStorage.removeItem('cj_saved_id');
-      if (rememberPw) localStorage.setItem('cj_saved_pw', btoa(password));
-      else localStorage.removeItem('cj_saved_pw');
       setToken(result.token);
       setAuthed(true);
+      setPassword('');
       window.dispatchEvent(new Event('admin-login'));
     } else {
       setPwError(true);
@@ -393,10 +387,7 @@ export default function Admin() {
     await apiLogout();
     clearToken();
     setAuthed(false);
-    try {
-      const saved = localStorage.getItem('cj_saved_pw');
-      setPassword(saved ? atob(saved) : '');
-    } catch { setPassword(''); }
+    setPassword('');
     window.dispatchEvent(new Event('admin-logout'));
   }
 
@@ -475,6 +466,16 @@ export default function Admin() {
     }
     checkSession();
   }, []);
+
+  // 로그인 상태일 때 비활동 자동 로그아웃 타이머 시작
+  useEffect(() => {
+    if (!authed) return;
+    const cleanup = startIdleTimer(() => {
+      handleLogout();
+      alert('20분간 활동이 없어 자동 로그아웃됐습니다.');
+    });
+    return cleanup;
+  }, [authed]);
 
   useEffect(() => {
     if (authed) {
@@ -1276,19 +1277,6 @@ export default function Admin() {
               />
               <label htmlFor="rememberMe" className="text-sm text-gray-500 cursor-pointer select-none">아이디 기억하기</label>
             </div>
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                id="rememberPw"
-                type="checkbox"
-                checked={rememberPw}
-                onChange={(e) => {
-                  setRememberPw(e.target.checked);
-                  if (!e.target.checked) localStorage.removeItem('cj_saved_pw');
-                }}
-                className="w-4 h-4 accent-[#f97316] cursor-pointer"
-              />
-              <label htmlFor="rememberPw" className="text-sm text-gray-500 cursor-pointer select-none">비밀번호 기억하기</label>
-            </div>
             {pwError && (
               <div className="bg-red-100 text-red-700 rounded-lg py-2.5 px-3.5 text-[13px] font-semibold mb-3">
                 {pwErrorMsg || '아이디 또는 비밀번호가 올바르지 않습니다.'}
@@ -1440,9 +1428,9 @@ export default function Admin() {
               { key: 'products', label: '🛒 추천템' },
               { key: 'wages', label: '💰 일당 시세' },
               { key: 'news', label: '📰 현장 소식' },
+              { key: 'blog', label: '📚 건설 꿀팁' },
               { key: 'stats', label: '📊 방문 통계' },
               { key: 'threads', label: '🧵 홍보 초안' },
-              { key: 'info_edit', label: '✍️ 정보글 수정' },
               { key: 'settings', label: '⚙️ 설정' },
             ] as { key: Tab; label: string }[]
           ).map((t) => (
@@ -2314,6 +2302,8 @@ export default function Admin() {
 
         {tab === 'news' && <AdminSiteNews showToast={showToast} />}
 
+        {tab === 'blog' && <AdminBlogArticles showToast={showToast} />}
+
         {tab === 'pending' && (
           <div className="bg-white rounded-xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-[#1e3a5f] mb-4 pb-2.5 border-b-2 border-gray-100 flex items-center justify-between">
@@ -2503,8 +2493,6 @@ export default function Admin() {
             <ThreadsCommentsPanel />
           </>
         )}
-
-        {tab === 'info_edit' && <InfoEditPanel showToast={showToast} />}
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">

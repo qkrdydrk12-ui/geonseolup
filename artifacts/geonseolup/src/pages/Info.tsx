@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { useInfoArticles, getArticleImage } from '@/lib/infoData';
+import { useMergedArticles } from '@/lib/useMergedArticles';
 
 function WageBanner() {
   return (
@@ -23,7 +23,8 @@ function WageBanner() {
 }
 
 export default function Info() {
-  const articles = useInfoArticles();
+  const { articles } = useMergedArticles();
+
   useEffect(() => {
     document.title = '정보/꿀팁 — 건설UP';
     let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
@@ -51,11 +52,14 @@ export default function Info() {
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer h-full flex flex-col">
                 <div className="relative aspect-[16/9] bg-gray-100 overflow-hidden">
                   <img
-                    src={getArticleImage(article.slug)}
+                    src={article.imageSrc}
                     alt=""
                     loading="lazy"
                     className="w-full h-full object-cover"
                   />
+                  <span className="absolute top-2 left-2 text-xl bg-white/90 rounded-full w-8 h-8 flex items-center justify-center shadow-sm">
+                    {article.emoji}
+                  </span>
                 </div>
                 <div className="p-5 flex-1 flex flex-col">
                   <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">

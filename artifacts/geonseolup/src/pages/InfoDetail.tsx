@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { useInfoArticles, getArticleImage } from '@/lib/infoData';
+import { useMergedArticles } from '@/lib/useMergedArticles';
 
 interface Props {
   slug: string;
 }
 
 export default function InfoDetail({ slug }: Props) {
-  const articles = useInfoArticles();
+  const { articles, loading } = useMergedArticles();
   const article = articles.find((a) => a.slug === slug);
 
   useEffect(() => {
@@ -22,6 +22,14 @@ export default function InfoDetail({ slug }: Props) {
   }, [article]);
 
   if (!article) {
+    if (loading) {
+      return (
+        <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
+          <Header />
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">불러오는 중...</div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
         <Header />
@@ -58,12 +66,13 @@ export default function InfoDetail({ slug }: Props) {
         <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="relative aspect-[16/9] bg-gray-100">
             <img
-              src={getArticleImage(article.slug)}
+              src={article.imageSrc}
               alt=""
               className="w-full h-full object-cover"
             />
           </div>
           <div className="p-6 sm:p-8">
+            <div className="text-4xl mb-4">{article.emoji}</div>
             <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
               {article.title}
             </h1>
@@ -75,15 +84,15 @@ export default function InfoDetail({ slug }: Props) {
                 {block.subtitle && (
                   <h2 className="text-base font-bold text-[#1e3a5f] mb-1.5">{block.subtitle}</h2>
                 )}
+                <p>{block.text}</p>
                 {block.image && (
                   <img
                     src={block.image}
                     alt=""
                     loading="lazy"
-                    className="w-full max-w-[440px] mx-auto block rounded-xl border border-gray-200 mb-3"
+                    className="w-full rounded-xl border border-gray-200 mt-3"
                   />
                 )}
-                <p className="whitespace-pre-line">{block.text}</p>
               </div>
             ))}
           </div>
