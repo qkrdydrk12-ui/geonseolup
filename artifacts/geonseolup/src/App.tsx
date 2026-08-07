@@ -11,6 +11,7 @@ import Contact from '@/pages/Contact';
 import Info from '@/pages/Info';
 import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
+import Wages from '@/pages/Wages';
 import VisitorWidget from '@/components/VisitorWidget';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 
@@ -172,6 +173,9 @@ function Router() {
       </Route>
       <Route path="/info/:slug">
         {(params) => <InfoDetail slug={params.slug} />}
+      </Route>
+      <Route path="/wages">
+        <Wages />
       </Route>
       <Route path="/terms">
         <Terms />

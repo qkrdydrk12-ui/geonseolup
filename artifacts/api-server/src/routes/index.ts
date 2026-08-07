@@ -9,6 +9,7 @@ import coupangRouter from "./coupang";
 import pushRouter from "./push";
 import subscribeRouter from "./subscribe";
 import threadsImageRouter from "./threadsImage";
+import wageRatesRouter from "./wageRates";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(coupangRouter);
 router.use(pushRouter);
 router.use(subscribeRouter);
 router.use(threadsImageRouter);
+router.use(wageRatesRouter);
 
 export default router;
