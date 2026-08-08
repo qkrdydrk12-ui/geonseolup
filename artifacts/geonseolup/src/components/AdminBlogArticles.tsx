@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { getToken } from '@/lib/adminAuth';
+import { INFO_ARTICLES, getArticleImage } from '@/lib/infoData';
 
 const inputCls = 'w-full py-2.5 px-3.5 border border-gray-300 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 transition-all bg-white';
 
-interface BodyBlock { subtitle?: string; text: string }
+interface BodyBlock { subtitle?: string; text: string; image?: string }
 
 interface BlogArticle {
   id: number;
@@ -125,6 +126,21 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // 코드에 내장된 기본 꿀팁 글을 수정 폼으로 불러온다.
+  // 저장하면 같은 slug의 글이 DB에 새로 만들어지고, 사이트에서는 DB 글이 기본 글을 덮어쓴다.
+  function startEditStatic(slug: string) {
+    const a = INFO_ARTICLES.find((x) => x.slug === slug);
+    if (!a) return;
+    setEditingId(null);
+    setForm({ slug: a.slug, title: a.title, description: a.description, emoji: a.emoji, published: true });
+    setBlocks(a.body.length ? a.body.map((b) => ({ ...b })) : [{ subtitle: '', text: '' }]);
+    setExistingImageUrl(getArticleImage(a.slug));
+    setImageDataUrl(null);
+    setSlugTouched(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function cancelEdit() {
     setEditingId(null);
     setForm(emptyForm());
@@ -140,7 +156,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     const description = form.description.trim();
     const slug = form.slug.trim();
     const cleanBlocks = blocks
-      .map((b) => ({ subtitle: (b.subtitle || '').trim() || undefined, text: b.text.trim() }))
+      .map((b) => ({ subtitle: (b.subtitle || '').trim() || undefined, text: b.text.trim(), image: b.image || undefined }))
       .filter((b) => b.text);
 
     if (!editingId && !slug) { showToast('slug를 입력해주세요'); return; }
@@ -263,6 +279,12 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
                     rows={3}
                     className={`${inputCls} resize-y leading-relaxed`}
                   />
+                  {b.image && (
+                    <div className="flex items-center gap-2">
+                      <img src={b.image} alt="" className="w-24 rounded-md border border-gray-200" />
+                      <span className="text-[11px] text-gray-400">문단 사진 (그대로 유지됩니다)</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -311,6 +333,31 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
             ))}
           </div>
         )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+        <h3 className="text-sm font-extrabold text-gray-700 mb-1 border-b border-gray-100 pb-3">
+          기본 꿀팁 글 ({INFO_ARTICLES.filter((a) => !rows.some((r) => r.slug === a.slug)).length})
+        </h3>
+        <p className="text-[11px] text-gray-400 mb-4">사이트에 처음부터 들어있는 글입니다. "수정"을 누르고 저장하면 수정한 버전이 원래 글을 대신해서 보입니다.</p>
+        <div className="flex flex-col gap-3">
+          {INFO_ARTICLES.filter((a) => !rows.some((r) => r.slug === a.slug)).map((a) => (
+            <div key={a.slug} className="flex gap-3 border border-gray-100 rounded-xl p-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span>{a.emoji}</span>
+                  <span className="font-bold text-sm text-gray-900">{a.title}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">기본 글</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.description}</p>
+                <p className="text-[11px] text-gray-400 mt-1">/info/{a.slug}</p>
+              </div>
+              <div className="flex flex-col gap-1.5 shrink-0">
+                <button type="button" onClick={() => startEditStatic(a.slug)} className="bg-white border border-blue-200 text-blue-600 px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-blue-50 font-[inherit]">수정</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
