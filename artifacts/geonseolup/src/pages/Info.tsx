@@ -57,9 +57,6 @@ export default function Info() {
                     loading="lazy"
                     className="w-full h-full object-cover"
                   />
-                  <span className="absolute top-2 left-2 text-xl bg-white/90 rounded-full w-8 h-8 flex items-center justify-center shadow-sm">
-                    {article.emoji}
-                  </span>
                 </div>
                 <div className="p-5 flex-1 flex flex-col">
                   <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">
