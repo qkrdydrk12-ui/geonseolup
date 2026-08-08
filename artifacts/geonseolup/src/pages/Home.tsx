@@ -96,9 +96,6 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
 function SubscribeBar({ region, job }: { region: string; job: string }) {
   const [pushOn, setPushOn] = useState(isPushMarkedSubscribed());
   const [pushBusy, setPushBusy] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   const filterLabel = [region !== '전체' ? region : '', job !== '전체' ? job : ''].filter(Boolean).join(' ') || '전체';
 
@@ -117,8 +114,8 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
           alert(
             isIOS
-              ? '아이폰에서는 사파리 하단의 공유 버튼 → "홈 화면에 추가"로 앱처럼 설치한 뒤 알림 구독이 가능해요.\n\n또는 "이메일로 받기"를 이용해주세요!'
-              : '이 브라우저는 푸시 알림을 지원하지 않아요. "이메일로 받기"를 이용해주세요!'
+              ? '아이폰에서는 사파리 하단의 공유 버튼 → "홈 화면에 추가"로 앱처럼 설치한 뒤 알림 구독이 가능해요.'
+              : '이 브라우저는 푸시 알림을 지원하지 않아요.'
           );
         } else if (result.error === 'permission_denied') {
           alert('알림 권한이 거부됐어요. 브라우저 설정에서 허용해주세요.');
@@ -128,22 +125,6 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
       }
     } finally {
       setPushBusy(false);
-    }
-  }
-
-  async function handleEmailSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || emailStatus === 'sending') return;
-    setEmailStatus('sending');
-    try {
-      const res = await fetch('/api/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), region, job }),
-      });
-      setEmailStatus(res.ok ? 'sent' : 'error');
-    } catch {
-      setEmailStatus('error');
     }
   }
 
@@ -176,44 +157,8 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             {pushOn ? '🔔 구독 중' : '🔕 브라우저 알림'}
           </button>
-          <button
-            className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-gray-200 text-gray-600 bg-white hover:border-[#f97316] hover:text-[#f97316] transition-all"
-            onClick={() => setEmailOpen((o) => !o)}
-          >
-            ✉️ 이메일로 받기
-          </button>
         </div>
       </div>
-      {emailOpen && (
-        <form onSubmit={handleEmailSubmit} className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
-          {emailStatus === 'sent' ? (
-            <span className="text-xs text-emerald-600 font-semibold">
-              ✅ 확인 메일을 보냈어요! 메일함에서 구독을 확정해주세요.
-            </span>
-          ) : (
-            <>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="이메일 주소"
-                className="flex-1 min-w-0 py-[7px] px-2.5 border-[1.5px] border-gray-200 rounded-lg text-xs outline-none focus:border-[#f97316]"
-              />
-              <button
-                type="submit"
-                disabled={emailStatus === 'sending'}
-                className="bg-[#f97316] text-white border-none py-[7px] px-3 rounded-lg text-xs font-bold cursor-pointer hover:bg-[#ea580c] disabled:opacity-60"
-              >
-                {emailStatus === 'sending' ? '전송 중…' : '구독'}
-              </button>
-            </>
-          )}
-          {emailStatus === 'error' && (
-            <span className="text-[11px] text-red-500 shrink-0">오류가 발생했어요. 다시 시도해주세요.</span>
-          )}
-        </form>
-      )}
     </section>
   );
 }

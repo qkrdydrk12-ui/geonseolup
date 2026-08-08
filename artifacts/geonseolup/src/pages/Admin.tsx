@@ -45,7 +45,6 @@ import {
   apiLogout,
   apiVerify,
   apiUpdateCreds,
-  startIdleTimer,
 } from '@/lib/adminAuth';
 
 
@@ -465,16 +464,6 @@ export default function Admin() {
     }
     checkSession();
   }, []);
-
-  // 로그인 상태일 때 비활동 자동 로그아웃 타이머 시작
-  useEffect(() => {
-    if (!authed) return;
-    const cleanup = startIdleTimer(() => {
-      handleLogout();
-      alert('20분간 활동이 없어 자동 로그아웃됐습니다.');
-    });
-    return cleanup;
-  }, [authed]);
 
   useEffect(() => {
     if (authed) {

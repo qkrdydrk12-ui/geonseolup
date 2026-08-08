@@ -1,9 +1,8 @@
 import { Router, type Request, type Response } from "express";
-import { randomBytes } from "crypto";
 import {
   adminStore,
   isTokenValid,
-  refreshTokenExpiry,
+  issueToken,
   getTokenFromReq,
   requireAdmin,
 } from "../lib/adminStore";
@@ -19,8 +18,6 @@ import { recordPublishedPost, listPendingComments, approveAndReply, dismissComme
 
 const router = Router();
 
-const SESSION_DURATION_MS = 20 * 60 * 1000;
-
 // POST /api/admin/login
 router.post("/admin/login", (req: Request, res: Response) => {
   const { id, pw } = req.body as { id?: string; pw?: string };
@@ -32,31 +29,22 @@ router.post("/admin/login", (req: Request, res: Response) => {
     res.status(401).json({ ok: false, message: "아이디 또는 비밀번호가 올바르지 않습니다" });
     return;
   }
-  // 기존 세션 무효화 (단일 세션 보장)
-  const token = randomBytes(32).toString("hex");
-  adminStore.activeToken = token;
-  adminStore.tokenExpiry = Date.now() + SESSION_DURATION_MS;
-  res.json({ ok: true, token });
+  // 서명 기반 토큰 (30일 유효, 서버 재시작에도 유지)
+  res.json({ ok: true, token: issueToken() });
 });
 
-// POST /api/admin/logout
-router.post("/admin/logout", (req: Request, res: Response) => {
-  const token = getTokenFromReq(req);
-  if (token && token === adminStore.activeToken) {
-    adminStore.activeToken = null;
-    adminStore.tokenExpiry = 0;
-  }
+// POST /api/admin/logout — 클라이언트가 토큰을 삭제하면 로그아웃
+router.post("/admin/logout", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// GET /api/admin/verify — 토큰 유효성 확인 + 만료 시간 갱신 (sliding window)
+// GET /api/admin/verify — 토큰 유효성 확인
 router.get("/admin/verify", (req: Request, res: Response) => {
   const token = getTokenFromReq(req);
   if (!isTokenValid(token)) {
     res.status(401).json({ ok: false, message: "인증이 필요합니다" });
     return;
   }
-  refreshTokenExpiry();
   res.json({ ok: true });
 });
 
