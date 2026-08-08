@@ -49,10 +49,17 @@ function getCreds(): { clientEmail: string; privateKey: string } | null {
       // JSON 파싱 실패 시 원본 그대로 사용
     }
   }
-  const clientEmail = envEmail || emailFromJson;
+  // JSON 전체가 저장된 경우 그 안의 client_email이 최신이므로 우선한다
+  const clientEmail = emailFromJson || envEmail;
   if (!clientEmail) return null;
-  // \n 이스케이프 복원
-  return { clientEmail, privateKey: privateKey.replace(/\\n/g, "\n") };
+  // \n 이스케이프 복원 + JSON에서 복사할 때 따라온 앞뒤 따옴표/쉼표 제거
+  const cleaned = privateKey
+    .replace(/\\n/g, "\n")
+    .trim()
+    .replace(/^["']+/, "")
+    .replace(/["',]+$/, "")
+    .trim();
+  return { clientEmail, privateKey: cleaned };
 }
 
 function isConfigured(): boolean {
