@@ -4,6 +4,7 @@ import {
   getPublicJobById,
   invalidatePublicJobsCache,
   filterActiveJobs,
+  getRawJobContact,
 } from "../lib/jobsCache.js";
 import { isJobClosed, isJobExpired, getClosesAt } from "../lib/jobLifecycle.js";
 import { recordJobView, getPopularJobIds, extractIp } from "../lib/jobViews.js";
@@ -41,6 +42,38 @@ router.get("/jobs/popular", async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
   }
+});
+
+// GET /api/jobs/:id/contact — "연락처 보기" 버튼 전용: 실제 전화번호 반환.
+// 공개 목록/상세/HTML에는 마스킹 번호만 나가므로, 원본은 이 엔드포인트로만 조회된다.
+// 스크래핑 방지를 위해 IP당 하루 조회 횟수를 제한한다 (인메모리 — 재시작 시 초기화).
+const CONTACT_REVEAL_DAILY_LIMIT = 30;
+const _contactReveals = new Map<string, { day: string; count: number }>();
+router.get("/jobs/:id/contact", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const ip = extractIp(req);
+  const day = new Date().toDateString();
+  const rec = _contactReveals.get(ip);
+  const count = rec && rec.day === day ? rec.count : 0;
+  if (count >= CONTACT_REVEAL_DAILY_LIMIT) {
+    res.status(429).json({ error: "limit" });
+    return;
+  }
+  const result = await getRawJobContact(req.params.id);
+  if (result.status === "gone") {
+    res.status(410).json({ error: "closed" });
+    return;
+  }
+  if (result.status !== "ok") {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  _contactReveals.set(ip, { day, count: count + 1 });
+  // 지난 날짜 기록 정리 (맵 무한 증식 방지)
+  if (_contactReveals.size > 5000) {
+    for (const [k, v] of _contactReveals) if (v.day !== day) _contactReveals.delete(k);
+  }
+  res.json({ contact: result.contact });
 });
 
 // GET /api/jobs/:id — 단일 공고 (캐시에서 조회)

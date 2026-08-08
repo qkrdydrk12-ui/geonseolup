@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbAddReport } from '@/lib/firebase';
+import { fbAddReport, fbGetJobContact } from '@/lib/firebase';
+import { maskPhone, maskPhonesInText } from '@/lib/phone';
 import {
   formatDate,
   getJobIcon,
@@ -26,18 +27,12 @@ interface Props {
   onDelete?: (id: string, title: string) => void;
 }
 
-function maskContact(contact: string): string {
-  const d = contact.replace(/[^0-9]/g, '');
-  if (d.length === 11) return `${d.slice(0, 3)}-****-${d.slice(7)}`;
-  if (d.length === 10) return `${d.slice(0, 3)}-***-${d.slice(6)}`;
-  if (d.length >= 7) return `${d.slice(0, 3)}-****`;
-  return contact ? contact.slice(0, 3) + '****' : '번호없음';
-}
-
 export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Props) {
   const [, setLocation] = useLocation();
   const [detailOpen, setDetailOpen] = useState(false);
-  const [revealed, setRevealed] = useState(false);
+  // 실제 번호는 "보기" 버튼을 눌렀을 때만 서버에서 가져온다 (공개 응답에는 마스킹본만 있음)
+  const [revealedNum, setRevealedNum] = useState<string | null>(null);
+  const [revealing, setRevealing] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -62,10 +57,12 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
   const _isHot = isHot(job.date);
-  const rawDigits = job.contact ? job.contact.replace(/[^0-9]/g, '') : '';
-  const hasPhone = rawDigits.length >= 9;
-  const telHref = hasPhone ? `tel:${rawDigits}` : '#';
-  const smsHref = hasPhone ? `sms:${rawDigits}` : '#';
+  // 서버 응답에는 contact 원본이 없고 hasContact/contactMasked만 온다.
+  // (로컬 저장본/Firestore 폴백 등 구형 데이터에는 contact가 남아있을 수 있음)
+  const hasPhone = job.hasContact ?? (job.contact ? job.contact.replace(/[^0-9]/g, '').length >= 9 : false);
+  const maskedContact = job.contactMasked ?? (job.contact ? maskPhone(job.contact) : null);
+  const revealDigits = revealedNum ? revealedNum.replace(/[^0-9]/g, '') : '';
+  const telHref = revealDigits ? `tel:${revealDigits}` : '#';
   const jobBg = JOB_ICON_BG[job.job] || '#f3f4f6';
   const jobBadge = JOB_BADGE_COLOR[job.job] || { bg: '#f3f4f6', text: '#374151' };
 
@@ -178,33 +175,46 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
           <span className="w-[15px] text-center shrink-0">📞</span>
           <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">연락처</span>
           <span className="flex items-center gap-1.5 flex-wrap">
-            {!job.contact ? (
+            {!hasPhone ? (
               <span className="font-semibold text-red-400">번호없음</span>
-            ) : revealed ? (
+            ) : revealedNum ? (
               <a
                 href={telHref}
                 className="font-bold text-[#1e3a5f] no-underline hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
-                {job.contact}
+                {revealedNum}
               </a>
             ) : (
-              <span className="font-semibold text-gray-600">{maskContact(job.contact)}</span>
+              <span className="font-semibold text-gray-600">{maskedContact || '번호없음'}</span>
             )}
-            {job.contact && !revealed && (
+            {hasPhone && !revealedNum && (
               <>
                 {blocked ? (
                   <span className="text-[10px] text-red-500 font-semibold">일일 한도 초과</span>
                 ) : (
                   <button
-                    onClick={(e) => {
+                    disabled={revealing}
+                    onClick={async (e) => {
                       e.stopPropagation();
                       if (isContactBlocked()) {
                         setBlocked(true);
                         return;
                       }
+                      setRevealing(true);
+                      // 항상 서버에서 실번호를 가져온다 (서버 측 조회 한도 적용).
+                      // 서버가 응답하지 못할 때만 로컬 폴백 데이터의 번호를 사용.
+                      const r = await fbGetJobContact(job.id);
+                      let num: string | null = r.contact;
+                      if (!num && r.reason === 'error') num = job.contact || null;
+                      if (!num) {
+                        if (r.reason === 'limit') setBlocked(true);
+                        setRevealing(false);
+                        return;
+                      }
                       recordContactReveal();
-                      setRevealed(true);
+                      setRevealedNum(num);
+                      setRevealing(false);
                     }}
                     style={{
                       backgroundImage: "linear-gradient(#f97316, #f97316)",
@@ -213,7 +223,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
                     }}
                     className="shrink-0 text-[10px] px-2 py-[3px] rounded-full font-bold cursor-pointer border-none hover:opacity-90 transition-opacity whitespace-nowrap [forced-color-adjust:none]"
                   >
-                    👁 보기 ({getTodayContactCount()}/{getContactDailyLimit()})
+                    {revealing ? '확인 중…' : <>👁 보기 ({getTodayContactCount()}/{getContactDailyLimit()})</>}
                   </button>
                 )}
               </>
@@ -224,7 +234,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
           <li className="flex items-start gap-1.5 py-[3px] text-xs border-t border-gray-50">
             <span className="w-[15px] text-center shrink-0 mt-0.5">📝</span>
             <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">비고</span>
-            <span className="flex-1 font-semibold text-gray-700">{job.detail}</span>
+            <span className="flex-1 font-semibold text-gray-700">{maskPhonesInText(job.detail)}</span>
           </li>
         )}
       </ul>
@@ -239,7 +249,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
       {detailOpen && (
         <div className="px-4 py-3 bg-[#f8fafc] border-t border-dashed border-gray-200" onClick={(e) => e.stopPropagation()}>
           <pre className="text-xs text-gray-500 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto bg-white border border-gray-200 rounded-lg p-2.5">
-            {job.originalText || '원문 없음'}
+            {job.originalText ? maskPhonesInText(job.originalText) : '원문 없음'}
           </pre>
         </div>
       )}
@@ -277,7 +287,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex gap-[5px] flex-1 min-w-0">
-          {hasPhone && revealed && (
+          {hasPhone && revealedNum && (
             <>
               <a
                 href={telHref}
@@ -286,7 +296,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
                 📞 전화
               </a>
               <a
-                href={smsHref}
+                href={revealDigits ? `sms:${revealDigits}` : '#'}
                 className="flex-1 flex items-center justify-center gap-0.5 bg-blue-500 text-white rounded-lg py-2 text-xs font-bold no-underline hover:bg-blue-600 transition-colors whitespace-nowrap min-w-0"
               >
                 💬 문자

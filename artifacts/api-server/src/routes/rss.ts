@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { maskPhonesInText } from "../lib/contactMask.js";
 
 const router = Router();
 
@@ -117,7 +118,8 @@ async function buildFeed(
         const salary = str(doc, "salary");
         const meal = str(doc, "meal");
         const lodging = str(doc, "lodging");
-        const detail = str(doc, "detail");
+        // 비고에는 전화번호가 섞일 수 있어 반드시 마스킹 (RSS는 공개 크롤링 대상)
+        const detail = maskPhonesInText(str(doc, "detail"));
         const date = str(doc, "date");
 
         const titleParts = [region, job, salary].filter(Boolean);

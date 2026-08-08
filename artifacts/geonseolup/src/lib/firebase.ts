@@ -112,6 +112,9 @@ export interface Job {
   // 서버가 /api/jobs/:id 응답에 붙여주는 파생 필드 (등록 48시간 경과 = 모집마감)
   closed?: boolean;
   closesAt?: string | null;
+  // 서버 공개 응답의 개인정보 보호 필드 — contact 원본 대신 내려온다.
+  contactMasked?: string | null;
+  hasContact?: boolean;
 }
 
 export interface PendingJob extends Omit<Job, 'id' | 'status'> {
@@ -198,6 +201,25 @@ const PUBLIC_JOBS_CACHE_KEY = 'cj_public_jobs_cache';
 // 서버 API는 이미 활성만 내려주지만, 로컬 캐시/저장본 폴백 경로에는 마감 공고가
 // 남아 있을 수 있으므로 폴백 반환 전 반드시 이 필터를 거친다.
 const JOB_ACTIVE_MS = 48 * 3600 * 1000;
+// "연락처 보기" 버튼 전용 — 서버에서 실제 전화번호를 가져온다.
+// 공개 목록/상세 응답에는 마스킹된 번호만 있으므로, 실번호는 이 호출로만 얻는다.
+export async function fbGetJobContact(
+  id: string
+): Promise<{ contact: string | null; reason?: 'limit' | 'gone' | 'error' }> {
+  try {
+    const res = await fetch(`/api/jobs/${encodeURIComponent(id)}/contact`);
+    if (res.ok) {
+      const d = (await res.json()) as { contact?: string };
+      return { contact: d.contact ?? null };
+    }
+    if (res.status === 429) return { contact: null, reason: 'limit' };
+    if (res.status === 410) return { contact: null, reason: 'gone' };
+    return { contact: null, reason: 'error' };
+  } catch {
+    return { contact: null, reason: 'error' };
+  }
+}
+
 export function isJobActive(j: Job): boolean {
   if (!j.date) return true;
   const t = new Date(j.date).getTime();

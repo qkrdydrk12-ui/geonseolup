@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbGetPublicJob, fbLoadPublicJobs, isJobActive } from '@/lib/firebase';
+import { fbGetPublicJob, fbLoadPublicJobs, fbGetJobContact, isJobActive } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
-import { formatDate, getJobIcon, JOB_ICON_BG, JOB_BADGE_COLOR, isNew, markViewed } from '@/lib/utils';
+import {
+  formatDate, getJobIcon, JOB_ICON_BG, JOB_BADGE_COLOR, isNew, markViewed,
+  isContactBlocked, recordContactReveal, getTodayContactCount, getContactDailyLimit,
+} from '@/lib/utils';
+import { maskPhone, maskPhonesInText } from '@/lib/phone';
 
 interface Props {
   id: string;
@@ -37,6 +41,32 @@ export default function Detail({ id }: Props) {
   const [job, setJob] = useState<Job | null>(null);
   const [related, setRelated] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  // 연락처는 기본 마스킹 — "연락처 보기"를 눌렀을 때만 실번호를 가져온다.
+  const [revealedContact, setRevealedContact] = useState<string | null>(null);
+  const [revealing, setRevealing] = useState(false);
+  const [contactBlocked, setContactBlocked] = useState(false);
+
+  async function revealContact() {
+    if (!job || revealing) return;
+    if (isContactBlocked()) {
+      setContactBlocked(true);
+      return;
+    }
+    setRevealing(true);
+    // 항상 서버에서 실번호를 가져온다 (서버 측 조회 한도 적용).
+    // 서버가 응답하지 못할 때만 로컬 폴백 데이터의 번호를 사용.
+    const r = await fbGetJobContact(job.id);
+    let num: string | null = r.contact;
+    if (!num && r.reason === 'error') num = job.contact || null;
+    if (!num) {
+      if (r.reason === 'limit') setContactBlocked(true);
+      setRevealing(false);
+      return;
+    }
+    recordContactReveal();
+    setRevealedContact(num);
+    setRevealing(false);
+  }
 
   useEffect(() => {
     async function load() {
@@ -160,9 +190,12 @@ export default function Detail({ id }: Props) {
 
   const jobBg = JOB_ICON_BG[job.job] || '#f3f4f6';
   const jobBadge = JOB_BADGE_COLOR[job.job] || { bg: '#f3f4f6', text: '#374151' };
-  const hasPhone = !!(job.contact && /\d{2,4}-\d{3,4}-\d{4}/.test(job.contact));
-  const telHref = hasPhone ? `tel:${job.contact?.replace(/-/g, '')}` : '#';
-  const smsHref = hasPhone ? `sms:${job.contact?.replace(/-/g, '')}` : '#';
+  // 서버 공개 응답에는 contact 원본이 없다 (hasContact/contactMasked만 존재).
+  const hasPhone = job.hasContact ?? !!(job.contact && /\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{4}/.test(job.contact));
+  const maskedContact = job.contactMasked ?? (job.contact ? maskPhone(job.contact) : null);
+  const revealDigits = revealedContact ? revealedContact.replace(/[^0-9]/g, '') : '';
+  const telHref = revealDigits ? `tel:${revealDigits}` : '#';
+  const smsHref = revealDigits ? `sms:${revealDigits}` : '#';
   const _isNew = isNew(job.date);
 
   const mealCls =
@@ -271,14 +304,34 @@ export default function Detail({ id }: Props) {
                 job.workType   ? { ico: '🚗', key: '근무형태', val: job.workType } : null,
                 job.ageLimit   ? { ico: '🎂', key: '나이제한', val: job.ageLimit } : null,
                 job.startDate  ? { ico: '📅', key: '투입시기', val: job.startDate } : null,
-                job.manager    ? { ico: '👤', key: '담당자',   val: job.manager } : null,
+                job.manager    ? { ico: '👤', key: '담당자',   val: maskPhonesInText(job.manager) } : null,
                 { ico: '🍚', key: '식사', val: <span className={mealCls}>{job.meal || '정보없음'}</span> },
                 { ico: '🏠', key: '숙박', val: <span className={lodgCls}>{job.lodging || '정보없음'}</span> },
                 job.weldSub ? { ico: '⚙️', key: '용접종류', val: job.weldSub } : null,
                 job.weldTest ? { ico: '🧪', key: '시험여부', val: job.weldTest } : null,
-                { ico: '📞', key: '연락처', val: job.contact || '문의' },
+                {
+                  ico: '📞', key: '연락처',
+                  val: !hasPhone ? '문의' : revealedContact ? (
+                    <a href={telHref} className="font-bold text-[#1e3a5f] no-underline hover:underline">{revealedContact}</a>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 flex-wrap">
+                      <span>{maskedContact || '문의'}</span>
+                      {contactBlocked ? (
+                        <span className="text-[11px] text-red-500 font-semibold">일일 한도 초과</span>
+                      ) : !isClosed && (
+                        <button
+                          onClick={revealContact}
+                          disabled={revealing}
+                          className="text-[11px] px-2.5 py-1 rounded-full font-bold cursor-pointer border-none bg-[#f97316] text-white hover:opacity-90 transition-opacity whitespace-nowrap"
+                        >
+                          {revealing ? '확인 중…' : `👁 연락처 보기 (${getTodayContactCount()}/${getContactDailyLimit()})`}
+                        </button>
+                      )}
+                    </span>
+                  ),
+                },
                 { ico: '🕐', key: '등록일', val: formatDate(job.date) },
-                job.detail ? { ico: '📝', key: '비고', val: job.detail, full: true } : null,
+                job.detail ? { ico: '📝', key: '비고', val: maskPhonesInText(job.detail), full: true } : null,
               ]
                 .filter(Boolean)
                 .map((row, i) => (
@@ -310,7 +363,7 @@ export default function Detail({ id }: Props) {
                 className="bg-[#f8fafc] border border-gray-200 rounded-lg p-3 sm:p-[14px] text-[12px] sm:text-[13px] text-gray-500 leading-6 max-h-56 overflow-y-auto"
                 style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
               >
-                {job.originalText}
+                {maskPhonesInText(job.originalText)}
               </pre>
             </div>
           )}
@@ -385,7 +438,7 @@ export default function Detail({ id }: Props) {
             <div className="col-span-2 flex items-center justify-center gap-1.5 bg-gray-300 text-gray-600 rounded-xl py-[15px] text-base font-bold cursor-not-allowed select-none">
               ⏰ 모집이 마감된 공고입니다
             </div>
-          ) : hasPhone ? (
+          ) : hasPhone && revealedContact ? (
             <>
               <a
                 href={telHref}
@@ -400,6 +453,20 @@ export default function Detail({ id }: Props) {
                 💬 문자 보내기
               </a>
             </>
+          ) : hasPhone ? (
+            contactBlocked ? (
+              <div className="col-span-2 flex items-center justify-center gap-1.5 bg-gray-300 text-gray-600 rounded-xl py-[15px] text-base font-bold cursor-not-allowed select-none">
+                오늘 연락처 조회 한도를 초과했습니다
+              </div>
+            ) : (
+              <button
+                onClick={revealContact}
+                disabled={revealing}
+                className="col-span-2 flex items-center justify-center gap-1.5 bg-[#f97316] text-white rounded-xl py-[15px] text-base font-bold cursor-pointer border-none hover:opacity-90 transition-opacity disabled:opacity-60"
+              >
+                {revealing ? '확인 중…' : `📞 연락처 보기 (${getTodayContactCount()}/${getContactDailyLimit()})`}
+              </button>
+            )
           ) : (
             <div className="col-span-2 flex items-center justify-center gap-1.5 bg-amber-500 text-white rounded-xl py-[15px] text-base font-bold">
               📩 문의 필요 — 관리자에 연락하세요

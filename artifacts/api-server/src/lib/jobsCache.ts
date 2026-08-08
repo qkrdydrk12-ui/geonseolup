@@ -11,6 +11,7 @@ import { notifyNewJobSubscribers } from "./emailSubscribers.js";
 import { pingSearchEngines } from "./searchEnginePing.js";
 import { maybeCreateDraft } from "./threadsDrafts.js";
 import { isJobClosed, isJobExpired } from "./jobLifecycle.js";
+import { sanitizePublicJob } from "./contactMask.js";
 
 export interface PublicJob {
   id: string;
@@ -59,10 +60,11 @@ function isPublic(j: PublicJob): boolean {
   );
 }
 
-// 공개적으로 노출 가능한 공고만 남긴다.
+// 공개적으로 노출 가능한 공고만 남기고, 개인정보(전화번호)를 마스킹한다.
 // (마감 후 30일이 지나 완전히 만료된 공고는 캐시에서도 제외 — 410 처리 대상)
+// 캐시 자체가 마스킹본을 담으므로 목록/인기/상세/SEO 어디로 나가도 원본 번호가 없다.
 function toPublic(all: PublicJob[]): PublicJob[] {
-  return all.filter((j) => isPublic(j) && !isJobExpired(j));
+  return all.filter((j) => isPublic(j) && !isJobExpired(j)).map(sanitizePublicJob);
 }
 
 // 활성(모집 중) 공고만 — 목록/알림/사이트맵용. 마감(closed) 공고는 제외.
@@ -186,12 +188,31 @@ export async function getPublicJobById(id: string): Promise<PublicJob | null> {
     // 만료(expired) 여부는 여기서 거르지 않는다 — 호출부(라우트)가 만료 공고를
     // 404(모름)가 아닌 410(확실히 사라짐)으로 구분 응답해야 하기 때문.
     const doc = (await getDocument("jobs", id)) as PublicJob | null;
-    if (doc && isPublic(doc)) return doc;
+    if (doc && isPublic(doc)) return sanitizePublicJob(doc);
     return null;
   } catch (err) {
     _lastFailAt = Date.now();
     logger.warn({ err, id }, "공개 공고 단건 조회 실패");
     return null;
+  }
+}
+
+// 연락처 보기(명시적 버튼) 전용 — 실제 번호를 반환한다.
+// 공개 캐시는 마스킹본이므로, 원본은 단일 문서 1회 읽기로만 가져온다.
+export type RawContactResult =
+  | { status: "ok"; contact: string }
+  | { status: "none" }   // 공고 없음/비공개/번호 없음
+  | { status: "gone" };  // 마감 또는 만료 — 연락 불가
+export async function getRawJobContact(id: string): Promise<RawContactResult> {
+  try {
+    const doc = (await getDocument("jobs", id)) as PublicJob | null;
+    if (!doc || !isPublic(doc)) return { status: "none" };
+    if (isJobExpired(doc) || isJobClosed(doc)) return { status: "gone" };
+    const contact = typeof doc["contact"] === "string" ? (doc["contact"] as string).trim() : "";
+    return contact ? { status: "ok", contact } : { status: "none" };
+  } catch (err) {
+    logger.warn({ err, id }, "연락처 원본 조회 실패");
+    return { status: "none" };
   }
 }
 
