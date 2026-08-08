@@ -771,11 +771,26 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
       // 관리자 패널("현장 소식" 코너)에서 DB로 발행한 글이면 실제 제목·본문을
       // 초기 HTML에 넣어 크롤러가 JS 실행 없이도 읽을 수 있게 한다.
       if (full) {
-        const paragraphs = full.body
-          .split(/\n{2,}/)
-          .map((p) => p.trim())
-          .filter(Boolean)
-          .map((p) => `<p style="margin:0 0 14px;color:#334155;white-space:pre-line">${escapeHtmlAttr(p)}</p>`)
+        // full.body는 "## 소제목" 마크다운 스타일 문자열이다(business1-threads.txt 4번).
+        // 헤딩을 실제 <h2>로, 그 아래 문단을 <p>로 변환해 크롤러가 진짜 구조를 읽게 한다
+        // (예전엔 "## 배경"이 그대로 본문 텍스트처럼 노출됐음, 2026-08-09 발견).
+        const sections = full.body.split(/\n(?=## )/g).map((s) => s.trim()).filter(Boolean);
+        const paragraphs = sections
+          .map((section) => {
+            const m = section.match(/^##\s+(.+?)\n+([\s\S]*)$/);
+            const heading = m ? m[1].trim() : null;
+            const text = m ? m[2].trim() : section;
+            const headingHtml = heading
+              ? `<h2 style="font-size:17px;font-weight:700;color:#1e3a5f;margin:20px 0 8px">${escapeHtmlAttr(heading)}</h2>`
+              : "";
+            const bodyHtml = text
+              .split(/\n{2,}/)
+              .map((p) => p.trim())
+              .filter(Boolean)
+              .map((p) => `<p style="margin:0 0 14px;color:#334155;white-space:pre-line">${escapeHtmlAttr(p)}</p>`)
+              .join("\n");
+            return headingHtml + bodyHtml;
+          })
           .join("\n");
         const fallbackBody = `
     <div id="root">
