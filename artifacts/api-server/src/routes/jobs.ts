@@ -80,7 +80,7 @@ router.get("/jobs/:id/contact", async (req, res) => {
 router.get("/jobs/:id", async (req, res) => {
   const job = await getPublicJobById(req.params.id);
   if (!job || isJobExpired(job)) {
-    // 마감 후 30일까지 지난 공고는 "확실히 사라짐" → 410 Gone
+    // 마감 후 90일까지 지난 공고는 "확실히 사라짐" → 410 Gone
     res.status(job ? 410 : 404).json({ error: job ? "expired" : "not_found" });
     return;
   }

@@ -13,19 +13,28 @@ interface Props {
   id: string;
 }
 
-// 관련 공고 스코어링: 같은 지역+직종 > 같은 직종 > 같은 지역 순으로 우선순위를 매겨
-// 단순 "같은 직종만" 필터보다 실제로 더 관련성 높은 공고를 상단에 보여준다.
-function rankRelated(pool: Job[], id: string, region: string, job: string, limit = 10): Job[] {
+// 관련 공고 추천: 같은 지역+직종 > 같은 직종 > 같은 지역 > 그 밖의 최신 순.
+// 현재 공고와 같은 내용의 중복 공고(제목·지역·직종 동일)는 제외하고,
+// 추천 목록 안에서도 같은 제목+지역+직종 조합은 한 번만 보여준다.
+function rankRelated(pool: Job[], id: string, region: string, job: string, title = '', limit = 5): Job[] {
+  const currentKey = `${(title || '').trim()}|${region}|${job}`;
+  const seen = new Set<string>([currentKey]);
   return pool
     .filter((j) => j.id !== id && !j.hidden && isJobActive(j))
     .map((j) => {
       let score = 0;
-      if (job && j.job === job) score += 2;
-      if (region && j.region === region) score += 1;
+      if (job && j.job === job && region && j.region === region) score = 3;
+      else if (job && j.job === job) score = 2;
+      else if (region && j.region === region) score = 1;
       return { j, score };
     })
-    .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || new Date(b.j.date).getTime() - new Date(a.j.date).getTime())
+    .filter((r) => {
+      const key = `${(r.j.title || '').trim()}|${r.j.region}|${r.j.job}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, limit)
     .map((r) => r.j);
 }
@@ -76,7 +85,7 @@ export default function Detail({ id }: Props) {
         setJob(sampleFound);
         markViewed(id);
         recordServerView(id);
-        const rels = rankRelated(SAMPLE_JOBS, id, sampleFound.region, sampleFound.job);
+        const rels = rankRelated(SAMPLE_JOBS, id, sampleFound.region, sampleFound.job, sampleFound.title);
         setRelated(rels);
         setLoading(false);
         fbGetPublicJob(id).then((found) => {
@@ -86,7 +95,7 @@ export default function Detail({ id }: Props) {
           if (allJobs.length > 0) {
             const job = allJobs.find((j) => j.id === id);
             if (job) setJob(job);
-            const rels2 = rankRelated(allJobs, id, job?.region || sampleFound.region, job?.job || sampleFound.job);
+            const rels2 = rankRelated(allJobs, id, job?.region || sampleFound.region, job?.job || sampleFound.job, job?.title || sampleFound.title);
             if (rels2.length > 0) setRelated(rels2);
           }
         });
@@ -101,7 +110,7 @@ export default function Detail({ id }: Props) {
       recordServerView(id);
       const allJobs = await fbLoadPublicJobs();
       const pool = allJobs.length > 0 ? allJobs : SAMPLE_JOBS;
-      const rels = rankRelated(pool, id, found?.region || '', found?.job || '');
+      const rels = rankRelated(pool, id, found?.region || '', found?.job || '', found?.title || '');
       setRelated(rels);
       setLoading(false);
     }
@@ -196,6 +205,57 @@ export default function Detail({ id }: Props) {
   const revealDigits = revealedContact ? revealedContact.replace(/[^0-9]/g, '') : '';
   const telHref = revealDigits ? `tel:${revealDigits}` : '#';
   const smsHref = revealDigits ? `sms:${revealDigits}` : '#';
+
+  // 모집 중인 유사 공고 추천 (최대 5개). 마감 공고에서는 마감 배너 바로 아래에 표시.
+  const relatedSection = related.length > 0 ? (
+    <section className="mb-5">
+      <h2 className="text-[15px] font-extrabold text-[#1e3a5f] mb-3 pb-[7px] border-b-2 border-gray-200 flex items-center gap-1.5">
+        🔍 {isClosed ? '지금 모집 중인 비슷한 일자리' : '비슷한 일자리'}
+        <span className="ml-auto text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+          {related.length}
+        </span>
+      </h2>
+      <div className="flex flex-col gap-2.5">
+        {related.map((rel) => {
+          const relBg = JOB_ICON_BG[rel.job] || '#f3f4f6';
+          const lodgingOn = !!rel.lodging && rel.lodging !== '숙박없음';
+          const mealOn = !!rel.meal && rel.meal !== '식사없음';
+          return (
+            <a
+              key={rel.id}
+              href={`/detail/${rel.id}`}
+              className="flex items-center gap-3 bg-white rounded-[10px] border-[1.5px] border-gray-200 shadow-sm p-3 cursor-pointer hover:shadow-md hover:border-[#f97316] transition-all no-underline text-gray-800"
+              onClick={(e) => { e.preventDefault(); setLocation(`/detail/${rel.id}`); window.scrollTo(0, 0); }}
+            >
+              <div className="w-10 h-10 shrink-0 rounded-[8px] flex items-center justify-center text-lg" style={{ background: relBg }}>
+                {getJobIcon(rel.job)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold leading-snug line-clamp-1">
+                  {isNew(rel.date) && <span className="text-[9px] font-bold bg-[#f97316] text-white px-1 py-0.5 rounded mr-1 align-middle">NEW</span>}
+                  {rel.title}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[11px] text-gray-500">
+                  <span>📍 {rel.region}</span>
+                  <span className="font-semibold text-gray-600">{rel.job}</span>
+                  <span className="text-[#f97316] font-extrabold text-[12px]">{rel.salary || '급여 협의'}</span>
+                  {(lodgingOn || mealOn) && (
+                    <span className="text-emerald-600 font-semibold">
+                      {[lodgingOn && '숙박', mealOn && '식사'].filter(Boolean).join('·')} 제공
+                    </span>
+                  )}
+                  <span className="text-gray-400">{formatDate(rel.date)}</span>
+                </div>
+              </div>
+              <span className="shrink-0 text-[11px] font-bold text-white bg-[#1e3a5f] rounded-lg px-3 py-2 whitespace-nowrap">
+                상세보기 →
+              </span>
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  ) : null;
   const _isNew = isNew(job.date);
 
   const mealCls =
@@ -228,17 +288,20 @@ export default function Detail({ id }: Props) {
           </button>
         </div>
 
-        {/* 모집마감 안내 배너 */}
+        {/* 모집마감 안내 배너 + 배너 바로 아래 모집 중인 유사 공고 추천 */}
         {isClosed && (
-          <div className="flex items-start gap-2.5 rounded-xl border-[1.5px] border-red-300 bg-red-50 px-4 py-3.5 mb-4">
-            <span className="text-xl shrink-0">⏰</span>
-            <div>
-              <div className="text-sm font-extrabold text-red-700">이 공고는 모집이 마감되었습니다</div>
-              <div className="text-xs text-red-600 mt-0.5">
-                아래 '비슷한 일자리'에서 지금 지원 가능한 공고를 확인해보세요.
+          <>
+            <div className="flex items-start gap-2.5 rounded-xl border-[1.5px] border-red-300 bg-red-50 px-4 py-3.5 mb-4">
+              <span className="text-xl shrink-0">⏰</span>
+              <div>
+                <div className="text-sm font-extrabold text-red-700">이 공고는 모집이 마감되었습니다</div>
+                <div className="text-xs text-red-600 mt-0.5">
+                  모집이 종료된 공고입니다. 바로 아래에서 지금 모집 중인 비슷한 일자리를 확인해보세요.
+                </div>
               </div>
             </div>
-          </div>
+            {relatedSection}
+          </>
         )}
 
         {/* 상세 카드 */}
@@ -369,47 +432,8 @@ export default function Detail({ id }: Props) {
           )}
         </div>
 
-        {/* 비슷한 일자리 */}
-        {related.length > 0 && (
-          <section className="mb-5">
-            <h2 className="text-[15px] font-extrabold text-[#1e3a5f] mb-3 pb-[7px] border-b-2 border-gray-200 flex items-center gap-1.5">
-              🔍 {isClosed ? '지금 지원 가능한 비슷한 일자리' : '비슷한 일자리'}
-              <span className="ml-auto text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                {related.length}
-              </span>
-            </h2>
-            <div className="flex gap-2.5 overflow-x-auto pb-1.5" style={{ scrollbarWidth: 'none' }}>
-              {related.map((rel) => {
-                const relBg = JOB_ICON_BG[rel.job] || '#f3f4f6';
-                return (
-                  <a
-                    key={rel.id}
-                    href={`/detail/${rel.id}`}
-                    className="shrink-0 w-[200px] bg-white rounded-[10px] border-[1.5px] border-gray-200 shadow-sm p-[13px] cursor-pointer hover:shadow-md hover:border-[#f97316] hover:-translate-y-0.5 transition-all no-underline text-gray-800 block"
-                    onClick={(e) => { e.preventDefault(); setLocation(`/detail/${rel.id}`); }}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-8 h-8 rounded-[7px] flex items-center justify-center text-[15px]" style={{ background: relBg }}>
-                        {getJobIcon(rel.job)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold leading-snug line-clamp-2">{rel.title}</div>
-                      </div>
-                    </div>
-                    <span className="block text-[#f97316] text-[13px] font-extrabold mb-0.5">{rel.salary || '협의'}</span>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-[10px] text-gray-500">📍 {rel.region}</span>
-                      <span className="text-[10px] text-gray-400">{formatDate(rel.date)}</span>
-                    </div>
-                    {isNew(rel.date) && (
-                      <span className="text-[9px] font-bold bg-[#f97316] text-white px-[5px] py-0.5 rounded block mt-1.5 text-center">NEW</span>
-                    )}
-                  </a>
-                );
-              })}
-            </div>
-          </section>
-        )}
+        {/* 비슷한 일자리 — 마감 공고에서는 마감 배너 바로 아래에 표시됨 */}
+        {!isClosed && relatedSection}
 
         {/* 더 많은 공고 배너 */}
         <a

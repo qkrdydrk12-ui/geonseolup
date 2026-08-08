@@ -14,7 +14,7 @@ import {
 import { logger } from "./logger.js";
 import { ACTIVE_HOURS, RETENTION_DAYS_AFTER_CLOSE } from "./jobLifecycle.js";
 
-// 완전 삭제 하한: 활성 48시간 + 마감 상태 30일 유지 = 32일.
+// 완전 삭제 하한: 활성 48시간 + 마감 상태 90일 유지 = 92일.
 // 관리자 설정(autoDeleteHours)이 이보다 짧아도 상세 페이지 유지 기간을 침범하지 않는다.
 const MIN_DELETE_HOURS = ACTIVE_HOURS + RETENTION_DAYS_AFTER_CLOSE * 24;
 
@@ -48,7 +48,7 @@ async function loadDupSettings(): Promise<DupSettings> {
 
 // 정리 실행 — 자동숨김은 하지 않는다.
 // "등록 48시간 후 모집마감"은 API가 등록일(date) 기준으로 파생 판정하며(jobLifecycle),
-// hidden 처리하면 마감 공고의 상세 페이지(30일 유지·SEO)까지 사라지므로 금지.
+// hidden 처리하면 마감 공고의 상세 페이지(90일 유지·SEO)까지 사라지므로 금지.
 async function runCleanup(): Promise<{ hidden: number; purged: number; deleted: number }> {
   const settings = await loadDupSettings();
   const autoDeleteHours = settings.autoDeleteHours ?? 0;
@@ -87,7 +87,7 @@ async function runCleanup(): Promise<{ hidden: number; purged: number; deleted: 
   }
 
   // ── 2. 자동삭제: date 기준 초과 → 완전 삭제 (예약/실패 제외) ──
-  // 설정값과 무관하게 최소 32일(활성 2일 + 마감 30일)은 보존한다.
+  // 설정값과 무관하게 최소 92일(활성 2일 + 마감 90일)은 보존한다.
   {
     const effectiveHours = Math.max(autoDeleteHours || MIN_DELETE_HOURS, MIN_DELETE_HOURS);
     const cutoff = now - effectiveHours * 3600000;

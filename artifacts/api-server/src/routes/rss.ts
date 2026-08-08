@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { maskPhonesInText } from "../lib/contactMask.js";
+import { getMergedInfoMeta, getNewsMeta } from "../lib/articleMeta";
 
 const router = Router();
 
@@ -152,7 +153,38 @@ async function buildFeed(
       })
       .join("\n");
 
-    const itemsXml = items.length > 0 ? items : DUMMY_ITEM;
+    // 전체 피드(/rss)에는 건설꿀팁·현장 소식 글도 자동 포함한다.
+    // (프론트 데이터 파일 + DB 블로그 글에서 자동 수집 — 새 글 등록·수정 시 자동 반영)
+    let articleItems = "";
+    if (!opts.region && !opts.job) {
+      try {
+        const [infoArticles, newsArticles] = await Promise.all([
+          getMergedInfoMeta().catch(() => []),
+          getNewsMeta().catch(() => []),
+        ]);
+        const toItem = (base: "info" | "news") => (a: { slug: string; title: string; description: string; date?: string; updated?: string }) => {
+          const link = `${siteUrl}/${base}/${encodeURIComponent(a.slug)}`;
+          const dateVal = a.updated || a.date;
+          const pubDate = dateVal && !isNaN(new Date(dateVal).getTime())
+            ? `\n      <pubDate>${new Date(dateVal).toUTCString()}</pubDate>` : "";
+          return `    <item>
+      <title>${escapeXml(a.title)}</title>
+      <link>${link}</link>
+      <description>${escapeXml(a.description)}</description>${pubDate}
+      <guid isPermaLink="true">${link}</guid>
+    </item>`;
+        };
+        articleItems = [
+          ...newsArticles.map(toItem("news")),
+          ...infoArticles.map(toItem("info")),
+        ].join("\n");
+      } catch (e) {
+        console.error("[RSS] 아티클 항목 생성 실패:", e);
+      }
+    }
+
+    const jobItemsXml = items.length > 0 ? items : DUMMY_ITEM;
+    const itemsXml = articleItems ? `${jobItemsXml}\n${articleItems}` : jobItemsXml;
     const feedDesc = opts.region || opts.job
       ? `${[opts.region, opts.job].filter(Boolean).join(" ")} 건설 현장 구인 공고를 실시간으로 제공합니다.`
       : "전국 건설 현장 일자리 정보를 실시간으로 제공합니다. 조공·배관·용접·화기감시자 등 다양한 직종의 구인 공고를 확인하세요.";

@@ -178,29 +178,18 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
     // 만료된 채용정보를 새로 색인하지 않게 한다.
     const jobs = filterActiveJobs(cachedJobs);
 
-    // 건설꿀팁 아티클 slug 목록 — geonseolup/src/lib/infoData.ts와 수동 동기화한다.
-    // (패키지가 분리돼 있어 직접 import 불가. 새 글 추가 시 여기도 같이 추가할 것 — 2026-08-07 SEO 점검 중 발견)
-    const infoSlugs = [
-      "wage-tax-withholding-guide",
-      "p5-guide-worker-guide",
-      "ecard-tag-guide",
-      "unemployment-benefit-guide",
-      "guide1",
-      "guide2",
-      "guide3",
-      "guide4",
-      "guide5",
-      "wage-gyeonggi-202608",
-      "insurance-4major",
-      "retirement-pay-guide",
-      "wage-delay-response",
-      "welding-types-guide",
-      "fire-watch-guide",
-      "summer-heat-safety",
-      "basic-safety-education",
-      "industrial-accident-guide",
-      "plumbing-job-guide",
-    ];
+    // 건설꿀팁·현장 소식 글 목록 — 프론트 데이터 파일과 DB 블로그 글에서 자동 수집.
+    // (새 글 등록·수정 시 별도 작업 없이 사이트맵에 자동 반영, DB 글은 updated_at이 lastmod)
+    const [infoArticles, newsArticles] = await Promise.all([
+      getMergedInfoMeta().catch(() => [] as ArticleMeta[]),
+      getNewsMeta().catch(() => [] as ArticleMeta[]),
+    ]);
+    const toLastmod = (a: ArticleMeta): string | undefined => {
+      const v = a.updated || a.date;
+      if (!v) return undefined;
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+    };
 
     const staticUrls: Array<{ loc: string; changefreq: string; priority: string; lastmod?: string }> = [
       { loc: "/", changefreq: "daily", priority: "1.0" },
@@ -209,7 +198,14 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/wages", changefreq: "daily", priority: "0.8" },
       { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
-      ...infoSlugs.map((slug) => ({ loc: `/info/${slug}`, changefreq: "monthly", priority: "0.6" })),
+      ...infoArticles.map((a) => ({
+        loc: `/info/${encodeURIComponent(a.slug)}`, changefreq: "monthly", priority: "0.6",
+        lastmod: toLastmod(a),
+      })),
+      ...newsArticles.map((a) => ({
+        loc: `/news/${encodeURIComponent(a.slug)}`, changefreq: "monthly", priority: "0.6",
+        lastmod: toLastmod(a),
+      })),
     ];
 
     const jobUrls = jobs
@@ -274,7 +270,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     ]);
 
     if (!job || isJobExpired(job)) {
-      // 마감 후 30일 유지 기간까지 지난 공고(또는 존재하지 않는 ID)는
+      // 마감 후 90일 유지 기간까지 지난 공고(또는 존재하지 않는 ID)는
       // "없을 수도 있음"(404)이 아니라 "확실히 만료되어 사라짐" 상태이므로,
       // 구글이 채용정보 만료 시 권장하는 410 Gone으로 명확히 응답한다.
       // (200으로 홈 화면 껍데기를 내려주면 검색엔진이 "소프트 404"로 인식해 감점됨)
@@ -286,7 +282,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6;text-align:center">
         <h1 style="font-size:20px;font-weight:700;color:#f97316;margin:40px 0 8px">이 공고는 만료되어 내려갔어요</h1>
-        <p style="margin:0 0 20px;color:#334155">모집이 끝난 공고는 30일이 지나면 삭제됩니다. 지금 올라와 있는 다른 공고를 확인해보세요.</p>
+        <p style="margin:0 0 20px;color:#334155">모집이 끝난 공고는 90일이 지나면 삭제됩니다. 지금 올라와 있는 다른 공고를 확인해보세요.</p>
         <p><a href="/" style="color:#f97316;font-weight:700;text-decoration:underline">건설UP 홈에서 다른 공고 보기 →</a></p>
       </div>
     </div>
@@ -541,44 +537,43 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
 // 서버에서 글별 제목·설명·헤더 이미지로 치환해 해결한다.
 // 글 데이터 원본은 프론트(infoData.ts)에 있으므로, 그 파일을 읽어 slug/title/description만
 // 추출해 캐시한다 (새 글이 추가돼도 별도 작업 없이 자동 반영).
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import {
+  getInfoMeta,
+  getNewsMeta,
+  getBlogArticleMeta,
+  getMergedInfoMeta,
+  type ArticleMeta,
+} from "../lib/articleMeta";
 
-interface InfoMeta { slug: string; title: string; description: string; }
-let _infoMetaCache: { list: InfoMeta[]; fetchedAt: number } | null = null;
-const INFO_META_TTL_MS = 5 * 60_000;
-
-async function getInfoMeta(): Promise<InfoMeta[]> {
-  const now = Date.now();
-  if (_infoMetaCache && now - _infoMetaCache.fetchedAt < INFO_META_TTL_MS) {
-    return _infoMetaCache.list;
-  }
-  // 실행 위치가 워크스페이스 루트일 수도, artifacts/api-server일 수도 있어 둘 다 시도한다.
-  const candidates = [
-    path.resolve(process.cwd(), "artifacts/geonseolup/src/lib/infoData.ts"),
-    path.resolve(process.cwd(), "../geonseolup/src/lib/infoData.ts"),
-  ];
-  let src = "";
-  let lastErr: unknown;
-  for (const p of candidates) {
-    try {
-      src = await readFile(p, "utf8");
-      break;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  if (!src) throw lastErr;
-  const list: InfoMeta[] = [];
-  // 작은따옴표 문자열 내 이스케이프(\')도 허용해 제목/설명에 아포스트로피가 있어도 안전하게 추출.
-  const re = /slug:\s*'((?:\\'|[^'])+)',\s*\n\s*title:\s*'((?:\\'|[^'])+)',\s*\n\s*description:\s*'((?:\\'|[^'])+)'/g;
-  const unescape = (s: string) => s.replace(/\\'/g, "'").replace(/\\\\/g, "\\");
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
-    list.push({ slug: unescape(m[1]!), title: unescape(m[2]!), description: unescape(m[3]!) });
-  }
-  _infoMetaCache = { list, fetchedAt: now };
-  return list;
+// Article/NewsArticle 구조화 데이터 — 글별 검색 노출용.
+function buildArticleLd(opts: {
+  type: "Article" | "NewsArticle";
+  headline: string;
+  description: string;
+  url: string;
+  image: string;
+  datePublished?: string;
+  dateModified?: string;
+}): string {
+  const ld: Record<string, unknown> = {
+    "@context": "https://schema.org/",
+    "@type": opts.type,
+    headline: opts.headline,
+    description: opts.description,
+    image: [opts.image],
+    mainEntityOfPage: { "@type": "WebPage", "@id": opts.url },
+    author: { "@type": "Organization", name: "건설UP", url: SITE_URL },
+    publisher: {
+      "@type": "Organization",
+      name: "건설UP",
+      url: SITE_URL,
+      logo: { "@type": "ImageObject", url: `${SITE_URL}/og-image.png?v=2` },
+    },
+    inLanguage: "ko",
+  };
+  if (opts.datePublished) ld.datePublished = opts.datePublished;
+  if (opts.dateModified || opts.datePublished) ld.dateModified = opts.dateModified || opts.datePublished;
+  return `<script type="application/ld+json">${escapeJsonForScriptTag(JSON.stringify(ld))}</script>`;
 }
 
 function replaceMetaTags(template: string, opts: { title: string; desc: string; url: string; image: string }): string {
@@ -621,23 +616,47 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
   try {
     const [template, metaList, overrides] = await Promise.all([
       getIndexTemplate(),
-      getInfoMeta(),
+      getMergedInfoMeta(),
       // 관리자가 글 제목/설명을 수정했을 수 있으므로 덮어쓰기를 병합 (실패해도 원본으로 진행).
       getAllInfoOverrides().catch(() => ({}) as Record<string, { title: string; description: string }>),
     ]);
     const base = metaList.find((a) => a.slug === slug);
     const ov = overrides[slug];
     const meta = base
-      ? { title: ov?.title || base.title, description: ov?.description || base.description }
+      ? { ...base, title: ov?.title || base.title, description: ov?.description || base.description }
       : undefined;
     const pageUrl = `${SITE_URL}/info/${encodeURIComponent(slug)}`;
-    const html = replaceMetaTags(template, {
+    // DB 글은 업로드된 이미지, 정적 글은 slug와 동일한 파일명 규칙 (프론트 getArticleImage와 동일).
+    const imageUrl = meta
+      ? meta.imageUrl
+        ? `${SITE_URL}${meta.imageUrl}`
+        : `${SITE_URL}/images/info/${encodeURIComponent(slug)}.webp`
+      : `${SITE_URL}/og-image.png?v=2`;
+    let html = replaceMetaTags(template, {
       title: meta ? `${meta.title} — 건설UP` : "정보/꿀팁 — 건설UP",
       desc: meta ? meta.description : "건설 현장 일자리 실용 정보를 모았습니다.",
       url: meta ? pageUrl : `${SITE_URL}/info`,
-      // 글별 헤더 이미지는 slug와 동일한 파일명으로 저장돼 있다 (프론트 getArticleImage와 동일 규칙).
-      image: meta ? `${SITE_URL}/images/info/${encodeURIComponent(slug)}.webp` : `${SITE_URL}/og-image.png?v=2`,
+      image: imageUrl,
     });
+    if (meta) {
+      // Article 구조화 데이터 + 탐색경로 — 글별 독립 검색 노출용.
+      const ldTags =
+        buildArticleLd({
+          type: "Article",
+          headline: meta.title,
+          description: meta.description,
+          url: pageUrl,
+          image: imageUrl,
+          datePublished: meta.date,
+          dateModified: meta.updated,
+        }) +
+        buildBreadcrumbLd([
+          { name: "건설UP", url: `${SITE_URL}/` },
+          { name: "정보/꿀팁", url: `${SITE_URL}/info` },
+          { name: meta.title, url: pageUrl },
+        ]);
+      html = html.replace("</head>", `${ldTags}</head>`);
+    }
     res.set("Content-Type", "text/html; charset=utf-8");
     res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
     // 존재하지 않는 글은 404로 응답 (SPA 셸은 그대로 렌더링되므로 사용자 경험 동일, 검색엔진 오염 방지).
@@ -656,39 +675,6 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
 
 // ── GET /news, /news/:slug ──────────────────────────────────────────────────
 // 건설업 현장 소식 공유 미리보기. 데이터 원본은 프론트 newsData.ts (info와 동일한 방식).
-let _newsMetaCache: { list: InfoMeta[]; fetchedAt: number } | null = null;
-
-async function getNewsMeta(): Promise<InfoMeta[]> {
-  const now = Date.now();
-  if (_newsMetaCache && now - _newsMetaCache.fetchedAt < INFO_META_TTL_MS) {
-    return _newsMetaCache.list;
-  }
-  const candidates = [
-    path.resolve(process.cwd(), "artifacts/geonseolup/src/lib/newsData.ts"),
-    path.resolve(process.cwd(), "../geonseolup/src/lib/newsData.ts"),
-  ];
-  let src = "";
-  let lastErr: unknown;
-  for (const p of candidates) {
-    try {
-      src = await readFile(p, "utf8");
-      break;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  if (!src) throw lastErr;
-  const list: InfoMeta[] = [];
-  const re = /slug:\s*'((?:\\'|[^'])+)',\s*\n\s*title:\s*\n?\s*'((?:\\'|[^'])+)',\s*\n\s*description:\s*\n?\s*'((?:\\'|[^'])+)'/g;
-  const unescape = (s: string) => s.replace(/\\'/g, "'").replace(/\\\\/g, "\\");
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
-    list.push({ slug: unescape(m[1]!), title: unescape(m[2]!), description: unescape(m[3]!) });
-  }
-  _newsMetaCache = { list, fetchedAt: now };
-  return list;
-}
-
 router.get("/news", async (_req: Request, res: Response) => {
   try {
     const template = await getIndexTemplate();
@@ -713,12 +699,33 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
     const [template, metaList] = await Promise.all([getIndexTemplate(), getNewsMeta()]);
     const meta = metaList.find((a) => a.slug === slug);
     const pageUrl = `${SITE_URL}/news/${encodeURIComponent(slug)}`;
-    const html = replaceMetaTags(template, {
+    const imageUrl = meta
+      ? `${SITE_URL}/images/news/${encodeURIComponent(slug)}.webp`
+      : `${SITE_URL}/og-image.png?v=2`;
+    let html = replaceMetaTags(template, {
       title: meta ? `${meta.title} — 건설UP` : "건설업 현장 소식 — 건설UP",
       desc: meta ? meta.description : "건설업계 소식을 현장 근로자 시각에서 정리했습니다.",
       url: meta ? pageUrl : `${SITE_URL}/news`,
-      image: meta ? `${SITE_URL}/images/news/${encodeURIComponent(slug)}.webp` : `${SITE_URL}/og-image.png?v=2`,
+      image: imageUrl,
     });
+    if (meta) {
+      const ldTags =
+        buildArticleLd({
+          type: "NewsArticle",
+          headline: meta.title,
+          description: meta.description,
+          url: pageUrl,
+          image: imageUrl,
+          datePublished: meta.date,
+          dateModified: meta.updated,
+        }) +
+        buildBreadcrumbLd([
+          { name: "건설UP", url: `${SITE_URL}/` },
+          { name: "현장 소식", url: `${SITE_URL}/news` },
+          { name: meta.title, url: pageUrl },
+        ]);
+      html = html.replace("</head>", `${ldTags}</head>`);
+    }
     res.set("Content-Type", "text/html; charset=utf-8");
     res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
     res.status(meta ? 200 : 404).send(html);

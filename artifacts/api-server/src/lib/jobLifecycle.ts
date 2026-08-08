@@ -2,14 +2,14 @@
 // (Firestore 문서를 변경하지 않으므로 별도 크론/스케줄러·쓰기 비용이 없다)
 //
 //   활성(active)   : 등록 후 48시간 동안 — 목록/알림/사이트맵에 노출, 지원 가능
-//   마감(closed)   : 48시간 경과 ~ 30일 — 상세 페이지는 유지하되 "모집마감" 표시,
+//   마감(closed)   : 48시간 경과 ~ 90일 — 상세 페이지는 유지하되 "모집마감" 표시,
 //                    목록/알림/사이트맵에서 제외, 전화·문자 지원 비활성화
-//   만료(expired)  : 마감 후 30일 경과 — 상세 페이지도 410 Gone 처리
+//   만료(expired)  : 마감 후 90일 경과 — 상세 페이지도 410 Gone 처리
 //
 // JobPosting 구조화 데이터의 validThrough도 반드시 closesAt과 같은 값을 쓴다.
 
 export const ACTIVE_HOURS = 48;
-export const RETENTION_DAYS_AFTER_CLOSE = 30;
+export const RETENTION_DAYS_AFTER_CLOSE = 90;
 
 interface JobLike {
   date?: unknown;
@@ -37,7 +37,7 @@ export function isJobClosed(job: JobLike, now: number = Date.now()): boolean {
   return closesAt !== null && now >= closesAt.getTime();
 }
 
-/** 상세 페이지 유지 기간(마감 후 30일)도 지나 완전히 만료됐는가. */
+/** 상세 페이지 유지 기간(마감 후 90일)도 지나 완전히 만료됐는가. */
 export function isJobExpired(job: JobLike, now: number = Date.now()): boolean {
   const closesAt = getClosesAt(job);
   if (!closesAt) return false;

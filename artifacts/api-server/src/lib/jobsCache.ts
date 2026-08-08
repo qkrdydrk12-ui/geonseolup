@@ -61,7 +61,7 @@ function isPublic(j: PublicJob): boolean {
 }
 
 // 공개적으로 노출 가능한 공고만 남기고, 개인정보(전화번호)를 마스킹한다.
-// (마감 후 30일이 지나 완전히 만료된 공고는 캐시에서도 제외 — 410 처리 대상)
+// (마감 후 90일이 지나 완전히 만료된 공고는 캐시에서도 제외 — 410 처리 대상)
 // 캐시 자체가 마스킹본을 담으므로 목록/인기/상세/SEO 어디로 나가도 원본 번호가 없다.
 function toPublic(all: PublicJob[]): PublicJob[] {
   return all.filter((j) => isPublic(j) && !isJobExpired(j)).map(sanitizePublicJob);

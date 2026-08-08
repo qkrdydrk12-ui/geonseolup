@@ -274,7 +274,7 @@ function readPublicJobsCache(): Job[] {
 export async function fbGetPublicJob(id: string): Promise<Job | null> {
   try {
     const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
-    if (res.status === 404 || res.status === 410) return null; // 410 = 마감 후 30일 지나 만료
+    if (res.status === 404 || res.status === 410) return null; // 410 = 마감 후 90일 지나 만료
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as Job;
   } catch (e) {
