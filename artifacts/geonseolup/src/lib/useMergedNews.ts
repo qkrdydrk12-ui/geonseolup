@@ -4,6 +4,7 @@ import { NEWS_NEWEST_FIRST, getNewsImage, type NewsArticle } from './newsData';
 export interface DisplayNewsArticle extends NewsArticle {
   imageSrc: string;
   sourceUrl?: string;
+  sourceLabel?: string;
 }
 
 interface SiteNewsApiRow {
@@ -32,13 +33,14 @@ function toDisplay(r: SiteNewsApiRow): DisplayNewsArticle {
     body: [{ text: r.body }],
     imageSrc: r.imageUrl || getNewsImage(r.slug || String(r.id)),
     sourceUrl: r.sourceUrl || undefined,
+    sourceLabel: r.sourceLabel || undefined,
   };
 }
 
 /**
  * 관리자 패널("현장 소식" 코너)에서 DB로 직접 발행한 글 + 기존 코드에 하드코딩된
- * NEWS_NEWEST_FIRST(newsData.ts)를 합쳐서 보여준다. DB 발행 글이 최신순으로 앞에 오고,
- * slug가 겹치면 DB 쪽을 우선한다. DB 발행 글은 git push/Replit 배포 없이 바로 반영된다.
+ * NEWS_NEWEST_FIRST(newsData.ts)를 합쳐서 보여준다. slug가 겹치면 DB 쪽을 우선하고,
+ * 최종 목록은 (정적/DB 구분과 무관하게) date 내림차순으로 실제 정렬한다.
  */
 export function useMergedNews() {
   const [articles, setArticles] = useState<DisplayNewsArticle[]>(() => cache ?? staticOnly());
@@ -57,7 +59,7 @@ export function useMergedNews() {
         const staticArticles = staticOnly().filter(
           (s) => !dynamic.some((d) => d.slug === s.slug)
         );
-        const merged = [...dynamic, ...staticArticles];
+        const merged = [...dynamic, ...staticArticles].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
         cache = merged;
         setArticles(merged);
         setLoading(false);

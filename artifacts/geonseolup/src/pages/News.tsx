@@ -1,30 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { NEWS_NEWEST_FIRST, getNewsImage } from '@/lib/newsData';
+import { useMergedNews } from '@/lib/useMergedNews';
 
-// 관리자 패널에서 발행하는 짧은 소식 (DB 저장)
-interface SiteNews {
-  id: number;
-  slug: string | null;
-  title: string;
-  body: string;
-  imageUrl: string | null;
-  sourceLabel: string;
-  sourceUrl: string;
-  publishedAt: string;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
+function formatDate(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00+09:00`);
   return d.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'Asia/Seoul', month: 'long', day: 'numeric',
   });
 }
 
 export default function News() {
-  const [rows, setRows] = useState<SiteNews[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { articles, loading } = useMergedNews();
 
   useEffect(() => {
     document.title = '건설업 현장 소식 — 건설UP';
@@ -32,15 +19,7 @@ export default function News() {
     if (meta) meta.content = '대형 현장 착공, 투자, 안전 기준 등 건설업계 소식을 현장 근로자 시각에서 정리했습니다.';
   }, []);
 
-  useEffect(() => {
-    fetch('/api/site-news')
-      .then((res) => res.json())
-      .then((d: { rows: SiteNews[] }) => setRows(d.rows ?? []))
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const isEmpty = !loading && rows.length === 0 && NEWS_NEWEST_FIRST.length === 0;
+  const isEmpty = !loading && articles.length === 0;
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -55,61 +34,34 @@ export default function News() {
           <div className="text-center py-16 text-gray-400 text-sm bg-white rounded-2xl border border-gray-200">아직 등록된 소식이 없습니다.</div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 items-start">
-            {/* 심층 기사 (장문, 상세 페이지로 연결) */}
-            {NEWS_NEWEST_FIRST.map((article) => (
+            {/* 최신순(date 내림차순)으로 정렬된 단일 목록 — 정적 글/DB 발행 글 구분 없이 실제 날짜순으로 섞여서 나온다 */}
+            {articles.map((article) => (
               <Link
                 key={article.slug}
                 href={`/news/${article.slug}`}
                 className="block no-underline"
               >
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col">
+                <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col">
                   <div className="relative aspect-[16/9] overflow-hidden" style={{ background: '#0d0d0d' }}>
                     <img
-                      src={getNewsImage(article.slug)}
+                      src={article.imageSrc}
                       alt=""
                       loading="lazy"
                       className="w-full h-full object-contain"
                     />
                   </div>
                   <div className="p-5 flex-1 flex flex-col">
-                    <div className="text-[11px] text-gray-400 mb-1.5">{article.date}</div>
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className="text-[11px] text-gray-400">{formatDate(article.date)}</span>
+                      {article.sourceLabel && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-[#f97316] shrink-0">{article.sourceLabel}</span>
+                      )}
+                    </div>
                     <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">
                       {article.title}
                     </h2>
                     <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
                       {article.description}
-                    </p>
-                    <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#f97316]">
-                      자세히 보기 →
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
-
-            {/* 짧은 소식 (관리자 패널에서 발행) — 같은 크기 카드, 누르면 상세 페이지(/news/:slug)로 이동 */}
-            {rows.map((r) => (
-              <Link
-                key={r.id}
-                href={r.slug ? `/news/${r.slug}` : '/news'}
-                className="block no-underline"
-              >
-                <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col">
-                  {r.imageUrl && (
-                    <div className="relative aspect-[16/9] overflow-hidden" style={{ background: '#0d0d0d' }}>
-                      <img src={r.imageUrl} alt={r.title} loading="lazy" className="w-full h-full object-contain" />
-                    </div>
-                  )}
-                  <div className="p-5 flex-1 flex flex-col">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <span className="text-[11px] text-gray-400">{formatDate(r.publishedAt)}</span>
-                      {r.sourceLabel && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-[#f97316] shrink-0">{r.sourceLabel}</span>
-                      )}
-                    </div>
-                    <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">{r.title}</h2>
-                    <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
-                      {r.body}
                     </p>
                     <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#f97316]">
                       자세히 보기 →
