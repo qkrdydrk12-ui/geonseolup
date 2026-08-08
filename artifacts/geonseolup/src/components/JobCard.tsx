@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbAddReport, fbGetJobContact } from '@/lib/firebase';
-import { maskPhone, maskPhonesInText } from '@/lib/phone';
+import { maskPhonesInText } from '@/lib/phone';
 import {
   formatDate,
   getJobIcon,
@@ -57,10 +57,10 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
   const viewed = getViewed().has(job.id);
   const _isNew = isNew(job.date);
   const _isHot = isHot(job.date);
-  // 서버 응답에는 contact 원본이 없고 hasContact/contactMasked만 온다.
+  // 서버 응답에는 contact 원본이 없고 hasContact 여부만 온다.
   // (로컬 저장본/Firestore 폴백 등 구형 데이터에는 contact가 남아있을 수 있음)
+  // 공개 화면에는 전화번호 숫자를 일부도 표시하지 않는다 — '연락처 보기' 클릭 후에만 노출.
   const hasPhone = job.hasContact ?? (job.contact ? job.contact.replace(/[^0-9]/g, '').length >= 9 : false);
-  const maskedContact = job.contactMasked ?? (job.contact ? maskPhone(job.contact) : null);
   const revealDigits = revealedNum ? revealedNum.replace(/[^0-9]/g, '') : '';
   const telHref = revealDigits ? `tel:${revealDigits}` : '#';
   const jobBg = JOB_ICON_BG[job.job] || '#f3f4f6';
@@ -185,9 +185,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
               >
                 {revealedNum}
               </a>
-            ) : (
-              <span className="font-semibold text-gray-600">{maskedContact || '번호없음'}</span>
-            )}
+            ) : null}
             {hasPhone && !revealedNum && (
               <>
                 {blocked ? (
@@ -202,11 +200,10 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
                         return;
                       }
                       setRevealing(true);
-                      // 항상 서버에서 실번호를 가져온다 (서버 측 조회 한도 적용).
-                      // 서버가 응답하지 못할 때만 로컬 폴백 데이터의 번호를 사용.
+                      // 실번호는 오직 서버에서만 가져온다 (서버 측 조회 한도 적용).
+                      // 서버 실패 시에도 로컬 데이터의 번호는 절대 사용하지 않는다.
                       const r = await fbGetJobContact(job.id);
-                      let num: string | null = r.contact;
-                      if (!num && r.reason === 'error') num = job.contact || null;
+                      const num: string | null = r.contact;
                       if (!num) {
                         if (r.reason === 'limit') setBlocked(true);
                         setRevealing(false);

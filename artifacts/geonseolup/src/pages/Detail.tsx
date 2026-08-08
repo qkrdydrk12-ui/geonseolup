@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbGetPublicJob, fbLoadPublicJobs, fbGetJobContact, isJobActive } from '@/lib/firebase';
-import { SAMPLE_JOBS } from '@/data/sampleJobs';
+import { SAMPLE_JOBS as RAW_SAMPLE_JOBS } from '@/data/sampleJobs';
+
+// 공개 화면에는 샘플 데이터의 전화번호도 노출하지 않는다 (연락처 보기 버튼 경유만).
+const SAMPLE_JOBS = RAW_SAMPLE_JOBS.map(sanitizeClientJob);
 import {
   formatDate, getJobIcon, JOB_ICON_BG, JOB_BADGE_COLOR, isNew, markViewed,
   isContactBlocked, recordContactReveal, getTodayContactCount, getContactDailyLimit,
 } from '@/lib/utils';
-import { maskPhone, maskPhonesInText } from '@/lib/phone';
+import { maskPhonesInText, sanitizeClientJob } from '@/lib/phone';
 
 interface Props {
   id: string;
@@ -62,11 +65,10 @@ export default function Detail({ id }: Props) {
       return;
     }
     setRevealing(true);
-    // 항상 서버에서 실번호를 가져온다 (서버 측 조회 한도 적용).
-    // 서버가 응답하지 못할 때만 로컬 폴백 데이터의 번호를 사용.
+    // 실번호는 오직 서버에서만 가져온다 (서버 측 조회 한도 적용).
+    // 서버 실패 시에도 로컬 데이터의 번호는 절대 사용하지 않는다.
     const r = await fbGetJobContact(job.id);
-    let num: string | null = r.contact;
-    if (!num && r.reason === 'error') num = job.contact || null;
+    const num: string | null = r.contact;
     if (!num) {
       if (r.reason === 'limit') setContactBlocked(true);
       setRevealing(false);
@@ -199,9 +201,9 @@ export default function Detail({ id }: Props) {
 
   const jobBg = JOB_ICON_BG[job.job] || '#f3f4f6';
   const jobBadge = JOB_BADGE_COLOR[job.job] || { bg: '#f3f4f6', text: '#374151' };
-  // 서버 공개 응답에는 contact 원본이 없다 (hasContact/contactMasked만 존재).
+  // 서버 공개 응답에는 contact 원본이 없다 (hasContact 여부만 존재).
+  // 공개 화면에는 전화번호 숫자를 일부도 표시하지 않는다 — '연락처 보기' 클릭 후에만 노출.
   const hasPhone = job.hasContact ?? !!(job.contact && /\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{4}/.test(job.contact));
-  const maskedContact = job.contactMasked ?? (job.contact ? maskPhone(job.contact) : null);
   const revealDigits = revealedContact ? revealedContact.replace(/[^0-9]/g, '') : '';
   const telHref = revealDigits ? `tel:${revealDigits}` : '#';
   const smsHref = revealDigits ? `sms:${revealDigits}` : '#';
@@ -378,10 +380,11 @@ export default function Detail({ id }: Props) {
                     <a href={telHref} className="font-bold text-[#1e3a5f] no-underline hover:underline">{revealedContact}</a>
                   ) : (
                     <span className="inline-flex items-center gap-2 flex-wrap">
-                      <span>{maskedContact || '문의'}</span>
                       {contactBlocked ? (
                         <span className="text-[11px] text-red-500 font-semibold">일일 한도 초과</span>
-                      ) : !isClosed && (
+                      ) : isClosed ? (
+                        <span className="text-gray-500">모집마감</span>
+                      ) : (
                         <button
                           onClick={revealContact}
                           disabled={revealing}

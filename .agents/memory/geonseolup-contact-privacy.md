@@ -4,7 +4,7 @@ description: 공개 응답에서 전화번호가 절대 나가면 안 되는 경
 ---
 
 규칙: 공개 API/HTML/RSS/SEO 어디에도 실제 전화번호가 나가면 안 된다. 서버 캐시(toPublic)가
-sanitizePublicJob으로 마스킹본을 담고, 실번호는 GET /api/jobs/:id/contact(연락처 보기 버튼,
+sanitizePublicJob으로 번호를 완전 제거한 본을 담고(마스킹 숫자도 금지, 문구로 대체), 실번호는 GET /api/jobs/:id/contact(연락처 보기 버튼,
 IP당 일일 한도)로만 나간다.
 
 **Why:** 구인 등록자 전화번호는 개인정보 — 검색엔진/스크래퍼에 수집되면 안 됨 (사용자 요청).

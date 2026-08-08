@@ -2,7 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbLoadPublicJobs } from '@/lib/firebase';
-import { SAMPLE_JOBS } from '@/data/sampleJobs';
+import { SAMPLE_JOBS as RAW_SAMPLE_JOBS } from '@/data/sampleJobs';
+import { sanitizeClientJob } from '@/lib/phone';
+
+// 공개 화면에는 샘플 데이터의 전화번호도 노출하지 않는다 (연락처 보기 버튼 경유만).
+const SAMPLE_JOBS = RAW_SAMPLE_JOBS.map(sanitizeClientJob);
 import { isAutoHidden, WELD_SUBS, isWeld, getJobIcon, JOB_ICON_BG, isNew } from '@/lib/utils';
 import { getToken, apiVerify } from '@/lib/adminAuth';
 import JobCard from '@/components/JobCard';
