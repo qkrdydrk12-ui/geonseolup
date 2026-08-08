@@ -76,7 +76,14 @@ export default function NewsDetail({ slug }: Props) {
             <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
               {article.title}
             </h1>
-            <p className="text-sm text-gray-400 mb-6 pb-5 border-b border-gray-100">{article.description}</p>
+            {/* DB(site_news) 글은 description이 본문 첫 문단을 그대로 잘라 만든 것이라
+                아래 본문과 그대로 겹쳐 보이고 단어 중간이 잘리는 문제가 있었다(2026-08-09
+                발견) — 별도 요약 문장이 있는 정적 글에서만 미리보기를 보여준다. */}
+            {article.isDbArticle ? (
+              <div className="mb-6 pb-5 border-b border-gray-100" />
+            ) : (
+              <p className="text-sm text-gray-400 mb-6 pb-5 border-b border-gray-100">{article.description}</p>
+            )}
 
             <div className="space-y-5 text-[15px] text-gray-700 leading-relaxed">
               {article.body.map((block, i) => (

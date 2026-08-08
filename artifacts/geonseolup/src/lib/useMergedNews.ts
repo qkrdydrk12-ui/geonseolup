@@ -5,6 +5,13 @@ export interface DisplayNewsArticle extends NewsArticle {
   imageSrc: string;
   sourceUrl?: string;
   sourceLabel?: string;
+  /**
+   * DB(site_news)에서 온 글이면 true. 이 경우 description은 body 맨 앞부분을 그대로
+   * 잘라 만든 것이라(별도 요약 필드가 없음) 상세 페이지에서 본문 첫 문단과 그대로
+   * 겹쳐 보이고, 120자 경계에서 단어 중간이 잘리는 문제가 있었다(2026-08-09 발견).
+   * 상세 페이지(NewsDetail.tsx)는 이 값이 true면 미리보기 문단을 생략한다.
+   */
+  isDbArticle?: boolean;
 }
 
 interface SiteNewsApiRow {
@@ -51,6 +58,7 @@ function toDisplay(r: SiteNewsApiRow): DisplayNewsArticle {
     imageSrc: r.imageUrl || getNewsImage(r.slug || String(r.id)),
     sourceUrl: r.sourceUrl || undefined,
     sourceLabel: r.sourceLabel || undefined,
+    isDbArticle: true,
   };
 }
 
