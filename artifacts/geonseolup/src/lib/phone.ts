@@ -6,7 +6,7 @@
 
 const PHONE_IN_TEXT_RE = /0\d{1,2}[-.\s()]*\d{3,4}[-.\s()]*\d{4}/g;
 
-export const CONTACT_HIDDEN_NOTE = '(연락처는 개인정보 보호를 위해 숨겨져 있습니다)';
+export const CONTACT_HIDDEN_NOTE = '(연락처는 건설UP에서 확인할 수 있습니다)';
 
 export function maskPhonesInText(text: string): string {
   return text.replace(PHONE_IN_TEXT_RE, CONTACT_HIDDEN_NOTE);

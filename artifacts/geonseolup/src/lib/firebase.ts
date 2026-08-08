@@ -207,7 +207,8 @@ export async function fbGetJobContact(
   id: string
 ): Promise<{ contact: string | null; reason?: 'limit' | 'gone' | 'error' }> {
   try {
-    const res = await fetch(`/api/jobs/${encodeURIComponent(id)}/contact`);
+    // POST 전용 — 검색로봇의 자동 GET 요청으로는 번호가 반환되지 않도록 한다.
+    const res = await fetch(`/api/jobs/${encodeURIComponent(id)}/contact`, { method: 'POST' });
     if (res.ok) {
       const d = (await res.json()) as { contact?: string };
       return { contact: d.contact ?? null };

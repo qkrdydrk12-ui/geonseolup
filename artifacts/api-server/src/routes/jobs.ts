@@ -44,12 +44,13 @@ router.get("/jobs/popular", async (req, res) => {
   }
 });
 
-// GET /api/jobs/:id/contact — "연락처 보기" 버튼 전용: 실제 전화번호 반환.
-// 공개 목록/상세/HTML에는 마스킹 번호만 나가므로, 원본은 이 엔드포인트로만 조회된다.
+// POST /api/jobs/:id/contact — "연락처 보기" 버튼 전용: 실제 전화번호 반환.
+// 공개 목록/상세/HTML에는 번호가 전혀 나가지 않으므로, 원본은 이 엔드포인트로만 조회된다.
+// POST 전용: 검색로봇은 링크(GET)만 따라가므로 자동 크롤링으로는 번호가 반환되지 않는다.
 // 스크래핑 방지를 위해 IP당 하루 조회 횟수를 제한한다 (인메모리 — 재시작 시 초기화).
 const CONTACT_REVEAL_DAILY_LIMIT = 30;
 const _contactReveals = new Map<string, { day: string; count: number }>();
-router.get("/jobs/:id/contact", async (req, res) => {
+router.post("/jobs/:id/contact", async (req, res) => {
   res.set("Cache-Control", "no-store");
   const ip = extractIp(req);
   const day = new Date().toDateString();
