@@ -37,4 +37,4 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-GOOGLE_INDEXING_CLIENT_EMAIL = "geonseolup-indexing@serious-house-495211-q4.iam.gserviceaccount.com"
+GOOGLE_INDEXING_CLIENT_EMAIL = "geonseolup-indexing@geonseolup-indexing.iam.gserviceaccount.com"
