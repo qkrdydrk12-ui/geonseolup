@@ -7,6 +7,17 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pgPool } from "./db";
 
+/**
+ * site_news.body는 "## 소제목" 마크다운 스타일 문자열로 저장된다(business1-threads.txt
+ * 4번 참고). 그냥 앞 200자를 자르면 메타 description/OG description/sitemap 요약에
+ * "## 배경"이 그대로 노출되는 문제가 있었음(2026-08-09 발견) — 헤딩 마커를 제거하고
+ * 실제 본문 텍스트만으로 요약을 만든다.
+ */
+function summarizeMarkdownBody(raw: string, maxLen = 200): string {
+  const plain = raw.replace(/^##\s+.*$/gm, " ").replace(/\s+/g, " ").trim();
+  return plain.slice(0, maxLen);
+}
+
 export interface ArticleMeta {
   slug: string;
   title: string;
@@ -117,7 +128,7 @@ export async function getSiteNewsMeta(): Promise<ArticleMeta[]> {
       slug: String(r.slug),
       title: String(r.title),
       // 목록/사이트맵/RSS용 요약 — 본문 첫 200자를 설명으로 사용(별도 description 필드가 없음).
-      description: String(r.body).slice(0, 200),
+      description: summarizeMarkdownBody(String(r.body)),
       date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,
       updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
       imageUrl: r.has_image ? `/api/site-news-image/${encodeURIComponent(String(r.slug))}` : undefined,
@@ -185,7 +196,7 @@ export async function getSiteNewsFull(slug: string): Promise<SiteNewsFull | null
     return {
       slug: String(r.slug),
       title: String(r.title),
-      description: bodyText.slice(0, 200),
+      description: summarizeMarkdownBody(bodyText),
       body: bodyText,
       sourceLabel: String(r.source_label ?? ""),
       date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,

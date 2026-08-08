@@ -24,13 +24,30 @@ function staticOnly(): DisplayNewsArticle[] {
   return NEWS_NEWEST_FIRST.map((a) => ({ ...a, imageSrc: getNewsImage(a.slug) }));
 }
 
+/**
+ * 관리자 API로 등록되는 site_news.body는 "## 소제목" 마크다운 스타일 문자열로 저장된다
+ * (business1-threads.txt 4번 참고). 예전엔 이걸 파싱 없이 통째로 한 덩어리 텍스트로만
+ * 넘겨서, 실제 화면엔 "## 배경" 글자가 h2 태그가 아니라 그냥 본문 텍스트로 그대로
+ * 보이는 문제가 있었음(2026-08-09 발견) — "##"를 문단 구분자로 잘라 NewsDetail.tsx가
+ * 이미 지원하는 {subtitle, text} 블록 배열로 변환해 진짜 <h2>로 렌더링되게 한다.
+ */
+function parseMarkdownBody(raw: string): { subtitle?: string; text: string }[] {
+  const parts = raw.split(/\n(?=## )/g).map((s) => s.trim()).filter(Boolean);
+  const blocks = parts.map((part) => {
+    const m = part.match(/^##\s+(.+?)\n+([\s\S]*)$/);
+    if (m) return { subtitle: m[1].trim(), text: m[2].trim() };
+    return { text: part };
+  });
+  return blocks.length > 0 ? blocks : [{ text: raw }];
+}
+
 function toDisplay(r: SiteNewsApiRow): DisplayNewsArticle {
   return {
     slug: r.slug || String(r.id),
     title: r.title,
-    description: r.body.slice(0, 120),
+    description: r.body.replace(/^##\s+.+$/m, '').replace(/\s+/g, ' ').trim().slice(0, 120),
     date: r.publishedAt.slice(0, 10),
-    body: [{ text: r.body }],
+    body: parseMarkdownBody(r.body),
     imageSrc: r.imageUrl || getNewsImage(r.slug || String(r.id)),
     sourceUrl: r.sourceUrl || undefined,
     sourceLabel: r.sourceLabel || undefined,
