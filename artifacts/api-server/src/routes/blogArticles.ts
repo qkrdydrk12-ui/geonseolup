@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
+import { notifyIndexNow } from "../lib/indexNow";
 
 const router: IRouter = Router();
 
@@ -136,7 +137,11 @@ router.post("/blog-articles", requireAdmin, jsonBig, async (req: Request, res: R
       [slug, title, description, emoji, JSON.stringify(bodyBlocks),
         image?.data ?? null, image?.mime ?? null, body.published !== false]
     );
-    res.json({ ok: true, row: toApi(result.rows[0]!) });
+    const saved = result.rows[0]!;
+    if (saved.published) {
+      notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
+    }
+    res.json({ ok: true, row: toApi(saved) });
   } catch (err: unknown) {
     const pgErr = err as { code?: string };
     if (pgErr?.code === "23505") {
@@ -189,7 +194,11 @@ router.put("/blog-articles/:id", requireAdmin, jsonBig, async (req: Request, res
       res.status(404).json({ error: "해당 글을 찾을 수 없습니다" });
       return;
     }
-    res.json({ ok: true, row: toApi(result.rows[0]!) });
+    const saved = result.rows[0]!;
+    if (saved.published) {
+      notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
+    }
+    res.json({ ok: true, row: toApi(saved) });
   } catch (err) {
     console.error("[BlogArticles] PUT error:", err);
     res.status(500).json({ error: "수정 실패" });

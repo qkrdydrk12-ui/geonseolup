@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
-import { NEWS_NEWEST_FIRST, getNewsArticle, getNewsImage } from '@/lib/newsData';
+import { useMergedNews } from '@/lib/useMergedNews';
 
 interface Props {
   slug: string;
 }
 
 export default function NewsDetail({ slug }: Props) {
-  const article = getNewsArticle(slug);
+  const { articles, loading } = useMergedNews();
+  const article = articles.find((a) => a.slug === slug);
 
   useEffect(() => {
     if (article) {
@@ -21,6 +22,14 @@ export default function NewsDetail({ slug }: Props) {
   }, [article]);
 
   if (!article) {
+    if (loading) {
+      return (
+        <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
+          <Header />
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">불러오는 중...</div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
         <Header />
@@ -35,9 +44,9 @@ export default function NewsDetail({ slug }: Props) {
     );
   }
 
-  const currentIdx = NEWS_NEWEST_FIRST.findIndex((a) => a.slug === slug);
-  const prevArticle = currentIdx > 0 ? NEWS_NEWEST_FIRST[currentIdx - 1] : null;
-  const nextArticle = currentIdx < NEWS_NEWEST_FIRST.length - 1 ? NEWS_NEWEST_FIRST[currentIdx + 1] : null;
+  const currentIdx = articles.findIndex((a) => a.slug === slug);
+  const prevArticle = currentIdx > 0 ? articles[currentIdx - 1] : null;
+  const nextArticle = currentIdx < articles.length - 1 ? articles[currentIdx + 1] : null;
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -57,7 +66,7 @@ export default function NewsDetail({ slug }: Props) {
         <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div style={{ background: '#0d0d0d' }}>
             <img
-              src={getNewsImage(article.slug)}
+              src={article.imageSrc}
               alt=""
               className="w-full max-w-[560px] mx-auto block"
             />

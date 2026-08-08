@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { maskPhonesInText } from "../lib/contactMask.js";
-import { getMergedInfoMeta, getNewsMeta } from "../lib/articleMeta";
+import { getMergedInfoMeta, getMergedNewsMeta } from "../lib/articleMeta";
 
 const router = Router();
 
@@ -160,7 +160,7 @@ async function buildFeed(
       try {
         const [infoArticles, newsArticles] = await Promise.all([
           getMergedInfoMeta().catch(() => []),
-          getNewsMeta().catch(() => []),
+          getMergedNewsMeta().catch(() => []),
         ]);
         const toItem = (base: "info" | "news") => (a: { slug: string; title: string; description: string; date?: string; updated?: string }) => {
           const link = `${siteUrl}/${base}/${encodeURIComponent(a.slug)}`;

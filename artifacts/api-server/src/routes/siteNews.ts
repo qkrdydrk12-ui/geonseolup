@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
+import { notifyIndexNow } from "../lib/indexNow";
 
 const router: IRouter = Router();
 
@@ -24,12 +25,51 @@ async function initTables() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_site_news_published ON site_news(published_at DESC);
+    -- 2026-08-08: 개별 상세 URL(/news/:slug) + SEO(NewsArticle) 연결을 위해 slug 추가.
+    ALTER TABLE site_news ADD COLUMN IF NOT EXISTS slug VARCHAR(150);
   `);
+  // 기존에 slug 없이 등록된 글(마이그레이션 이전 데이터)에 제목 기반 slug를 채워준다.
+  const { rows } = await pgPool.query<{ id: number; title: string }>(
+    `SELECT id, title FROM site_news WHERE slug IS NULL OR slug = ''`
+  );
+  for (const row of rows) {
+    const slug = await uniqueSlugFor(row.title, row.id);
+    await pgPool.query(`UPDATE site_news SET slug = $1 WHERE id = $2`, [slug, row.id]);
+  }
+  await pgPool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_site_news_slug ON site_news(slug) WHERE slug IS NOT NULL`
+  );
 }
 initTables().catch((e) => console.error("[DB] site_news initTables error:", e));
 
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 60) || "news";
+}
+
+async function uniqueSlugFor(title: string, excludeId?: number): Promise<string> {
+  const base = slugify(title);
+  let candidate = base;
+  let n = 2;
+  for (;;) {
+    const { rows } = await pgPool.query<{ id: number }>(
+      `SELECT id FROM site_news WHERE slug = $1`,
+      [candidate]
+    );
+    const taken = rows.some((r) => r.id !== excludeId);
+    if (!taken) return candidate;
+    candidate = `${base}-${n}`;
+    n++;
+  }
+}
+
 interface SiteNewsRow {
   id: number;
+  slug: string | null;
   title: string;
   body: string;
   image_mime: string | null;
@@ -44,6 +84,7 @@ interface SiteNewsRow {
 function toApi(row: SiteNewsRow) {
   return {
     id: row.id,
+    slug: row.slug,
     title: row.title,
     body: row.body,
     imageUrl: row.has_image ? `/api/site-news-image/${row.id}` : null,
@@ -70,7 +111,7 @@ router.get("/site-news", async (req: Request, res: Response) => {
   try {
     const limit = Math.min(Number(req.query["limit"]) || 30, 100);
     const result = await pgPool.query<SiteNewsRow>(
-      `SELECT id, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+      `SELECT id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
               source_label, source_url, published_at, created_at, updated_at
        FROM site_news
        WHERE published_at <= now()
@@ -89,7 +130,7 @@ router.get("/site-news", async (req: Request, res: Response) => {
 router.get("/site-news/all", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query<SiteNewsRow>(
-      `SELECT id, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+      `SELECT id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
               source_label, source_url, published_at, created_at, updated_at
        FROM site_news
        ORDER BY published_at DESC
@@ -99,6 +140,29 @@ router.get("/site-news/all", requireAdmin, async (_req: Request, res: Response) 
   } catch (err) {
     console.error("[SiteNews] GET all error:", err);
     res.status(500).json({ error: "현장 소식 조회 실패" });
+  }
+});
+
+// GET /api/site-news/by-slug/:slug — 공개, 상세 페이지(NewsDetail.tsx)·SEO 라우트에서 사용
+router.get("/site-news/by-slug/:slug", async (req: Request, res: Response) => {
+  try {
+    const slug = String(req.params["slug"]);
+    const result = await pgPool.query<SiteNewsRow>(
+      `SELECT id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+              source_label, source_url, published_at, created_at, updated_at
+       FROM site_news
+       WHERE slug = $1 AND published_at <= now()`,
+      [slug]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    res.json({ row: toApi(row) });
+  } catch (err) {
+    console.error("[SiteNews] GET by-slug error:", err);
+    res.status(500).json({ error: "조회 실패" });
   }
 });
 
@@ -127,7 +191,7 @@ router.get("/site-news-image/:id", async (req: Request, res: Response) => {
 router.post("/site-news", requireAdmin, jsonBig, async (req: Request, res: Response) => {
   try {
     const body = req.body as {
-      title?: string; body?: string; imageBase64?: string;
+      title?: string; body?: string; imageBase64?: string; slug?: string;
       sourceLabel?: string; sourceUrl?: string; publishedAt?: string;
     };
     const title = (body.title ?? "").trim();
@@ -138,11 +202,13 @@ router.post("/site-news", requireAdmin, jsonBig, async (req: Request, res: Respo
     }
     const image = decodeImage(body.imageBase64);
     const publishedAt = body.publishedAt ? new Date(body.publishedAt) : new Date();
+    const requestedSlug = (body.slug ?? "").trim();
+    const slug = await uniqueSlugFor(requestedSlug ? slugify(requestedSlug) : title);
 
     const result = await pgPool.query<SiteNewsRow>(
-      `INSERT INTO site_news (title, body, image_data, image_mime, source_label, source_url, published_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+      `INSERT INTO site_news (title, body, image_data, image_mime, source_label, source_url, published_at, slug)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
                  source_label, source_url, published_at, created_at, updated_at`,
       [
         title, content,
@@ -150,9 +216,14 @@ router.post("/site-news", requireAdmin, jsonBig, async (req: Request, res: Respo
         (body.sourceLabel ?? "").trim() || null,
         (body.sourceUrl ?? "").trim() || null,
         publishedAt.toISOString(),
+        slug,
       ]
     );
-    res.json({ ok: true, row: toApi(result.rows[0]!) });
+    const saved = result.rows[0]!;
+    if (new Date(saved.published_at).getTime() <= Date.now()) {
+      notifyIndexNow([`https://geonseolup.com/news/${saved.slug}`]).catch(() => {});
+    }
+    res.json({ ok: true, row: toApi(saved) });
   } catch (err) {
     console.error("[SiteNews] POST error:", err);
     res.status(500).json({ error: "등록 실패" });
@@ -188,7 +259,7 @@ router.put("/site-news/:id", requireAdmin, jsonBig, async (req: Request, res: Re
              source_label = $5, source_url = $6,
              published_at = COALESCE($7, published_at), updated_at = now()
          WHERE id = $8
-         RETURNING id, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+         RETURNING id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
                    source_label, source_url, published_at, created_at, updated_at`,
         [title, content, image.data, image.mime,
           (body.sourceLabel ?? "").trim() || null, (body.sourceUrl ?? "").trim() || null,
@@ -201,7 +272,7 @@ router.put("/site-news/:id", requireAdmin, jsonBig, async (req: Request, res: Re
              source_label = $3, source_url = $4,
              published_at = COALESCE($5, published_at), updated_at = now()
          WHERE id = $6
-         RETURNING id, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+         RETURNING id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
                    source_label, source_url, published_at, created_at, updated_at`,
         [title, content,
           (body.sourceLabel ?? "").trim() || null, (body.sourceUrl ?? "").trim() || null,
@@ -214,7 +285,7 @@ router.put("/site-news/:id", requireAdmin, jsonBig, async (req: Request, res: Re
              source_label = $3, source_url = $4,
              published_at = COALESCE($5, published_at), updated_at = now()
          WHERE id = $6
-         RETURNING id, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+         RETURNING id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
                    source_label, source_url, published_at, created_at, updated_at`,
         [title, content,
           (body.sourceLabel ?? "").trim() || null, (body.sourceUrl ?? "").trim() || null,
@@ -226,7 +297,11 @@ router.put("/site-news/:id", requireAdmin, jsonBig, async (req: Request, res: Re
       res.status(404).json({ error: "해당 항목을 찾을 수 없습니다" });
       return;
     }
-    res.json({ ok: true, row: toApi(result.rows[0]!) });
+    const saved = result.rows[0]!;
+    if (new Date(saved.published_at).getTime() <= Date.now()) {
+      notifyIndexNow([`https://geonseolup.com/news/${saved.slug}`]).catch(() => {});
+    }
+    res.json({ ok: true, row: toApi(saved) });
   } catch (err) {
     console.error("[SiteNews] PUT error:", err);
     res.status(500).json({ error: "수정 실패" });

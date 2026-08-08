@@ -6,6 +6,7 @@ import { NEWS_NEWEST_FIRST, getNewsImage } from '@/lib/newsData';
 // 관리자 패널에서 발행하는 짧은 소식 (DB 저장)
 interface SiteNews {
   id: number;
+  slug: string | null;
   title: string;
   body: string;
   imageUrl: string | null;
@@ -24,7 +25,6 @@ function formatDate(iso: string): string {
 export default function News() {
   const [rows, setRows] = useState<SiteNews[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState<number | null>(null);
 
   useEffect(() => {
     document.title = '건설업 현장 소식 — 건설UP';
@@ -87,15 +87,14 @@ export default function News() {
               </Link>
             ))}
 
-            {/* 짧은 소식 (관리자 패널에서 발행) — 같은 크기 카드, 누르면 전문 펼침 */}
-            {rows.map((r) => {
-              const open = openId === r.id;
-              return (
-                <article
-                  key={r.id}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer flex flex-col"
-                  onClick={() => setOpenId(open ? null : r.id)}
-                >
+            {/* 짧은 소식 (관리자 패널에서 발행) — 같은 크기 카드, 누르면 상세 페이지(/news/:slug)로 이동 */}
+            {rows.map((r) => (
+              <Link
+                key={r.id}
+                href={r.slug ? `/news/${r.slug}` : '/news'}
+                className="block no-underline"
+              >
+                <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col">
                   {r.imageUrl && (
                     <div className="relative aspect-[16/9] overflow-hidden" style={{ background: '#0d0d0d' }}>
                       <img src={r.imageUrl} alt={r.title} loading="lazy" className="w-full h-full object-contain" />
@@ -109,27 +108,16 @@ export default function News() {
                       )}
                     </div>
                     <h2 className="text-[15px] font-bold text-[#1e3a5f] leading-snug mb-2">{r.title}</h2>
-                    <p className={`text-xs text-gray-500 leading-relaxed whitespace-pre-line ${open ? '' : 'line-clamp-2'}`}>
+                    <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
                       {r.body}
                     </p>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#f97316]">{open ? '접기 ↑' : '내용 보기 ↓'}</span>
-                      {r.sourceUrl && (
-                        <a
-                          href={r.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-[#f97316] font-semibold no-underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          원문 보기 →
-                        </a>
-                      )}
+                    <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#f97316]">
+                      자세히 보기 →
                     </div>
                   </div>
                 </article>
-              );
-            })}
+              </Link>
+            ))}
           </div>
         )}
 

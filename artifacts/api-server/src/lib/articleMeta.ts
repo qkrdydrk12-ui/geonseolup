@@ -102,3 +102,97 @@ export async function getMergedInfoMeta(): Promise<ArticleMeta[]> {
   const dbSlugs = new Set(db.map((a) => a.slug));
   return [...db, ...statics.filter((a) => !dbSlugs.has(a.slug))];
 }
+
+let _siteNews: { list: ArticleMeta[]; at: number } | null = null;
+/** 관리자 패널("현장 소식" 코너)에서 등록한 DB 뉴스 글(공개된 것만). 실패 시 빈 배열. */
+export async function getSiteNewsMeta(): Promise<ArticleMeta[]> {
+  if (_siteNews && Date.now() - _siteNews.at < TTL_MS) return _siteNews.list;
+  try {
+    const { rows } = await pgPool.query(
+      `SELECT slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+              published_at, updated_at
+       FROM site_news WHERE slug IS NOT NULL AND published_at <= now() ORDER BY published_at DESC`
+    );
+    const list: ArticleMeta[] = rows.map((r: Record<string, unknown>) => ({
+      slug: String(r.slug),
+      title: String(r.title),
+      // 목록/사이트맵/RSS용 요약 — 본문 첫 200자를 설명으로 사용(별도 description 필드가 없음).
+      description: String(r.body).slice(0, 200),
+      date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,
+      updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+      imageUrl: r.has_image ? `/api/site-news-image/${encodeURIComponent(String(r.slug))}` : undefined,
+    }));
+    _siteNews = { list, at: Date.now() };
+    return list;
+  } catch {
+    return _siteNews?.list ?? [];
+  }
+}
+
+/** 정적 news 글 + DB 현장소식 글 합본 (DB 글이 같은 slug면 우선). */
+export async function getMergedNewsMeta(): Promise<ArticleMeta[]> {
+  const [statics, db] = await Promise.all([getNewsMeta(), getSiteNewsMeta()]);
+  const dbSlugs = new Set(db.map((a) => a.slug));
+  return [...db, ...statics.filter((a) => !dbSlugs.has(a.slug))];
+}
+
+export interface BlogArticleFull extends ArticleMeta {
+  body: { subtitle?: string; text: string }[];
+}
+
+/** /info/:slug SSR 폴백 본문(H1+문단)에 쓸 DB 블로그 글 전체 — slug가 DB에 없으면 null. */
+export async function getBlogArticleFull(slug: string): Promise<BlogArticleFull | null> {
+  try {
+    const { rows } = await pgPool.query(
+      `SELECT slug, title, description, body, (image_data IS NOT NULL) AS has_image,
+              created_at, updated_at
+       FROM blog_articles WHERE slug = $1 AND published = true`,
+      [slug]
+    );
+    const r = rows[0] as Record<string, unknown> | undefined;
+    if (!r) return null;
+    return {
+      slug: String(r.slug),
+      title: String(r.title),
+      description: String(r.description),
+      body: Array.isArray(r.body) ? (r.body as { subtitle?: string; text: string }[]) : [],
+      date: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
+      updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+      imageUrl: r.has_image ? `/api/blog-articles-image/${encodeURIComponent(String(r.slug))}` : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export interface SiteNewsFull extends ArticleMeta {
+  body: string;
+  sourceLabel: string;
+}
+
+/** /news/:slug SSR 폴백 본문에 쓸 DB 현장소식 글 전체 — slug가 DB에 없으면 null. */
+export async function getSiteNewsFull(slug: string): Promise<SiteNewsFull | null> {
+  try {
+    const { rows } = await pgPool.query(
+      `SELECT slug, title, body, source_label, (image_data IS NOT NULL) AS has_image,
+              published_at, updated_at
+       FROM site_news WHERE slug = $1 AND published_at <= now()`,
+      [slug]
+    );
+    const r = rows[0] as Record<string, unknown> | undefined;
+    if (!r) return null;
+    const bodyText = String(r.body);
+    return {
+      slug: String(r.slug),
+      title: String(r.title),
+      description: bodyText.slice(0, 200),
+      body: bodyText,
+      sourceLabel: String(r.source_label ?? ""),
+      date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,
+      updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+      imageUrl: r.has_image ? `/api/site-news-image/${encodeURIComponent(String(r.slug))}` : undefined,
+    };
+  } catch {
+    return null;
+  }
+}

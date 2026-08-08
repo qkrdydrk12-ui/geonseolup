@@ -9,6 +9,7 @@ import { notifyGoogleIndexing } from "./googleIndexing.js";
 import { notifyPushSubscribers } from "./webPush.js";
 import { notifyNewJobSubscribers } from "./emailSubscribers.js";
 import { pingSearchEngines } from "./searchEnginePing.js";
+import { notifyIndexNow } from "./indexNow.js";
 import { maybeCreateDraft } from "./threadsDrafts.js";
 import { isJobClosed, isJobExpired } from "./jobLifecycle.js";
 import { sanitizePublicJob } from "./contactMask.js";
@@ -94,6 +95,9 @@ async function refresh(): Promise<PublicJob[]> {
     const newlyAdded = pub.filter((j) => !previousIds.has(j.id) && !isJobClosed(j));
     if (newlyAdded.length > 0) {
       pingSearchEngines().catch(() => {});
+    }
+    if (newlyAdded.length > 0) {
+      notifyIndexNow(newlyAdded.map((j) => `https://geonseolup.com/detail/${j.id}`)).catch(() => {});
     }
     for (const j of newlyAdded) {
       notifyGoogleIndexing(`https://geonseolup.com/detail/${j.id}`, "URL_UPDATED").catch(() => {});

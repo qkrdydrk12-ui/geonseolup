@@ -3,6 +3,7 @@ import { getPublicJobs, getPublicJobById, filterActiveJobs } from "../lib/jobsCa
 import { getClosesAt, getPostedAt, isJobClosed, isJobExpired, ACTIVE_HOURS } from "../lib/jobLifecycle.js";
 import { logger } from "../lib/logger.js";
 import { getAllInfoOverrides } from "../lib/infoOverrides.js";
+import { INDEXNOW_KEY } from "../lib/indexNow.js";
 
 const router = Router();
 
@@ -168,6 +169,12 @@ function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string,
   return counts;
 }
 
+// ── GET /{key}.txt — IndexNow 소유 확인 키 파일 ──────────────────────────────
+router.get(`/${INDEXNOW_KEY}.txt`, (_req: Request, res: Response) => {
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.send(INDEXNOW_KEY);
+});
+
 // ── GET /sitemap.xml ─────────────────────────────────────────────────────────
 // 정적 sitemap.xml(홈 + /post 2개)을 대체. 공개된 모든 공고 상세페이지 +
 // 실제 공고가 있는 지역×직종 랜딩페이지를 포함한다.
@@ -182,7 +189,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
     // (새 글 등록·수정 시 별도 작업 없이 사이트맵에 자동 반영, DB 글은 updated_at이 lastmod)
     const [infoArticles, newsArticles] = await Promise.all([
       getMergedInfoMeta().catch(() => [] as ArticleMeta[]),
-      getNewsMeta().catch(() => [] as ArticleMeta[]),
+      getMergedNewsMeta().catch(() => [] as ArticleMeta[]),
     ]);
     const toLastmod = (a: ArticleMeta): string | undefined => {
       const v = a.updated || a.date;
@@ -542,6 +549,9 @@ import {
   getNewsMeta,
   getBlogArticleMeta,
   getMergedInfoMeta,
+  getMergedNewsMeta,
+  getBlogArticleFull,
+  getSiteNewsFull,
   type ArticleMeta,
 } from "../lib/articleMeta";
 
@@ -656,6 +666,30 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
           { name: meta.title, url: pageUrl },
         ]);
       html = html.replace("</head>", `${ldTags}</head>`);
+
+      // 관리자 패널("건설 꿀팁" 코너)에서 DB로 발행한 글이면 실제 제목·본문을
+      // 크롤러가 JS 실행 없이도 읽을 수 있게 <div id="root"> 폴백에 직접 넣는다.
+      // (기존 19개 정적 글은 body를 여기서 파싱하지 않으므로 메타/구조화 데이터까지만 적용됨.)
+      const full = await getBlogArticleFull(slug).catch(() => null);
+      if (full) {
+        const bodyHtml = full.body
+          .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(b.text)}</p>`)
+          .join("\n");
+        const fallbackBody = `
+    <div id="root">
+      <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(meta.title)}</h1>
+        <p style="margin:0 0 16px;color:#64748b;font-size:14px">${escapeHtmlAttr(meta.description)}</p>
+        ${bodyHtml}
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
+      </div>
+    </div>
+    <script type="module"`;
+        html = html.replace(/<div id="root">[\s\S]*?<script type="module"/, fallbackBody);
+      }
     }
     res.set("Content-Type", "text/html; charset=utf-8");
     res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
@@ -696,11 +730,14 @@ router.get("/news", async (_req: Request, res: Response) => {
 router.get("/news/:slug", async (req: Request, res: Response) => {
   const slug = String(req.params.slug);
   try {
-    const [template, metaList] = await Promise.all([getIndexTemplate(), getNewsMeta()]);
+    const [template, metaList] = await Promise.all([getIndexTemplate(), getMergedNewsMeta()]);
     const meta = metaList.find((a) => a.slug === slug);
     const pageUrl = `${SITE_URL}/news/${encodeURIComponent(slug)}`;
+    // DB 글은 업로드된 이미지, 정적 글은 slug와 동일한 파일명 규칙(프론트 getNewsImage와 동일).
     const imageUrl = meta
-      ? `${SITE_URL}/images/news/${encodeURIComponent(slug)}.webp`
+      ? meta.imageUrl
+        ? `${SITE_URL}${meta.imageUrl}`
+        : `${SITE_URL}/images/news/${encodeURIComponent(slug)}.webp`
       : `${SITE_URL}/og-image.png?v=2`;
     let html = replaceMetaTags(template, {
       title: meta ? `${meta.title} — 건설UP` : "건설업 현장 소식 — 건설UP",
@@ -709,9 +746,14 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
       image: imageUrl,
     });
     if (meta) {
+      const full = await getSiteNewsFull(slug).catch(() => null);
+      // 홍보성으로 재게시된 짧은 글(예: Threads/Instagram 원문 재게시)에는 NewsArticle을
+      // 잘못 적용하지 않는다 — 뉴스 보도가 아니라 일반 Article로 처리한다.
+      const isPromoRepost = !!full && /threads|instagram/i.test(full.sourceLabel) && full.body.length < 400;
+      const ldType = full && isPromoRepost ? "Article" : "NewsArticle";
       const ldTags =
         buildArticleLd({
-          type: "NewsArticle",
+          type: ldType,
           headline: meta.title,
           description: meta.description,
           url: pageUrl,
@@ -725,6 +767,30 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
           { name: meta.title, url: pageUrl },
         ]);
       html = html.replace("</head>", `${ldTags}</head>`);
+
+      // 관리자 패널("현장 소식" 코너)에서 DB로 발행한 글이면 실제 제목·본문을
+      // 초기 HTML에 넣어 크롤러가 JS 실행 없이도 읽을 수 있게 한다.
+      if (full) {
+        const paragraphs = full.body
+          .split(/\n{2,}/)
+          .map((p) => p.trim())
+          .filter(Boolean)
+          .map((p) => `<p style="margin:0 0 14px;color:#334155;white-space:pre-line">${escapeHtmlAttr(p)}</p>`)
+          .join("\n");
+        const fallbackBody = `
+    <div id="root">
+      <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(meta.title)}</h1>
+        ${paragraphs}
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
+      </div>
+    </div>
+    <script type="module"`;
+        html = html.replace(/<div id="root">[\s\S]*?<script type="module"/, fallbackBody);
+      }
     }
     res.set("Content-Type", "text/html; charset=utf-8");
     res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
