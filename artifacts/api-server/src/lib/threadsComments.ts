@@ -40,14 +40,53 @@ async function ensureTables(): Promise<void> {
 }
 ensureTables().catch((e) => logger.error({ err: String(e) }, "[threads-comments] 테이블 초기화 실패"));
 
+// URL 숏코드(예: threads.com/@계정/post/Db0MfFamO73 의 "Db0MfFamO73")와 실제
+// Graph API 미디어 ID(예: "18015052187922581")는 서로 다른 값이다. Claude in
+// Chrome으로 브라우저에서 직접 게시하는 현재 방식은 URL에서 숏코드만 뽑아낼 수
+// 있는데, 댓글 폴링(fetchReplies)은 반드시 실제 미디어 ID가 필요하다 — 숏코드를
+// 그대로 쓰면 Graph API가 "Object with ID ... does not exist"로 매번 조용히
+// 실패한다 (2026-08-09 실측 확인: 이 버그 때문에 브라우저로 게시한 글은 댓글
+// 자동 감지가 단 한 번도 작동한 적이 없었음 — 토큰/시크릿 문제가 아니었음).
+// 그래서 등록 시점에 숏코드면 최근 게시물 목록에서 매칭되는 실제 ID로 치환한다.
+async function resolveMediaId(threadsPostId: string, token: string): Promise<string> {
+  // 실제 미디어 ID는 항상 순수 숫자 문자열이다 — 이미 숫자면 그대로 쓴다
+  // (관리자 승인 발행 경로(threadsPublish.ts)는 원래부터 올바른 숫자 ID를 준다).
+  if (/^\d+$/.test(threadsPostId)) return threadsPostId;
+
+  const userId = process.env["THREADS_USER_ID"];
+  if (!userId) return threadsPostId; // 변환 불가 — 기존 동작 그대로 (원래 값 사용)
+
+  try {
+    const url = `${GRAPH_BASE}/${userId}/threads?fields=id,shortcode&limit=25&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url);
+    if (!res.ok) return threadsPostId;
+    const data = (await res.json()) as { data?: { id: string; shortcode?: string }[] };
+    const match = data.data?.find((p) => p.shortcode === threadsPostId);
+    if (match) {
+      logger.info(
+        { shortcode: threadsPostId, mediaId: match.id },
+        "[threads-comments] 숏코드 → 실제 미디어 ID 변환 성공"
+      );
+      return match.id;
+    }
+    logger.warn({ shortcode: threadsPostId }, "[threads-comments] 숏코드에 매칭되는 최근 게시물을 못 찾음 — 원래 값 사용");
+    return threadsPostId;
+  } catch (err) {
+    logger.warn({ err: String(err), threadsPostId }, "[threads-comments] 숏코드 변환 중 오류 — 원래 값 사용");
+    return threadsPostId;
+  }
+}
+
 // 실제로 Threads에 글을 발행한 직후 호출 — 이 글의 댓글을 앞으로 감시 대상에 넣는다.
 export async function recordPublishedPost(threadsPostId: string, sourceText?: string): Promise<void> {
   await ensureTables();
   try {
+    const tokenInfo = await getCurrentThreadsToken();
+    const resolvedId = tokenInfo ? await resolveMediaId(threadsPostId, tokenInfo.token) : threadsPostId;
     await pgPool.query(
       `INSERT INTO threads_posts (threads_post_id, source_text) VALUES ($1, $2)
        ON CONFLICT (threads_post_id) DO NOTHING`,
-      [threadsPostId, sourceText ?? null]
+      [resolvedId, sourceText ?? null]
     );
   } catch (err) {
     logger.warn({ err: String(err), threadsPostId }, "[threads-comments] 게시물 기록 실패");
