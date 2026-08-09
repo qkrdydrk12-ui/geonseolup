@@ -32,6 +32,12 @@ export interface ArticleMeta {
 
 const TTL_MS = 5 * 60_000;
 
+/** 관리자가 글을 올리거나 수정/삭제한 직후 캐시를 비워 새 글이 즉시 반영되게 한다. */
+export function invalidateArticleCaches() {
+  _blog = null;
+  _siteNews = null;
+}
+
 async function readFrontSource(rel: string): Promise<string> {
   const candidates = [
     path.resolve(process.cwd(), `artifacts/geonseolup/${rel}`),

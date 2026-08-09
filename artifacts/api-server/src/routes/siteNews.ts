@@ -3,8 +3,15 @@ import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
+import { invalidateArticleCaches } from "../lib/articleMeta";
 
 const router: IRouter = Router();
+
+// 글 등록/수정/삭제가 끝나면 SEO·사이트맵·OG 캐시를 즉시 비운다 (새 글 바로 반영).
+function bustCache(_req: Request, res: Response, next: () => void) {
+  res.on("finish", () => invalidateArticleCaches());
+  next();
+}
 
 // 큰 이미지(base64)를 담아 보내는 라우트라 기본 100kb 제한을 이 라우터에서만 올림
 const jsonBig = express.json({ limit: "8mb" });
@@ -188,7 +195,7 @@ router.get("/site-news-image/:id", async (req: Request, res: Response) => {
 });
 
 // POST /api/site-news — 관리자 전용, 등록
-router.post("/site-news", requireAdmin, jsonBig, async (req: Request, res: Response) => {
+router.post("/site-news", requireAdmin, bustCache, jsonBig, async (req: Request, res: Response) => {
   try {
     const body = req.body as {
       title?: string; body?: string; imageBase64?: string; slug?: string;
@@ -231,7 +238,7 @@ router.post("/site-news", requireAdmin, jsonBig, async (req: Request, res: Respo
 });
 
 // PUT /api/site-news/:id — 관리자 전용, 수정 (imageBase64 없으면 기존 이미지 유지)
-router.put("/site-news/:id", requireAdmin, jsonBig, async (req: Request, res: Response) => {
+router.put("/site-news/:id", requireAdmin, bustCache, jsonBig, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params["id"]);
     if (!id) {
@@ -309,7 +316,7 @@ router.put("/site-news/:id", requireAdmin, jsonBig, async (req: Request, res: Re
 });
 
 // DELETE /api/site-news/:id — 관리자 전용, 삭제
-router.delete("/site-news/:id", requireAdmin, async (req: Request, res: Response) => {
+router.delete("/site-news/:id", requireAdmin, bustCache, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params["id"]);
     if (!id) {
