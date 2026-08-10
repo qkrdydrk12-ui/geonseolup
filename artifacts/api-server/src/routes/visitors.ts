@@ -256,7 +256,6 @@ router.get("/stats/sources", requireAdmin, async (req: Request, res: Response) =
       `SELECT source, COUNT(*) AS count
        FROM visit_sources
        WHERE visit_date BETWEEN $1 AND $2
-         AND source <> 'direct'
        GROUP BY source
        ORDER BY count DESC`,
       [fromDate, date]
