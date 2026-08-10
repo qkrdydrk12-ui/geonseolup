@@ -3,8 +3,15 @@ import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
+import { invalidateArticleCaches } from "../lib/articleMeta";
 
 const router: IRouter = Router();
+
+// 글 등록/수정/삭제가 끝나면 SEO·사이트맵·OG 캐시를 즉시 비운다 (새 글 바로 반영).
+function bustCache(_req: Request, res: Response, next: () => void) {
+  res.on("finish", () => invalidateArticleCaches());
+  next();
+}
 
 const jsonBig = express.json({ limit: "8mb" });
 
@@ -112,7 +119,7 @@ router.get("/blog-articles-image/:slug", async (req: Request, res: Response) => 
 });
 
 // POST /api/blog-articles — 관리자 전용, 등록
-router.post("/blog-articles", requireAdmin, jsonBig, async (req: Request, res: Response) => {
+router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Request, res: Response) => {
   try {
     const body = req.body as {
       slug?: string; title?: string; description?: string; emoji?: string;
@@ -154,7 +161,7 @@ router.post("/blog-articles", requireAdmin, jsonBig, async (req: Request, res: R
 });
 
 // PUT /api/blog-articles/:id — 관리자 전용, 수정
-router.put("/blog-articles/:id", requireAdmin, jsonBig, async (req: Request, res: Response) => {
+router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params["id"]);
     if (!id) {
@@ -206,7 +213,7 @@ router.put("/blog-articles/:id", requireAdmin, jsonBig, async (req: Request, res
 });
 
 // DELETE /api/blog-articles/:id — 관리자 전용, 삭제
-router.delete("/blog-articles/:id", requireAdmin, async (req: Request, res: Response) => {
+router.delete("/blog-articles/:id", requireAdmin, bustCache, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params["id"]);
     if (!id) {

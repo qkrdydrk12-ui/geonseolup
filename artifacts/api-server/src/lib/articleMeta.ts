@@ -32,6 +32,12 @@ export interface ArticleMeta {
 
 const TTL_MS = 5 * 60_000;
 
+/** 관리자가 글을 올리거나 수정/삭제한 직후 캐시를 비워 새 글이 즉시 반영되게 한다. */
+export function invalidateArticleCaches() {
+  _blog = null;
+  _siteNews = null;
+}
+
 async function readFrontSource(rel: string): Promise<string> {
   const candidates = [
     path.resolve(process.cwd(), `artifacts/geonseolup/${rel}`),
@@ -120,7 +126,7 @@ export async function getSiteNewsMeta(): Promise<ArticleMeta[]> {
   if (_siteNews && Date.now() - _siteNews.at < TTL_MS) return _siteNews.list;
   try {
     const { rows } = await pgPool.query(
-      `SELECT slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
+      `SELECT id, slug, title, body, image_mime, (image_data IS NOT NULL) AS has_image,
               published_at, updated_at
        FROM site_news WHERE slug IS NOT NULL AND published_at <= now() ORDER BY published_at DESC`
     );
@@ -131,7 +137,7 @@ export async function getSiteNewsMeta(): Promise<ArticleMeta[]> {
       description: summarizeMarkdownBody(String(r.body)),
       date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,
       updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
-      imageUrl: r.has_image ? `/api/site-news-image/${encodeURIComponent(String(r.slug))}` : undefined,
+      imageUrl: r.has_image ? `/api/site-news-image/${Number(r.id)}` : undefined,
     }));
     _siteNews = { list, at: Date.now() };
     return list;
@@ -185,7 +191,7 @@ export interface SiteNewsFull extends ArticleMeta {
 export async function getSiteNewsFull(slug: string): Promise<SiteNewsFull | null> {
   try {
     const { rows } = await pgPool.query(
-      `SELECT slug, title, body, source_label, (image_data IS NOT NULL) AS has_image,
+      `SELECT id, slug, title, body, source_label, (image_data IS NOT NULL) AS has_image,
               published_at, updated_at
        FROM site_news WHERE slug = $1 AND published_at <= now()`,
       [slug]
@@ -201,7 +207,7 @@ export async function getSiteNewsFull(slug: string): Promise<SiteNewsFull | null
       sourceLabel: String(r.source_label ?? ""),
       date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,
       updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
-      imageUrl: r.has_image ? `/api/site-news-image/${encodeURIComponent(String(r.slug))}` : undefined,
+      imageUrl: r.has_image ? `/api/site-news-image/${Number(r.id)}` : undefined,
     };
   } catch {
     return null;
