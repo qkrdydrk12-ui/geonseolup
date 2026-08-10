@@ -98,7 +98,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
 
   return (
     <article
-      className={`bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col cursor-pointer transition-all hover:-translate-y-[3px] hover:shadow-md ${
+      className={`relative bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col cursor-pointer transition-all hover:-translate-y-[3px] hover:shadow-md ${
         viewed ? 'bg-[#f8f9fb] border-[#dde1e8] opacity-80 hover:opacity-100' : 'border-gray-200'
       } ${isDupOld ? 'opacity-70 border-dashed bg-gray-50' : ''} ${
         isAdmin && !hasPhone ? 'ring-2 ring-red-300 ring-offset-1' : ''
@@ -117,6 +117,19 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
         <div className="bg-red-500 text-white text-[10px] font-bold py-1 text-center tracking-wide">
           ⚠️ 번호없음 — 관리자 전용 경고
         </div>
+      )}
+
+      {/* 신고 버튼 — 카드 오른쪽 위 구석에 작게 (하단 버튼 줄 혼잡 해소) */}
+      {reportsEnabled && (
+        <button
+          type="button"
+          className="absolute top-1.5 right-1.5 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 border border-gray-200 text-[13px] cursor-pointer opacity-60 hover:opacity-100 hover:border-red-400 transition-all shrink-0"
+          onClick={(e) => { e.stopPropagation(); setReportOpen(true); setReportDone(false); setReportReason(''); setReportNote(''); }}
+          title="이 공고 신고"
+          aria-label="이 공고 신고"
+        >
+          🚨
+        </button>
       )}
 
       <div className="p-[13px] flex gap-[10px] flex-1">
@@ -307,15 +320,6 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
         >
           {detailOpen ? '📋 닫기' : '📋 원문'}
         </button>
-        {reportsEnabled && (
-          <button
-            className="bg-white border-[1.5px] border-gray-200 text-gray-400 py-[7px] px-[9px] rounded-lg text-[11px] font-semibold cursor-pointer hover:border-red-400 hover:text-red-500 transition-all whitespace-nowrap shrink-0"
-            onClick={() => { setReportOpen(true); setReportDone(false); setReportReason(''); setReportNote(''); }}
-            title="이 공고 신고"
-          >
-            🚩 신고
-          </button>
-        )}
         <button
           className="bg-[#1e3a5f] text-white border-none py-[7px] px-[9px] rounded-lg text-[11px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors whitespace-nowrap shrink-0"
           onClick={() => {
