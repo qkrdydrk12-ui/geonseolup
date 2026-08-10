@@ -192,9 +192,18 @@ export async function pollForNewComments(): Promise<void> {
      ORDER BY published_at DESC LIMIT 50`
   );
 
+  // 우리 계정 자신이 단 댓글(예: 유입 유도용 링크 댓글)은 답글 대상에서 반드시 제외한다.
+  // 2026-08-10 실측 발견: 이 필터가 없어서 봇이 자동화가 스스로 단
+  // "geonseolup.com/?utm_source=threads" 링크 댓글을 새 댓글로 착각해 자기 자신에게
+  // 답글을 달아버리는 사고가 실제로 발생했음(사용자가 직접 발견, 수동 삭제함).
+  const ownUsername = (process.env["THREADS_USERNAME"] || "geonseolup").toLowerCase();
+
   for (const post of posts.rows) {
     const replies = await fetchReplies(post.threads_post_id, tokenInfo.token);
     for (const reply of replies) {
+      if (reply.username && reply.username.toLowerCase() === ownUsername) {
+        continue; // 자기 자신의 댓글 — 답글 대상 아님
+      }
       // 이미 큐에 있거나 처리된 댓글은 건너뜀 (comment_id UNIQUE 제약으로도 이중 방지됨).
       try {
         const suggested = await generateSuggestedReply(reply.text ?? "", post.source_text ?? undefined);
