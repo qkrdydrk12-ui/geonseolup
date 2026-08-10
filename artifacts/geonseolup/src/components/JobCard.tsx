@@ -29,7 +29,6 @@ interface Props {
 
 export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Props) {
   const [, setLocation] = useLocation();
-  const [detailOpen, setDetailOpen] = useState(false);
   // 실제 번호는 "보기" 버튼을 눌렀을 때만 서버에서 가져온다 (공개 응답에는 마스킹본만 있음)
   const [revealedNum, setRevealedNum] = useState<string | null>(null);
   const [revealing, setRevealing] = useState(false);
@@ -256,14 +255,6 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
         </span>
       </div>
 
-      {detailOpen && (
-        <div className="px-4 py-3 bg-[#f8fafc] border-t border-dashed border-gray-200" onClick={(e) => e.stopPropagation()}>
-          <pre className="text-xs text-gray-500 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto bg-white border border-gray-200 rounded-lg p-2.5">
-            {job.originalText ? maskPhonesInText(job.originalText) : '원문 없음'}
-          </pre>
-        </div>
-      )}
-
       {/* 삭제 확인 UI */}
       {confirmDelete && (
         <div
@@ -314,12 +305,6 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
             </>
           )}
         </div>
-        <button
-          className="bg-white border-[1.5px] border-gray-200 text-gray-400 py-[7px] px-[9px] rounded-lg text-[11px] font-semibold cursor-pointer hover:border-[#1e3a5f] hover:text-[#1e3a5f] transition-all whitespace-nowrap shrink-0"
-          onClick={() => setDetailOpen(!detailOpen)}
-        >
-          {detailOpen ? '📋 닫기' : '📋 원문'}
-        </button>
         <button
           className="bg-[#1e3a5f] text-white border-none py-[7px] px-[9px] rounded-lg text-[11px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors whitespace-nowrap shrink-0"
           onClick={() => {
