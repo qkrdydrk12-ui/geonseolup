@@ -138,6 +138,11 @@ const SOURCE_STYLE: Record<string, { label: string; color: string; icon: string 
 export default function Admin() {
   const [authed, setAuthed] = useState(false);
   const [authChecking, setAuthChecking] = useState(true); // 토큰 검증 중
+  // 이 브라우저는 사이트 주인 것 — 관리자 페이지를 연 순간 영구 표시해서
+  // 이후 방문은 (로그인 여부와 무관하게) 방문자 통계에 잡히지 않게 한다.
+  useEffect(() => {
+    try { localStorage.setItem('geonseolup_owner', '1'); } catch { /* 무시 */ }
+  }, []);
   const [adminId, setAdminId] = useState(() => localStorage.getItem('cj_saved_id') || '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('cj_saved_id'));

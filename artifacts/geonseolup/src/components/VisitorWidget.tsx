@@ -52,8 +52,12 @@ export default function VisitorWidget() {
   }, []);
 
   // 방문 기록 (인증 불필요). 유입 경로(referrer/utm_source)도 함께 보낸다.
-  // 관리자(내) 브라우저는 집계에서 제외 — 로그인 토큰이 있으면 기록 자체를 보내지 않는다.
+  // 관리자(내) 브라우저는 집계에서 제외 — 로그인 토큰이 있거나, 이 브라우저에서
+  // 관리자 페이지를 한 번이라도 연 적이 있으면(owner 표시) 기록 자체를 보내지 않는다.
   useEffect(() => {
+    try {
+      if (localStorage.getItem('geonseolup_owner') === '1') return;
+    } catch { /* localStorage 사용 불가 시 무시 */ }
     if (getToken()) return;
     const utmSource = new URLSearchParams(window.location.search).get('utm_source') ?? undefined;
     fetch('/api/visit', {
