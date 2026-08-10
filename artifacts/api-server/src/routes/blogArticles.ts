@@ -3,6 +3,7 @@ import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
+import { notifyGoogleIndexing } from "../lib/googleIndexing";
 import { invalidateArticleCaches } from "../lib/articleMeta";
 
 const router: IRouter = Router();
@@ -147,6 +148,7 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
     const saved = result.rows[0]!;
     if (saved.published) {
       notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
+      notifyGoogleIndexing(`https://geonseolup.com/info/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
     res.json({ ok: true, row: toApi(saved) });
   } catch (err: unknown) {
@@ -204,6 +206,7 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
     const saved = result.rows[0]!;
     if (saved.published) {
       notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
+      notifyGoogleIndexing(`https://geonseolup.com/info/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
     res.json({ ok: true, row: toApi(saved) });
   } catch (err) {

@@ -3,6 +3,7 @@ import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
+import { notifyGoogleIndexing } from "../lib/googleIndexing";
 import { invalidateArticleCaches } from "../lib/articleMeta";
 
 const router: IRouter = Router();
@@ -229,6 +230,7 @@ router.post("/site-news", requireAdmin, bustCache, jsonBig, async (req: Request,
     const saved = result.rows[0]!;
     if (new Date(saved.published_at).getTime() <= Date.now()) {
       notifyIndexNow([`https://geonseolup.com/news/${saved.slug}`]).catch(() => {});
+      notifyGoogleIndexing(`https://geonseolup.com/news/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
     res.json({ ok: true, row: toApi(saved) });
   } catch (err) {
@@ -307,6 +309,7 @@ router.put("/site-news/:id", requireAdmin, bustCache, jsonBig, async (req: Reque
     const saved = result.rows[0]!;
     if (new Date(saved.published_at).getTime() <= Date.now()) {
       notifyIndexNow([`https://geonseolup.com/news/${saved.slug}`]).catch(() => {});
+      notifyGoogleIndexing(`https://geonseolup.com/news/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
     res.json({ ok: true, row: toApi(saved) });
   } catch (err) {
