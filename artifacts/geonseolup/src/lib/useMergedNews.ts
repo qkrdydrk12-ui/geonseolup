@@ -53,7 +53,11 @@ function toDisplay(r: SiteNewsApiRow): DisplayNewsArticle {
     slug: r.slug || String(r.id),
     title: r.title,
     description: r.body.replace(/^##\s+.+$/m, '').replace(/\s+/g, ' ').trim().slice(0, 120),
-    date: r.publishedAt.slice(0, 10),
+    // UTC로 저장된 publishedAt을 그냥 slice하면 한국시간 기준 날짜와 하루 어긋날 수 있다
+    // (예: 8/11 05:30 KST 발행 글이 UTC로는 8/10 20:30이라 "8/10"으로 잘못 표시됨,
+    // 2026-08-11 발견). sv-SE 로케일은 YYYY-MM-DD 형식을 그대로 주면서 타임존 변환도
+    // 정확히 해줘서, AdminSiteNews.tsx가 쓰는 'Asia/Seoul' 변환과 결과가 일치한다.
+    date: new Date(r.publishedAt).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' }),
     body: parseMarkdownBody(r.body),
     imageSrc: r.imageUrl || getNewsImage(r.slug || String(r.id)),
     sourceUrl: r.sourceUrl || undefined,
