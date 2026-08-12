@@ -38,12 +38,31 @@ function staticOnly(): DisplayNewsArticle[] {
  * 보이는 문제가 있었음(2026-08-09 발견) — "##"를 문단 구분자로 잘라 NewsDetail.tsx가
  * 이미 지원하는 {subtitle, text} 블록 배열로 변환해 진짜 <h2>로 렌더링되게 한다.
  */
-function parseMarkdownBody(raw: string): { subtitle?: string; text: string }[] {
+/**
+ * 문단 텍스트 안에 마크다운 이미지 문법 `![](URL 또는 data:...)`이 있으면 뽑아내서
+ * NewsDetail.tsx가 이미 지원하는 block.image로 분리한다(2026-08-12 추가 — 통계 등
+ * 수치가 많은 문단을 이미지(차트)로 보여줄 수 있게 하기 위함, body_articles의
+ * image?: string 블록 필드와 동일한 개념). 문단 어디에 있든 첫 번째 이미지 문법만
+ * 뽑고, 나머지 텍스트에서는 그 구문을 제거한다.
+ */
+function extractImage(text: string): { image?: string; text: string } {
+  const m = text.match(/!\[[^\]]*\]\(([^)]+)\)/);
+  if (!m || m.index === undefined) return { text };
+  const image = m[1];
+  const rest = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
+  return { image, text: rest };
+}
+
+function parseMarkdownBody(raw: string): { subtitle?: string; image?: string; text: string }[] {
   const parts = raw.split(/\n(?=## )/g).map((s) => s.trim()).filter(Boolean);
   const blocks = parts.map((part) => {
     const m = part.match(/^##\s+(.+?)\n+([\s\S]*)$/);
-    if (m) return { subtitle: m[1].trim(), text: m[2].trim() };
-    return { text: part };
+    if (m) {
+      const { image, text } = extractImage(m[2].trim());
+      return { subtitle: m[1].trim(), image, text };
+    }
+    const { image, text } = extractImage(part);
+    return { image, text };
   });
   return blocks.length > 0 ? blocks : [{ text: raw }];
 }
