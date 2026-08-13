@@ -125,13 +125,36 @@ function stripEmoji(s: string | undefined): string {
     .trim();
 }
 
+// 스하리/반하리류 "인사성 방문 댓글" 감지 — 시스템 프롬프트에도 이 경우 원글 주제로
+// 되돌리거나 질문하지 말라고 지시해뒀지만, 모델이 그 지시를 어기고 원글 얘기를 다시
+// 꺼내며 질문을 붙이는 사고가 실제로 발생했다(2026-08-14 실측: "반하리 3종 왔어요"에
+// "요즘 건설 현장 분위기가 어떠신가요?"로 답해버려 사용자가 직접 발견·지적함).
+// 그래서 stripEmoji와 같은 방식으로, 프롬프트만 믿지 않고 후처리 안전망을 하나 더 둔다.
+const GREETING_COMMENT_PATTERN = /스하리|반하리|맞팔|리포|스친|화력/;
+const GREETING_REPLY_FALLBACKS = [
+  "반가워요, 저도 놀러갈게요",
+  "와주셔서 감사해요, 저도 곧 놀러갈게요",
+  "반가워요, 맞팔 감사합니다",
+  "고마워요, 저도 인사드리러 갈게요",
+];
+
+// 인사성 방문 댓글인데 생성된 답글이 질문을 붙이거나(원글로 되묻기) 지나치게 길면
+// (원글 주제로 샌다는 신호) 무난한 답례 인사로 강제 교체한다.
+function enforceGreetingReply(commentText: string, reply: string): string {
+  if (!GREETING_COMMENT_PATTERN.test(commentText)) return reply;
+  if (reply.includes("?") || reply.length > 40) {
+    return GREETING_REPLY_FALLBACKS[Math.floor(Math.random() * GREETING_REPLY_FALLBACKS.length)]!;
+  }
+  return reply;
+}
+
 // CLAUDE_GUIDE.md.txt 톤(담백하고 세련되게, 광고 같지 않게)을 반영한 답글 생성.
 // OPENAI_API_KEY가 설정돼 있으면 문맥에 맞는 답글을 생성하고, 없으면 무난한
 // 기본 답글로 대체한다 (부가 기능이라 실패해도 전체 흐름은 막지 않는다).
 async function generateSuggestedReply(commentText: string, postText?: string): Promise<string> {
   const apiKey = process.env["OPENAI_API_KEY"];
   const fallback = "댓글 감사합니다! 자세한 조건은 게시글 댓글에 달린 링크에서 확인하실 수 있어요.";
-  if (!apiKey || !commentText.trim()) return fallback;
+  if (!apiKey || !commentText.trim()) return enforceGreetingReply(commentText, fallback);
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -150,7 +173,12 @@ async function generateSuggestedReply(commentText: string, postText?: string): P
               "종류를 막론하고 이모지 전면 금지. 텍스트만으로 자연스럽게 쓴다.\n" +
               "금지: '모집합니다·지원하세요·지금 확인하세요·아래 링크' 같은 광고 문구, " +
               "딱딱한 안내문 말투, '~해주셔서 감사합니다' 식 상투적 인사로 시작하는 것.\n" +
-              "댓글 내용에 실제로 반응하듯 자연스럽게 받아친다(예: 질문이면 답하고, 공감이면 맞장구치고). " +
+              "⚠️ 댓글이 '스하리', '반하리', '맞팔', '리포', '스친', '화력' 같은 단어가 들어간 " +
+              "인사성 방문 댓글(예: '반하리 3종 왔어요', '스하리 하고 갑니다')이면, 그건 원글 내용에 " +
+              "대한 질문이나 감상이 아니라 그냥 서로 좋아요/리포스트/댓글을 주고받는 문화적 인사다. " +
+              "이 경우 원글 주제(건설 현장 얘기 등)로 되돌리거나 원글에 대한 감상을 되묻지 말고, " +
+              "'반가워요, 저도 놀러갈게요' 같은 짧고 담백한 답례 인사만 한다(1문장, 질문 금지).\n" +
+              "그 외의 경우엔 댓글 내용에 실제로 반응하듯 자연스럽게 받아친다(예: 질문이면 답하고, 공감이면 맞장구치고). " +
               "절대 전화번호를 직접 알려주지 않고, 구체적인 조건이 궁금하다고 하면 " +
               "'게시글에 달린 링크(또는 건설UP)에서 확인해보세요' 정도로 자연스럽게 안내한다. " +
               "1~2문장, 길어도 3문장 이내로 짧게.",
@@ -165,14 +193,14 @@ async function generateSuggestedReply(commentText: string, postText?: string): P
     });
     if (!res.ok) {
       logger.warn({ status: res.status }, "[threads-comments] 답글 생성 API 실패 — 기본 답글로 대체");
-      return fallback;
+      return enforceGreetingReply(commentText, fallback);
     }
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const reply = data.choices?.[0]?.message?.content?.trim();
-    return stripEmoji(reply) || fallback;
+    return enforceGreetingReply(commentText, stripEmoji(reply) || fallback);
   } catch (err) {
     logger.warn({ err: String(err) }, "[threads-comments] 답글 생성 중 오류 — 기본 답글로 대체");
-    return fallback;
+    return enforceGreetingReply(commentText, fallback);
   }
 }
 
