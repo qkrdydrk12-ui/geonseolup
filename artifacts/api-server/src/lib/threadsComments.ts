@@ -14,6 +14,11 @@ const GRAPH_BASE = "https://graph.threads.net/v1.0";
 // (오래된 글까지 매번 다 훑으면 API 호출이 계속 늘어나기만 함).
 const POLL_WINDOW_DAYS = 14;
 
+// 2026-08-14: 인사성 댓글("반하리 3종 왔어요") 오답글 사고 이후 임시 조치 — 초안 생성은
+// 계속하되 실제 발행은 사용자가 확인 후 다시 켤 때까지 보류한다. true로 되돌리면
+// 원래대로(감지 즉시 자동발행) 동작한다. 아래 for 루프에서 이 값을 참조한다.
+const AUTO_PUBLISH_REPLIES = false;
+
 let _initialized = false;
 async function ensureTables(): Promise<void> {
   if (_initialized) return;
@@ -244,6 +249,18 @@ export async function pollForNewComments(): Promise<void> {
         );
         const newId = inserted.rows[0]?.id as number | undefined;
         if (newId == null) continue; // 이미 처리된 댓글
+
+        if (!AUTO_PUBLISH_REPLIES) {
+          // 2026-08-14: 인사성 댓글 오답글 사고(enforceGreetingReply 참고) 수정 직후,
+          // 배포 반영 여부와 실제 동작을 사용자가 눈으로 확인할 때까지 자동발행만 잠시
+          // 보류. 초안은 그대로 생성돼 'pending' 상태로 남고 /admin 큐에서 검토·수동
+          // 발행할 수 있다. 확인되면 이 상수를 다시 true로 되돌리면 된다.
+          logger.info(
+            { commentId: reply.id, username: reply.username },
+            "[threads-comments] 새 댓글 감지 — 자동발행 보류 중, 초안만 생성해 관리자 큐에 남김"
+          );
+          continue;
+        }
 
         logger.info({ commentId: reply.id, username: reply.username }, "[threads-comments] 새 댓글 감지 — 답글 자동 발행 시도");
         const publishResult = await publishReply(suggested, reply.id);
