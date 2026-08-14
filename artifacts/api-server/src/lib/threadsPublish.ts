@@ -13,6 +13,7 @@
 
 import { getCurrentThreadsToken } from "./threadsToken.js";
 import { logger } from "./logger.js";
+import { withThreadsUtm } from "./utm.js";
 
 const GRAPH_BASE = "https://graph.threads.net/v1.0";
 
@@ -83,7 +84,10 @@ export async function publishToThreads(text: string, linkUrl?: string, imageUrl?
   }
 
   if (linkUrl) {
-    const replyResult = await createAndPublishContainer(userId, tokenInfo.token, linkUrl, {
+    // 모든 Threads 발행 경로(공고 홍보 초안, 관리자 수동 발행)가 이 함수를 거치므로
+    // 여기 한 곳에서만 utm_source=threads를 붙이면 빠짐없이 적용된다.
+    const trackedLinkUrl = withThreadsUtm(linkUrl);
+    const replyResult = await createAndPublishContainer(userId, tokenInfo.token, trackedLinkUrl, {
       replyToId: mainResult.id,
     });
     if (!replyResult.ok) {
