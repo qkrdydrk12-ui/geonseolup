@@ -4,6 +4,7 @@ import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbAddReport, fbGetJobContact } from '@/lib/firebase';
 import { maskPhonesInText } from '@/lib/phone';
+import { isMyPost } from '@/lib/myPosts';
 import {
   formatDate,
   getJobIcon,
@@ -305,6 +306,16 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
             </>
           )}
         </div>
+        {/* 이 브라우저에서 올린 글이면 글쓴이에게만 수정 버튼 노출 */}
+        {isMyPost(job.id) && (
+          <button
+            className="bg-white border-[1.5px] border-[#f97316] text-[#f97316] py-[7px] px-[9px] rounded-lg text-[11px] font-bold cursor-pointer hover:bg-orange-50 transition-colors whitespace-nowrap shrink-0"
+            onClick={() => setLocation(`/post?edit=${job.id}`)}
+            title="내가 올린 공고 수정"
+          >
+            ✏️ 수정
+          </button>
+        )}
         <button
           className="bg-[#1e3a5f] text-white border-none py-[7px] px-[9px] rounded-lg text-[11px] font-bold cursor-pointer hover:bg-[#2d5282] transition-colors whitespace-nowrap shrink-0"
           onClick={() => {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { fbAddPending, fbAddJob, fbInvalidatePublicCache } from '@/lib/firebase';
+import { fbAddPending, fbAddJob, fbSetJob, fbInvalidatePublicCache } from '@/lib/firebase';
+import { getMyPost, saveMyPost } from '@/lib/myPosts';
 import { WELD_SUBS, parseSalaryNum } from '@/lib/utils';
 import { REGIONS, JOBS, parseJobText, generateSEOTitle } from '@/lib/parseJob';
 
@@ -24,19 +25,27 @@ function validatePhone(value: string): { valid: boolean; message: string } {
 
 export default function Post() {
   const [, setLocation] = useLocation();
-  const [form, setForm] = useState({
-    title: '',
-    region: '',
-    job: '',
-    weldSub: '',
-    weldTest: '',
-    salary: '',
-    meal: '',
-    lodging: '',
-    contact: '',
-    manager: '',
-    detail: '',
-    originalText: '',
+  // 수정 모드: /post?edit=<글ID> 로 진입 + 이 브라우저에서 올린 글일 때만 허용
+  const [editId] = useState<string | null>(() => {
+    const id = new URLSearchParams(window.location.search).get('edit');
+    return id && getMyPost(id) ? id : null;
+  });
+  const [form, setForm] = useState(() => {
+    const saved = editId ? getMyPost(editId) : null;
+    return saved?.form ?? {
+      title: '',
+      region: '',
+      job: '',
+      weldSub: '',
+      weldTest: '',
+      salary: '',
+      meal: '',
+      lodging: '',
+      contact: '',
+      manager: '',
+      detail: '',
+      originalText: '',
+    };
   });
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -148,6 +157,20 @@ export default function Post() {
 
     setSubmitting(true);
     try {
+      // 수정 모드: 기존 글을 덮어쓰기만 하고 끝 (쿨타임 미적용)
+      if (editId) {
+        await fbSetJob(editId, {
+          ...form,
+          salaryNum: parseSalaryNum(form.salary),
+        });
+        await fbInvalidatePublicCache(); // 수정 즉시 반영
+        saveMyPost(editId, form);
+        setAutoPublished(true);
+        setDone(true);
+        setSubmitting(false);
+        return;
+      }
+
       // 서버 쿨타임 확인 + 기록 (브라우저 우회 방지)
       const cooldownResult = await checkCooldownServer(form.contact);
       if (!cooldownResult.allowed) {
@@ -168,12 +191,13 @@ export default function Post() {
         });
         setAutoPublished(false);
       } else {
-        await fbAddJob({
+        const newId = await fbAddJob({
           ...form,
           salaryNum: parseSalaryNum(form.salary),
           date: new Date().toISOString(),
           hidden: false,
         });
+        saveMyPost(newId, form); // 이 브라우저에서 올린 글 기억 → 목록에서 "수정" 버튼 노출
         await fbInvalidatePublicCache(); // 새 글 즉시 노출
         setAutoPublished(true);
       }
@@ -192,7 +216,7 @@ export default function Post() {
         <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center border border-gray-200">
           <div className="text-6xl mb-4">{autoPublished ? '🎉' : '✅'}</div>
           <h2 className="text-xl font-extrabold text-[#1e3a5f] mb-2">
-            {autoPublished ? '공고가 등록됐습니다!' : '구인 신청이 완료됐습니다!'}
+            {editId ? '공고가 수정됐습니다!' : autoPublished ? '공고가 등록됐습니다!' : '구인 신청이 완료됐습니다!'}
           </h2>
           <p className="text-sm text-gray-500 mb-6 leading-relaxed">
             {autoPublished
