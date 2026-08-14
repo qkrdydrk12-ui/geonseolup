@@ -607,7 +607,7 @@ router.get("/info", async (_req: Request, res: Response) => {
   try {
     const template = await getIndexTemplate();
     const html = replaceMetaTags(template, {
-      title: "정보/꿀팁 — 건설UP",
+      title: "정보/꿀팁 | 건설UP",
       desc: "건설 현장 일자리 초보 가이드, 안전수칙, 일당 시세 등 실용 정보를 모았습니다.",
       url: `${SITE_URL}/info`,
       image: `${SITE_URL}/og-image.png?v=2`,
@@ -643,7 +643,7 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
         : `${SITE_URL}/images/info/${encodeURIComponent(slug)}.webp`
       : `${SITE_URL}/og-image.png?v=2`;
     let html = replaceMetaTags(template, {
-      title: meta ? `${meta.title} — 건설UP` : "정보/꿀팁 — 건설UP",
+      title: meta ? `${meta.title} | 건설UP` : "정보/꿀팁 | 건설UP",
       desc: meta ? meta.description : "건설 현장 일자리 실용 정보를 모았습니다.",
       url: meta ? pageUrl : `${SITE_URL}/info`,
       image: imageUrl,
@@ -713,7 +713,7 @@ router.get("/news", async (_req: Request, res: Response) => {
   try {
     const template = await getIndexTemplate();
     const html = replaceMetaTags(template, {
-      title: "건설업 현장 소식 — 건설UP",
+      title: "건설업 현장 소식 | 건설UP",
       desc: "대형 현장 착공, 투자, 인력 수요 등 건설업계 소식을 현장 근로자 시각에서 정리했습니다.",
       url: `${SITE_URL}/news`,
       image: `${SITE_URL}/og-image.png?v=2`,
@@ -740,7 +740,7 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
         : `${SITE_URL}/images/news/${encodeURIComponent(slug)}.webp`
       : `${SITE_URL}/og-image.png?v=2`;
     let html = replaceMetaTags(template, {
-      title: meta ? `${meta.title} — 건설UP` : "건설업 현장 소식 — 건설UP",
+      title: meta ? `${meta.title} | 건설UP` : "건설업 현장 소식 | 건설UP",
       desc: meta ? meta.description : "건설업계 소식을 현장 근로자 시각에서 정리했습니다.",
       url: meta ? pageUrl : `${SITE_URL}/news`,
       image: imageUrl,
