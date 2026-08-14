@@ -14,10 +14,11 @@ const GRAPH_BASE = "https://graph.threads.net/v1.0";
 // (오래된 글까지 매번 다 훑으면 API 호출이 계속 늘어나기만 함).
 const POLL_WINDOW_DAYS = 14;
 
-// 2026-08-14: 인사성 댓글("반하리 3종 왔어요") 오답글 사고 이후 임시 조치 — 초안 생성은
-// 계속하되 실제 발행은 사용자가 확인 후 다시 켤 때까지 보류한다. true로 되돌리면
-// 원래대로(감지 즉시 자동발행) 동작한다. 아래 for 루프에서 이 값을 참조한다.
-const AUTO_PUBLISH_REPLIES = false;
+// 2026-08-14: 인사성 댓글("반하리 3종 왔어요") 오답글 사고 이후 잠시 false로 보류했다가,
+// (1) enforceGreetingReply() 안전장치 추가, (2) 답글 생성 모델을 gpt-4o-mini에서
+// Claude Haiku 4.5로 교체(AI 티 완화), (3) 자기 자신 댓글 필터(THREADS_USERNAME) 재확인
+// — 이 세 가지를 마치고 사용자 확인 후 다시 true로 되돌림.
+const AUTO_PUBLISH_REPLIES = true;
 
 let _initialized = false;
 async function ensureTables(): Promise<void> {
