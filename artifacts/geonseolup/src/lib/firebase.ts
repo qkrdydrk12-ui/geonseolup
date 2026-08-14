@@ -296,10 +296,12 @@ export async function fbAddJob(job: Omit<Job, 'id'>): Promise<string> {
 }
 
 export async function fbSetJob(id: string, job: Partial<Job>): Promise<void> {
+  // 실패를 조용히 삼키면 호출부(글 수정 등)가 "수정 완료"로 착각하므로 오류를 그대로 던진다.
   try {
     await setDoc(doc(_db, 'jobs', id), job, { merge: true });
   } catch (e) {
     console.warn('[Firebase] fbSetJob failed:', e);
+    throw e;
   }
 }
 
