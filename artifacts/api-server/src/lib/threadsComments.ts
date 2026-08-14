@@ -154,54 +154,59 @@ function enforceGreetingReply(commentText: string, reply: string): string {
 }
 
 // CLAUDE_GUIDE.md.txt 톤(담백하고 세련되게, 광고 같지 않게)을 반영한 답글 생성.
-// OPENAI_API_KEY가 설정돼 있으면 문맥에 맞는 답글을 생성하고, 없으면 무난한
-// 기본 답글로 대체한다 (부가 기능이라 실패해도 전체 흐름은 막지 않는다).
+// ANTHROPIC_API_KEY가 설정돼 있으면 Claude Haiku 4.5로 문맥에 맞는 답글을 생성하고,
+// 없으면 무난한 기본 답글로 대체한다 (부가 기능이라 실패해도 전체 흐름은 막지 않는다).
+// 2026-08-14: gpt-4o-mini에서 Claude Haiku 4.5로 교체 — 이 계정의 다른 모든 게시물이
+// 이미 Claude로 작성돼 자연스럽다는 평을 받아온 반면, 이 댓글 답글만 별도로 "AI 티가
+// 난다"는 지적을 받아서(원인이 모델 계열 차이일 가능성이 높다고 판단) 같은 톤으로
+// 맞췄다. 호출량이 하루 5~20건 수준이라 비용 차이는 미미함(월 1달러 미만 추정).
 async function generateSuggestedReply(commentText: string, postText?: string): Promise<string> {
-  const apiKey = process.env["OPENAI_API_KEY"];
+  const apiKey = process.env["ANTHROPIC_API_KEY"];
   const fallback = "댓글 감사합니다! 자세한 조건은 게시글 댓글에 달린 링크에서 확인하실 수 있어요.";
   if (!apiKey || !commentText.trim()) return enforceGreetingReply(commentText, fallback);
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "claude-haiku-4-5",
+        max_tokens: 200,
+        system:
+          "너는 건설UP(건설 일용직 구인 플랫폼)의 Threads 계정을 운영하는 실제 사람이다. " +
+          "AI가 쓴 티가 절대 나면 안 된다 — 와디즈·토스·당근마켓 운영자가 댓글 다는 것처럼, " +
+          "짧고 자연스럽고 사람 냄새 나게 쓴다.\n" +
+          "🚫 필수 규칙(예외 없음): 이모지·이모티콘을 단 하나도 쓰지 않는다. 손가락·불꽃·하트·웃음 등 " +
+          "종류를 막론하고 이모지 전면 금지. 텍스트만으로 자연스럽게 쓴다.\n" +
+          "금지: '모집합니다·지원하세요·지금 확인하세요·아래 링크' 같은 광고 문구, " +
+          "딱딱한 안내문 말투, '~해주셔서 감사합니다' 식 상투적 인사로 시작하는 것.\n" +
+          "⚠️ 댓글이 '스하리', '반하리', '맞팔', '리포', '스친', '화력' 같은 단어가 들어간 " +
+          "인사성 방문 댓글(예: '반하리 3종 왔어요', '스하리 하고 갑니다')이면, 그건 원글 내용에 " +
+          "대한 질문이나 감상이 아니라 그냥 서로 좋아요/리포스트/댓글을 주고받는 문화적 인사다. " +
+          "이 경우 원글 주제(건설 현장 얘기 등)로 되돌리거나 원글에 대한 감상을 되묻지 말고, " +
+          "'반가워요, 저도 놀러갈게요' 같은 짧고 담백한 답례 인사만 한다(1문장, 질문 금지).\n" +
+          "그 외의 경우엔 댓글 내용에 실제로 반응하듯 자연스럽게 받아친다(예: 질문이면 답하고, 공감이면 맞장구치고). " +
+          "절대 전화번호를 직접 알려주지 않고, 구체적인 조건이 궁금하다고 하면 " +
+          "'게시글에 달린 링크(또는 건설UP)에서 확인해보세요' 정도로 자연스럽게 안내한다. " +
+          "1~2문장, 길어도 3문장 이내로 짧게.",
         messages: [
-          {
-            role: "system",
-            content:
-              "너는 건설UP(건설 일용직 구인 플랫폼)의 Threads 계정을 운영하는 실제 사람이다. " +
-              "AI가 쓴 티가 절대 나면 안 된다 — 와디즈·토스·당근마켓 운영자가 댓글 다는 것처럼, " +
-              "짧고 자연스럽고 사람 냄새 나게 쓴다.\n" +
-              "🚫 필수 규칙(예외 없음): 이모지·이모티콘을 단 하나도 쓰지 않는다. 손가락·불꽃·하트·웃음 등 " +
-              "종류를 막론하고 이모지 전면 금지. 텍스트만으로 자연스럽게 쓴다.\n" +
-              "금지: '모집합니다·지원하세요·지금 확인하세요·아래 링크' 같은 광고 문구, " +
-              "딱딱한 안내문 말투, '~해주셔서 감사합니다' 식 상투적 인사로 시작하는 것.\n" +
-              "⚠️ 댓글이 '스하리', '반하리', '맞팔', '리포', '스친', '화력' 같은 단어가 들어간 " +
-              "인사성 방문 댓글(예: '반하리 3종 왔어요', '스하리 하고 갑니다')이면, 그건 원글 내용에 " +
-              "대한 질문이나 감상이 아니라 그냥 서로 좋아요/리포스트/댓글을 주고받는 문화적 인사다. " +
-              "이 경우 원글 주제(건설 현장 얘기 등)로 되돌리거나 원글에 대한 감상을 되묻지 말고, " +
-              "'반가워요, 저도 놀러갈게요' 같은 짧고 담백한 답례 인사만 한다(1문장, 질문 금지).\n" +
-              "그 외의 경우엔 댓글 내용에 실제로 반응하듯 자연스럽게 받아친다(예: 질문이면 답하고, 공감이면 맞장구치고). " +
-              "절대 전화번호를 직접 알려주지 않고, 구체적인 조건이 궁금하다고 하면 " +
-              "'게시글에 달린 링크(또는 건설UP)에서 확인해보세요' 정도로 자연스럽게 안내한다. " +
-              "1~2문장, 길어도 3문장 이내로 짧게.",
-          },
           {
             role: "user",
             content: `원글: ${postText ?? "(내용 없음)"}\n\n댓글: ${commentText}\n\n이 댓글에 대한 답글을 작성해줘.`,
           },
         ],
-        max_tokens: 200,
       }),
     });
     if (!res.ok) {
       logger.warn({ status: res.status }, "[threads-comments] 답글 생성 API 실패 — 기본 답글로 대체");
       return enforceGreetingReply(commentText, fallback);
     }
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const reply = data.choices?.[0]?.message?.content?.trim();
+    const data = (await res.json()) as { content?: { type?: string; text?: string }[] };
+    const reply = data.content?.find((b) => b.type === "text")?.text?.trim();
     return enforceGreetingReply(commentText, stripEmoji(reply) || fallback);
   } catch (err) {
     logger.warn({ err: String(err) }, "[threads-comments] 답글 생성 중 오류 — 기본 답글로 대체");
