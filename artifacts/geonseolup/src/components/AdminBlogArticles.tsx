@@ -16,6 +16,7 @@ interface BlogArticle {
   imageUrl: string | null;
   published: boolean;
   createdAt: string;
+  createdBy?: string | null;
 }
 
 interface ArticleForm {
@@ -43,7 +44,11 @@ async function apiFetch(url: string, init?: RequestInit) {
   const token = getToken();
   const res = await fetch(url, {
     ...init,
-    headers: { ...(init?.headers ?? {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      ...(init?.headers ?? {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'X-Uploader': '관리자화면', // 누가 올렸는지 기록용
+    },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -324,6 +329,10 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
                   </div>
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>
                   <p className="text-[11px] text-gray-400 mt-1">/info/{r.slug}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    {new Date(r.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })} 등록
+                    {' · '}올린 곳: {r.createdBy ? r.createdBy.split('|')[0]!.trim() : '기록 없음 (예전 글)'}
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
                   <button type="button" onClick={() => startEdit(r)} className="bg-white border border-blue-200 text-blue-600 px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-blue-50 font-[inherit]">수정</button>

@@ -32,7 +32,16 @@ async function initTables() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_blog_articles_created ON blog_articles(created_at DESC);
+    ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS created_by TEXT;
   `);
+}
+
+// 누가 올렸는지 추적용: X-Uploader 헤더(도구 이름) + 접속 IP + 브라우저 정보를 기록
+function creatorInfo(req: Request): string {
+  const uploader = (req.get("x-uploader") ?? "").trim().slice(0, 50) || "미상";
+  const ip = (req.get("x-forwarded-for") ?? req.ip ?? "").split(",")[0]!.trim();
+  const ua = (req.get("user-agent") ?? "").slice(0, 180);
+  return `${uploader} | ip:${ip} | ${ua}`.slice(0, 300);
 }
 initTables().catch((e) => console.error("[DB] blog_articles initTables error:", e));
 
@@ -49,9 +58,15 @@ interface BlogArticleRow {
   published: boolean;
   created_at: string;
   updated_at: string;
+  created_by?: string | null;
 }
 
-function toApi(row: BlogArticleRow) {
+function toApi(row: BlogArticleRow, includeCreator = false) {
+  if (includeCreator) return { ...toApiBase(row), createdBy: row.created_by ?? null };
+  return toApiBase(row);
+}
+
+function toApiBase(row: BlogArticleRow) {
   return {
     id: row.id,
     slug: row.slug,
@@ -74,7 +89,7 @@ function decodeImage(imageBase64?: string): { data: Buffer; mime: string } | nul
 }
 
 const SELECT_COLS = `id, slug, title, description, emoji, body,
-  (image_data IS NOT NULL) AS has_image, published, created_at, updated_at`;
+  (image_data IS NOT NULL) AS has_image, published, created_at, updated_at, created_by`;
 
 // GET /api/blog-articles — 공개, 발행된 글 최신순
 router.get("/blog-articles", async (_req: Request, res: Response) => {
@@ -82,7 +97,7 @@ router.get("/blog-articles", async (_req: Request, res: Response) => {
     const result = await pgPool.query<BlogArticleRow>(
       `SELECT ${SELECT_COLS} FROM blog_articles WHERE published = true ORDER BY created_at DESC LIMIT 100`
     );
-    res.json({ rows: result.rows.map(toApi) });
+    res.json({ rows: result.rows.map((r) => toApi(r)) });
   } catch (err) {
     console.error("[BlogArticles] GET list error:", err);
     res.status(500).json({ error: "건설 꿀팁 목록 조회 실패" });
@@ -95,7 +110,7 @@ router.get("/blog-articles/all", requireAdmin, async (_req: Request, res: Respon
     const result = await pgPool.query<BlogArticleRow>(
       `SELECT ${SELECT_COLS} FROM blog_articles ORDER BY created_at DESC LIMIT 300`
     );
-    res.json({ rows: result.rows.map(toApi) });
+    res.json({ rows: result.rows.map((r) => toApi(r, true)) });
   } catch (err) {
     console.error("[BlogArticles] GET all error:", err);
     res.status(500).json({ error: "건설 꿀팁 목록 조회 실패" });
@@ -139,11 +154,11 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
     const image = decodeImage(body.imageBase64);
 
     const result = await pgPool.query<BlogArticleRow>(
-      `INSERT INTO blog_articles (slug, title, description, emoji, body, image_data, image_mime, published)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO blog_articles (slug, title, description, emoji, body, image_data, image_mime, published, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING ${SELECT_COLS}`,
       [slug, title, description, emoji, JSON.stringify(bodyBlocks),
-        image?.data ?? null, image?.mime ?? null, body.published !== false]
+        image?.data ?? null, image?.mime ?? null, body.published !== false, creatorInfo(req)]
     );
     const saved = result.rows[0]!;
     if (saved.published) {
