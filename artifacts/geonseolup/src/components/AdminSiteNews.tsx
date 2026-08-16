@@ -198,6 +198,11 @@ export default function AdminSiteNews({ showToast }: { showToast: (msg: string) 
               rows={8}
               className={`${inputCls} resize-y leading-relaxed`}
             />
+            <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-[11px] text-gray-500 leading-relaxed">
+              <b className="text-gray-600">✨ 본문 꾸미기</b> — 아래 기호를 쓰면 글이 꾸며져서 보입니다<br />
+              <b>## 소제목</b> → 파란 소제목 &nbsp;·&nbsp; <b>**굵게**</b> → <b>굵은 글씨</b> &nbsp;·&nbsp; {'{빨강:주의}'} → <span className="text-red-600 font-semibold">글자색</span> (빨강·파랑·초록·주황·회색)<br />
+              줄 맨 앞에 <b>&gt;&nbsp;</b> → 인용 상자 &nbsp;·&nbsp; <b>---</b> 한 줄 → 짧은 구분선 &nbsp;·&nbsp; <b>===</b> 한 줄 → 긴 구분선
+            </div>
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">이미지</label>

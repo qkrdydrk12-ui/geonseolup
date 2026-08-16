@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NEWS_NEWEST_FIRST, getNewsImage, type NewsArticle } from './newsData';
+import { stripRichMarks } from './richText';
 
 export interface DisplayNewsArticle extends NewsArticle {
   imageSrc: string;
@@ -71,7 +72,7 @@ function toDisplay(r: SiteNewsApiRow): DisplayNewsArticle {
   return {
     slug: r.slug || String(r.id),
     title: r.title,
-    description: r.body.replace(/^##\s+.+$/m, '').replace(/\s+/g, ' ').trim().slice(0, 120),
+    description: stripRichMarks(r.body.replace(/^##\s+.+$/m, '')).replace(/\s+/g, ' ').trim().slice(0, 120),
     // UTC로 저장된 publishedAt을 그냥 slice하면 한국시간 기준 날짜와 하루 어긋날 수 있다
     // (예: 8/11 05:30 KST 발행 글이 UTC로는 8/10 20:30이라 "8/10"으로 잘못 표시됨,
     // 2026-08-11 발견). sv-SE 로케일은 YYYY-MM-DD 형식을 그대로 주면서 타임존 변환도

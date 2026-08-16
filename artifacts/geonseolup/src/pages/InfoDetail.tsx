@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import { useMergedArticles } from '@/lib/useMergedArticles';
+import { renderRichText } from '@/lib/richText';
 
 interface Props {
   slug: string;
@@ -92,7 +93,7 @@ export default function InfoDetail({ slug }: Props) {
                     className="w-full rounded-xl border border-gray-200 mb-3"
                   />
                 )}
-                <p className="whitespace-pre-line">{block.text}</p>
+                {renderRichText(block.text)}
               </div>
             ))}
           </div>
