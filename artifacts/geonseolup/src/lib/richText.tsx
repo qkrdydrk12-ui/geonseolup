@@ -23,7 +23,8 @@ const COLOR_MAP: Record<string, string> = {
 export function renderInline(text: string, keyPrefix = ''): ReactNode[] {
   const out: ReactNode[] = [];
   // **굵게** 또는 {색이름:내용} 을 찾는다
-  const re = /\*\*([^*]+)\*\*|\{(빨강|빨간|파랑|파란|초록|주황|회색):([^}]+)\}/g;
+  // 줄바꿈은 넘지 않게([^*\n], [^}\n]) — 안 닫힌 기호가 여러 줄을 통째로 꾸미는 사고 방지
+  const re = /\*\*([^*\n]+)\*\*|\{(빨강|빨간|파랑|파란|초록|주황|회색):([^}\n]+)\}/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let k = 0;
@@ -107,6 +108,6 @@ export function stripRichMarks(text: string): string {
   return text
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\{(?:빨강|빨간|파랑|파란|초록|주황|회색):([^}]+)\}/g, '$1')
-    .replace(/^>\s?/gm, '')
-    .replace(/^[-=]{3,}$/gm, '');
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/^\s*[-=]{3,}\s*$/gm, '');
 }
