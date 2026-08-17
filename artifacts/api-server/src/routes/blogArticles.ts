@@ -34,6 +34,11 @@ async function initTables() {
     CREATE INDEX IF NOT EXISTS idx_blog_articles_created ON blog_articles(created_at DESC);
     ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS created_by TEXT;
   `);
+  // 잘못 저장된 깨진 이미지(수십 바이트짜리 쓰레기 데이터) 자동 정리 — 목록에서 엑박 방지
+  await pgPool.query(
+    `UPDATE blog_articles SET image_data = NULL, image_mime = NULL
+     WHERE image_data IS NOT NULL AND length(image_data) < 100`
+  );
 }
 
 // 누가 올렸는지 추적용: X-Uploader 헤더(도구 이름) + 접속 IP + 브라우저 정보를 기록
@@ -81,15 +86,27 @@ function toApiBase(row: BlogArticleRow) {
   };
 }
 
+// 진짜 이미지인지 앞머리(매직 바이트)로 확인 — 아니면 저장하지 않는다 (엑박 예방)
+function looksLikeImage(buf: Buffer): boolean {
+  if (buf.length < 100) return false;
+  if (buf[0] === 0xff && buf[1] === 0xd8) return true; // JPEG
+  if (buf[0] === 0x89 && buf[1] === 0x50) return true; // PNG
+  if (buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return true;
+  if (buf.subarray(0, 3).toString("ascii") === "GIF") return true;
+  return false;
+}
+
 function decodeImage(imageBase64?: string): { data: Buffer; mime: string } | null {
   if (!imageBase64) return null;
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(imageBase64);
-  if (match) return { data: Buffer.from(match[2]!, "base64"), mime: match[1]! };
-  return { data: Buffer.from(imageBase64, "base64"), mime: "image/webp" };
+  const data = match ? Buffer.from(match[2]!, "base64") : Buffer.from(imageBase64, "base64");
+  const mime = match ? match[1]! : "image/webp";
+  if (!looksLikeImage(data)) return null; // 깨진/잘못된 값이면 이미지 없이 저장
+  return { data, mime };
 }
 
 const SELECT_COLS = `id, slug, title, description, emoji, body,
-  (image_data IS NOT NULL) AS has_image, published, created_at, updated_at, created_by`;
+  (image_data IS NOT NULL AND length(image_data) > 100) AS has_image, published, created_at, updated_at, created_by`;
 
 // GET /api/blog-articles — 공개, 발행된 글 최신순
 router.get("/blog-articles", async (_req: Request, res: Response) => {
