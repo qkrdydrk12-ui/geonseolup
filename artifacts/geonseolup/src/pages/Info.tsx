@@ -50,12 +50,18 @@ export default function Info() {
               className="block no-underline"
             >
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer h-full flex flex-col">
-                <div className="relative aspect-[16/9] bg-gray-100 overflow-hidden">
+                <div
+                  className="relative aspect-[16/9] overflow-hidden flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}
+                >
+                  {/* 이미지가 없거나 못 불러오면 이모지 카드로 대체 (엑박 방지) */}
+                  <span className="absolute text-5xl">{article.emoji}</span>
                   <img
                     src={article.imageSrc}
                     alt=""
                     loading="lazy"
-                    className="w-full h-full object-cover"
+                    className="relative w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 </div>
                 <div className="p-5 flex-1 flex flex-col">

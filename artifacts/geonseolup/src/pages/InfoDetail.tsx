@@ -65,11 +65,17 @@ export default function InfoDetail({ slug }: Props) {
 
         {/* 본문 카드 */}
         <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="relative aspect-[16/9] bg-gray-100">
+          <div
+            className="relative aspect-[16/9] flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}
+          >
+            {/* 이미지가 없거나 못 불러오면 이모지 표지로 대체 (엑박 방지) */}
+            <span className="absolute text-6xl">{article.emoji}</span>
             <img
               src={article.imageSrc}
               alt=""
-              className="w-full h-full object-cover"
+              className="relative w-full h-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
           </div>
           <div className="p-6 sm:p-8">
