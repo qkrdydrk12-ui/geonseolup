@@ -11,6 +11,10 @@ export interface MyPostForm {
   salary: string;
   headcount?: string;
   startDate?: string;
+  company?: string;
+  site?: string;
+  line?: string;
+  ageLimit?: string;
   meal: string;
   lodging: string;
   contact: string;

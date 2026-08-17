@@ -33,7 +33,7 @@ export default function Post() {
   const [form, setForm] = useState(() => {
     const saved = editId ? getMyPost(editId) : null;
     // 예전에 저장된 글에는 headcount/startDate가 없을 수 있어 기본값을 먼저 깔아준다
-    if (saved?.form) return { headcount: '', startDate: '', ...saved.form };
+    if (saved?.form) return { headcount: '', startDate: '', company: '', site: '', line: '', ageLimit: '', ...saved.form };
     return {
       title: '',
       region: '',
@@ -43,6 +43,10 @@ export default function Post() {
       salary: '',
       headcount: '',
       startDate: '',
+      company: '',
+      site: '',
+      line: '',
+      ageLimit: '',
       meal: '',
       lodging: '',
       contact: '',
@@ -73,6 +77,11 @@ export default function Post() {
       salary: parsed.salary || prev.salary,
       headcount: parsed.headcount || prev.headcount,
       startDate: parsed.startDate || prev.startDate,
+      company: parsed.company || prev.company,
+      site: parsed.site || prev.site,
+      line: parsed.line || prev.line,
+      ageLimit: parsed.ageLimit || prev.ageLimit,
+      weldTest: parsed.weldTest || prev.weldTest,
       meal: parsed.meal || prev.meal,
       lodging: parsed.lodging || prev.lodging,
       contact: parsed.contact ? formatPhone(parsed.contact) : prev.contact,
@@ -161,16 +170,24 @@ export default function Post() {
     if (!phoneResult.valid) { setError('올바른 전화번호를 입력해주세요 (010-1234-5678)'); return; }
     if (!agreed) { setError('이용 규칙에 동의해주세요.'); return; }
 
+    // 비고가 비어 있으면 원문에서 간략 설명을 자동 생성해 채운다 (전화번호 포함 시 제외)
+    let autoDetail = form.detail;
+    if (!autoDetail.trim() && form.originalText.trim()) {
+      const note = (parseJobText(form.originalText).detail || '').slice(0, 200);
+      if (note && !containsPhone(note)) autoDetail = note;
+    }
+    const payload = { ...form, detail: autoDetail };
+
     setSubmitting(true);
     try {
       // 수정 모드: 기존 글을 덮어쓰기만 하고 끝 (쿨타임 미적용)
       if (editId) {
         await fbSetJob(editId, {
-          ...form,
+          ...payload,
           salaryNum: parseSalaryNum(form.salary),
         });
         await fbInvalidatePublicCache(); // 수정 즉시 반영
-        saveMyPost(editId, form);
+        saveMyPost(editId, payload);
         setAutoPublished(true);
         setDone(true);
         setSubmitting(false);
@@ -189,7 +206,7 @@ export default function Post() {
       const isReviewMode = localStorage.getItem('cj_review_mode') === 'on';
       if (isReviewMode) {
         await fbAddPending({
-          ...form,
+          ...payload,
           salaryNum: parseSalaryNum(form.salary),
           date: new Date().toISOString(),
           status: 'pending',
@@ -198,12 +215,12 @@ export default function Post() {
         setAutoPublished(false);
       } else {
         const newId = await fbAddJob({
-          ...form,
+          ...payload,
           salaryNum: parseSalaryNum(form.salary),
           date: new Date().toISOString(),
           hidden: false,
         });
-        saveMyPost(newId, form); // 이 브라우저에서 올린 글 기억 → 목록에서 "수정" 버튼 노출
+        saveMyPost(newId, payload); // 이 브라우저에서 올린 글 기억 → 목록에서 "수정" 버튼 노출
         await fbInvalidatePublicCache(); // 새 글 즉시 노출
         setAutoPublished(true);
       }
@@ -449,6 +466,54 @@ export default function Post() {
                     value={form.startDate}
                     onChange={(e) => setField('startDate', e.target.value)}
                     placeholder="예: 즉시, 8/25부터"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {/* 업체명 + 현장 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">업체명</label>
+                  <input
+                    type="text"
+                    value={form.company}
+                    onChange={(e) => setField('company', e.target.value)}
+                    placeholder="예: 두원전기"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">현장</label>
+                  <input
+                    type="text"
+                    value={form.site}
+                    onChange={(e) => setField('site', e.target.value)}
+                    placeholder="예: 삼성 평택 반도체"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {/* 라인 + 나이 제한 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">라인</label>
+                  <input
+                    type="text"
+                    value={form.line}
+                    onChange={(e) => setField('line', e.target.value)}
+                    placeholder="예: P4, 5라인"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">나이 제한</label>
+                  <input
+                    type="text"
+                    value={form.ageLimit}
+                    onChange={(e) => setField('ageLimit', e.target.value)}
+                    placeholder="예: ~55세"
                     className={inputCls}
                   />
                 </div>
