@@ -184,6 +184,17 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
             </span>
           </li>
         )}
+        {(job.headcount || job.startDate) && (
+          <li className="flex items-center gap-1.5 py-[3px] text-xs border-t border-gray-50">
+            <span className="w-[15px] text-center shrink-0">👥</span>
+            <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">인원/시기</span>
+            <span className="flex items-center gap-1.5 flex-wrap font-semibold text-gray-700">
+              {job.headcount && <span>{job.headcount}</span>}
+              {job.headcount && job.startDate && <span className="text-gray-300">|</span>}
+              {job.startDate && <span>{job.startDate}</span>}
+            </span>
+          </li>
+        )}
         <li className="flex items-center gap-1.5 py-[3px] text-xs border-t border-gray-50">
           <span className="w-[15px] text-center shrink-0">📞</span>
           <span className="text-gray-400 min-w-[56px] shrink-0 text-[11px]">연락처</span>

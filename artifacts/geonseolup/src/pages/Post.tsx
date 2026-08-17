@@ -32,13 +32,17 @@ export default function Post() {
   });
   const [form, setForm] = useState(() => {
     const saved = editId ? getMyPost(editId) : null;
-    return saved?.form ?? {
+    // 예전에 저장된 글에는 headcount/startDate가 없을 수 있어 기본값을 먼저 깔아준다
+    if (saved?.form) return { headcount: '', startDate: '', ...saved.form };
+    return {
       title: '',
       region: '',
       job: '',
       weldSub: '',
       weldTest: '',
       salary: '',
+      headcount: '',
+      startDate: '',
       meal: '',
       lodging: '',
       contact: '',
@@ -67,6 +71,8 @@ export default function Post() {
       job: parsed.job || prev.job,
       weldSub: parsed.weldSub || prev.weldSub,
       salary: parsed.salary || prev.salary,
+      headcount: parsed.headcount || prev.headcount,
+      startDate: parsed.startDate || prev.startDate,
       meal: parsed.meal || prev.meal,
       lodging: parsed.lodging || prev.lodging,
       contact: parsed.contact ? formatPhone(parsed.contact) : prev.contact,
@@ -419,6 +425,34 @@ export default function Post() {
               🏠 근무 조건
             </h2>
             <div className="flex flex-col gap-4">
+
+              {/* 모집 인원 + 투입 시기 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    모집 인원
+                  </label>
+                  <input
+                    type="text"
+                    value={form.headcount}
+                    onChange={(e) => setField('headcount', e.target.value)}
+                    placeholder="예: 2명"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    투입 시기
+                  </label>
+                  <input
+                    type="text"
+                    value={form.startDate}
+                    onChange={(e) => setField('startDate', e.target.value)}
+                    placeholder="예: 즉시, 8/25부터"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
 
               {/* 식사 + 숙박 */}
               <div className="grid grid-cols-2 gap-4">

@@ -9,6 +9,8 @@ export interface MyPostForm {
   weldSub: string;
   weldTest: string;
   salary: string;
+  headcount?: string;
+  startDate?: string;
   meal: string;
   lodging: string;
   contact: string;
