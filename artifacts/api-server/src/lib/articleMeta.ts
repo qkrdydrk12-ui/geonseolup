@@ -104,7 +104,9 @@ export async function getBlogArticleMeta(): Promise<ArticleMeta[]> {
       description: String(r.description),
       date: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
       updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
-      imageUrl: r.has_image ? `/api/blog-articles-image/${encodeURIComponent(String(r.slug))}` : undefined,
+      imageUrl: r.has_image
+        ? `/api/blog-articles-image/${encodeURIComponent(String(r.slug))}?v=${new Date(r.updated_at as string).getTime()}`
+        : undefined,
     }));
     _blog = { list, at: Date.now() };
     return list;
@@ -137,7 +139,9 @@ export async function getSiteNewsMeta(): Promise<ArticleMeta[]> {
       description: summarizeMarkdownBody(String(r.body)),
       date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,
       updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
-      imageUrl: r.has_image ? `/api/site-news-image/${Number(r.id)}` : undefined,
+      imageUrl: r.has_image
+        ? `/api/site-news-image/${Number(r.id)}?v=${new Date(r.updated_at as string).getTime()}`
+        : undefined,
     }));
     _siteNews = { list, at: Date.now() };
     return list;
@@ -175,7 +179,9 @@ export async function getBlogArticleFull(slug: string): Promise<BlogArticleFull 
       body: Array.isArray(r.body) ? (r.body as { subtitle?: string; text: string }[]) : [],
       date: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
       updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
-      imageUrl: r.has_image ? `/api/blog-articles-image/${encodeURIComponent(String(r.slug))}` : undefined,
+      imageUrl: r.has_image
+        ? `/api/blog-articles-image/${encodeURIComponent(String(r.slug))}?v=${new Date(r.updated_at as string).getTime()}`
+        : undefined,
     };
   } catch {
     return null;
@@ -207,7 +213,9 @@ export async function getSiteNewsFull(slug: string): Promise<SiteNewsFull | null
       sourceLabel: String(r.source_label ?? ""),
       date: r.published_at ? new Date(r.published_at as string).toISOString() : undefined,
       updated: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
-      imageUrl: r.has_image ? `/api/site-news-image/${Number(r.id)}` : undefined,
+      imageUrl: r.has_image
+        ? `/api/site-news-image/${Number(r.id)}?v=${new Date(r.updated_at as string).getTime()}`
+        : undefined,
     };
   } catch {
     return null;

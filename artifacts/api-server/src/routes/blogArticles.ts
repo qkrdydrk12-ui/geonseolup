@@ -79,7 +79,9 @@ function toApiBase(row: BlogArticleRow) {
     description: row.description,
     emoji: row.emoji,
     body: row.body,
-    imageUrl: row.has_image ? `/api/blog-articles-image/${row.slug}` : null,
+    imageUrl: row.has_image
+      ? `/api/blog-articles-image/${row.slug}?v=${new Date(row.updated_at).getTime()}`
+      : null,
     published: row.published,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

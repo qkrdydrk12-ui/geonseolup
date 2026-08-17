@@ -95,7 +95,9 @@ function toApi(row: SiteNewsRow) {
     slug: row.slug,
     title: row.title,
     body: row.body,
-    imageUrl: row.has_image ? `/api/site-news-image/${row.id}` : null,
+    imageUrl: row.has_image
+      ? `/api/site-news-image/${row.id}?v=${new Date(row.updated_at).getTime()}`
+      : null,
     sourceLabel: row.source_label ?? "",
     sourceUrl: row.source_url ?? "",
     publishedAt: row.published_at,
