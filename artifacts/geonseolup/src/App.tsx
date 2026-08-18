@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from 'wouter';
+import { Switch, Route, Router as WouterRouter, useLocation } from 'wouter';
 import { useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import Home from '@/pages/Home';
@@ -133,6 +133,15 @@ function NotFound() {
   );
 }
 
+// 페이지 이동 시 항상 맨 위부터 보이게 (목록에서 스크롤한 위치가 상세로 넘어가는 것 방지)
+function ScrollToTop() {
+  const [pathname] = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
@@ -232,6 +241,7 @@ function App() {
   useReservationScheduler();
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+      <ScrollToTop />
       <Router />
       <VisitorWidget />
     </WouterRouter>
