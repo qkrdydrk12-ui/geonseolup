@@ -57,6 +57,28 @@ function escapeJsonForScriptTag(json: string): string {
   return json.replace(/<\/script/gi, "<\\/script");
 }
 
+// ── salaryNum 안전망: salary 텍스트에서 숫자를 추출 ──────────────────────────
+// 2026-08-21: Search Console이 "baseSalary 필드 누락"을 지적함 — 원인은 salaryNum이
+// 안 채워진 채로 등록된 과거 공고(전체의 약 46%)였음. salary 문자열 자체는 있는
+// 경우가 대부분이라, 거기서 숫자를 뽑아 최소한의 baseSalary라도 채운다.
+// "일비"·"교통비"·"식대"는 단가가 아니므로 그 앞의 순수 "숫자+원/만" 패턴만 쓴다
+// ([[건설업 구인구직]] skill의 급여 파싱 원칙과 동일).
+function extractSalaryNumFromText(salary: string): number | undefined {
+  if (!salary) return undefined;
+  // "160,000원" / "16만원" / "16만" 순서로 첫 매치를 찾는다 (원 표기가 더 구체적이라 우선)
+  const wonMatch = salary.match(/(\d[\d,]*)\s*원/);
+  if (wonMatch) {
+    const n = parseInt(wonMatch[1].replace(/,/g, ""), 10);
+    if (n > 1000) return n; // "1원" 같은 오탐 방지
+  }
+  const manMatch = salary.match(/(\d+(?:\.\d+)?)\s*만/);
+  if (manMatch) {
+    const n = Math.round(parseFloat(manMatch[1]) * 10000);
+    if (n > 1000) return n;
+  }
+  return undefined;
+}
+
 // ── 채용공고 JobPosting 구조화 데이터 (Google 채용정보 검색 노출용) ─────────────
 // https://developers.google.com/search/docs/appearance/structured-data/job-posting
 function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
@@ -114,13 +136,15 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
     directApply: true,
   };
 
-  if (salaryNum && salaryNum > 0) {
+  const effectiveSalaryNum =
+    salaryNum && salaryNum > 0 ? salaryNum : extractSalaryNumFromText(salary);
+  if (effectiveSalaryNum && effectiveSalaryNum > 0) {
     ld.baseSalary = {
       "@type": "MonetaryAmount",
       currency: "KRW",
       value: {
         "@type": "QuantitativeValue",
-        value: salaryNum,
+        value: effectiveSalaryNum,
         unitText: "DAY",
       },
     };
