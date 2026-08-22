@@ -120,20 +120,63 @@ type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
 interface SourceRow { source: string; label: string; count: number; }
+interface CampaignRow {
+  source: string;
+  label: string;
+  medium: string;
+  campaign: string;
+  content: string;
+  landingPath: string;
+  count: number;
+}
+interface LandingRow {
+  source: string;
+  label: string;
+  landingPath: string;
+  count: number;
+}
 
 // 유입 경로별 표시 스타일 — 순서·색은 카테고리별로 고정(값 순위에 따라 바뀌지 않음)
 const SOURCE_STYLE: Record<string, { label: string; color: string; icon: string }> = {
   threads:   { label: 'Threads',    color: '#2a78d6', icon: '🧵' },
   google:    { label: 'Google',     color: '#eb6834', icon: '🔎' },
-  naver:     { label: 'Naver',      color: '#1baf7a', icon: 'N' },
+  naver_search: { label: '네이버 검색', color: '#03c75a', icon: 'N' },
+  naver_cafe:   { label: '네이버 카페', color: '#00a86b', icon: '☕' },
+  naver_blog:   { label: '네이버 블로그', color: '#2db400', icon: '📝' },
+  naver_kin:    { label: '네이버 지식iN', color: '#16a34a', icon: '💡' },
+  naver_other:  { label: '네이버(기타)', color: '#65a30d', icon: 'N' },
+  daum_search:  { label: '다음 검색', color: '#4c6ef5', icon: 'D' },
+  daum_cafe:    { label: '다음 카페', color: '#4263eb', icon: '☕' },
+  daum_blog:    { label: '다음 블로그', color: '#5c7cfa', icon: '📝' },
+  daum_other:   { label: '다음(기타)', color: '#748ffc', icon: 'D' },
+  tistory:      { label: '티스토리', color: '#f05a28', icon: 'T' },
+  dcinside:     { label: '디시인사이드', color: '#3b4890', icon: 'DC' },
+  ppomppu:      { label: '뽐뿌', color: '#2563eb', icon: 'P' },
+  clien:        { label: '클리앙', color: '#0f766e', icon: 'C' },
+  fmkorea:      { label: '에펨코리아', color: '#1d4ed8', icon: 'FM' },
+  ruliweb:      { label: '루리웹', color: '#7c3aed', icon: 'R' },
+  community:    { label: '기타 커뮤니티', color: '#8b5cf6', icon: '👥' },
+  cafe:         { label: '기타 카페', color: '#a855f7', icon: '☕' },
+  blog:         { label: '기타 블로그', color: '#d946ef', icon: '📝' },
   band:      { label: '네이버 밴드', color: '#008300', icon: '🥁' },
   instagram: { label: 'Instagram',  color: '#e87ba4', icon: '📸' },
   facebook:  { label: 'Facebook',   color: '#4a3aa7', icon: 'f' },
   kakao:     { label: '카카오',      color: '#eda100', icon: '💬' },
   twitter:   { label: 'X(트위터)',   color: '#e34948', icon: '✕' },
+  youtube:   { label: 'YouTube',     color: '#ef4444', icon: '▶' },
+  telegram:  { label: '텔레그램',     color: '#229ed9', icon: '✈' },
+  unknown:   { label: '출처 미확인',   color: '#898781', icon: '❔' },
   direct:    { label: '직접 방문',   color: '#898781', icon: '🔗' },
   other:     { label: '기타',        color: '#c3c2b7', icon: '❔' },
 };
+
+function readableLandingPath(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
 
 export default function Admin() {
   const [authed, setAuthed] = useState(false);
@@ -191,6 +234,8 @@ export default function Admin() {
   const [statsDate, setStatsDate] = useState(() => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
   const [statsLoading, setStatsLoading] = useState(false);
   const [sourceData, setSourceData] = useState<SourceRow[]>([]);
+  const [campaignData, setCampaignData] = useState<CampaignRow[]>([]);
+  const [landingData, setLandingData] = useState<LandingRow[]>([]);
   const [sourceDays, setSourceDays] = useState<1 | 7>(1);
   const [settings, setSettings] = useState({
     adminPw: localStorage.getItem('cj_admin_pw') || 'wns585426!@',
@@ -356,6 +401,8 @@ export default function Admin() {
       setHourlyData(hourly.rows ?? []);
       setVisitorTotals(totals);
       setSourceData(sources.rows ?? []);
+      setCampaignData(sources.campaigns ?? []);
+      setLandingData(sources.landings ?? []);
     } catch {
       showToast('통계 조회 실패');
     } finally {
@@ -2443,6 +2490,8 @@ export default function Admin() {
                 </div>
                 <p className="text-xs text-gray-400 mb-4">
                   {sourceDays === 1 ? statsDate : `${statsDate} 기준 최근 7일 합계`} · 같은 IP는 같은 유입경로로 하루 1회만 집계
+                  <br />
+                  사이트 내부 이동은 제외 · 출처 미확인은 브라우저가 원래 앱이나 링크 정보를 보내지 않은 방문
                 </p>
 
                 {statsLoading ? (
@@ -2460,9 +2509,9 @@ export default function Admin() {
                         const barPct = maxCount ? Math.max((r.count / maxCount) * 100, 4) : 0;
                         return (
                           <div key={r.source} className="flex items-center gap-3">
-                            <span className="w-[104px] shrink-0 text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                            <span className="w-[118px] shrink-0 text-xs font-semibold text-gray-600 flex items-center gap-1.5">
                               <span aria-hidden className="inline-flex items-center justify-center w-4 text-center">{style.icon}</span>
-                              {style.label}
+                              {r.label || style.label}
                             </span>
                             <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
                               <div
@@ -2479,6 +2528,110 @@ export default function Admin() {
                     </div>
                   );
                 })()}
+              </div>
+
+              {/* UTM 캠페인/게시물별 성과 */}
+              <div className="bg-white rounded-xl p-5 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-base font-bold text-[#1e3a5f]">📣 홍보 링크별 성과</h2>
+                  <p className="text-xs text-gray-400 mt-1">
+                    홍보 주소에 utm_campaign 또는 utm_content가 붙은 방문을 게시물 단위로 집계합니다.
+                  </p>
+                </div>
+                {statsLoading ? (
+                  <div className="flex items-center justify-center h-24 text-gray-400 text-sm">불러오는 중...</div>
+                ) : campaignData.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center">
+                    <p className="text-sm font-semibold text-gray-500">이 기간에는 표시된 홍보 링크 방문이 없어요</p>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      예: ?utm_source=naver_kin&amp;utm_campaign=지식인답변&amp;utm_content=답변1
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[620px] text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-left text-gray-400">
+                          <th className="py-2 pr-3 font-semibold">유입처</th>
+                          <th className="py-2 pr-3 font-semibold">캠페인</th>
+                          <th className="py-2 pr-3 font-semibold">게시물 표시</th>
+                          <th className="py-2 pr-3 font-semibold">첫 방문 페이지</th>
+                          <th className="py-2 text-right font-semibold">방문</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {campaignData.map((row, index) => {
+                          const style = SOURCE_STYLE[row.source] ?? SOURCE_STYLE.other;
+                          return (
+                            <tr
+                              key={`${row.source}-${row.campaign}-${row.content}-${row.landingPath}-${index}`}
+                              className="border-b border-gray-100 last:border-0"
+                            >
+                              <td className="py-2.5 pr-3 font-semibold text-gray-700">
+                                <span
+                                  className="inline-block w-2 h-2 rounded-full mr-1.5"
+                                  style={{ backgroundColor: style.color }}
+                                />
+                                {row.label || style.label}
+                                {row.medium && <span className="text-gray-400 font-normal"> · {row.medium}</span>}
+                              </td>
+                              <td className="py-2.5 pr-3 text-gray-600">{row.campaign || '-'}</td>
+                              <td className="py-2.5 pr-3 text-gray-600">{row.content || '-'}</td>
+                              <td
+                                className="py-2.5 pr-3 text-gray-500 max-w-[220px] truncate"
+                                title={readableLandingPath(row.landingPath)}
+                              >
+                                {readableLandingPath(row.landingPath)}
+                              </td>
+                              <td className="py-2.5 text-right font-black text-[#f97316]">{row.count.toLocaleString()}명</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* 첫 방문 페이지 */}
+              <div className="bg-white rounded-xl p-5 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-base font-bold text-[#1e3a5f]">🚪 처음 들어온 페이지</h2>
+                  <p className="text-xs text-gray-400 mt-1">방문자가 외부 링크에서 처음 도착한 페이지 상위 15개입니다.</p>
+                </div>
+                {statsLoading ? (
+                  <div className="flex items-center justify-center h-24 text-gray-400 text-sm">불러오는 중...</div>
+                ) : landingData.length === 0 ? (
+                  <div className="flex items-center justify-center h-20 text-gray-400 text-sm">
+                    새 통계 적용 이후 방문부터 표시됩니다
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {landingData.map((row, index) => {
+                      const style = SOURCE_STYLE[row.source] ?? SOURCE_STYLE.other;
+                      return (
+                        <div
+                          key={`${row.source}-${row.landingPath}-${index}`}
+                          className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5"
+                        >
+                          <span
+                            className="shrink-0 text-[10px] font-bold text-white rounded-full px-2 py-1"
+                            style={{ backgroundColor: style.color }}
+                          >
+                            {row.label || style.label}
+                          </span>
+                          <span
+                            className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-700"
+                            title={readableLandingPath(row.landingPath)}
+                          >
+                            {readableLandingPath(row.landingPath)}
+                          </span>
+                          <span className="shrink-0 text-xs font-black text-[#1e3a5f]">{row.count.toLocaleString()}명</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           );
