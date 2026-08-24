@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import { useMergedNews } from '@/lib/useMergedNews';
 import { renderRichText } from '@/lib/richText';
+import { usePageMeta } from '@/lib/seo';
 
 interface Props {
   slug: string;
@@ -12,15 +12,14 @@ export default function NewsDetail({ slug }: Props) {
   const { articles, loading } = useMergedNews();
   const article = articles.find((a) => a.slug === slug);
 
-  useEffect(() => {
-    if (article) {
-      document.title = `${article.title} — 건설UP`;
-      let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-      if (meta) meta.content = article.description;
-    } else {
-      document.title = '페이지를 찾을 수 없습니다 — 건설UP';
-    }
-  }, [article]);
+  usePageMeta({
+    title: article ? `${article.title} | 건설UP` : '현장 소식을 찾을 수 없습니다 | 건설UP',
+    description: article?.description || '건설업계 소식을 현장 근로자 시각에서 정리했습니다.',
+    path: article ? `/news/${encodeURIComponent(slug)}` : '/news',
+    image: article?.imageSrc,
+    robots: !loading && !article ? 'noindex,follow' : 'index,follow',
+    type: article ? 'article' : 'website',
+  });
 
   if (!article) {
     if (loading) {
@@ -48,6 +47,7 @@ export default function NewsDetail({ slug }: Props) {
   const currentIdx = articles.findIndex((a) => a.slug === slug);
   const prevArticle = currentIdx > 0 ? articles[currentIdx - 1] : null;
   const nextArticle = currentIdx < articles.length - 1 ? articles[currentIdx + 1] : null;
+  const relatedArticles = articles.filter((item) => item.slug !== slug).slice(0, 3);
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -68,12 +68,25 @@ export default function NewsDetail({ slug }: Props) {
           <div style={{ background: '#0d0d0d' }}>
             <img
               src={article.imageSrc}
-              alt=""
+              alt={`${article.title} 대표 이미지`}
               className="w-full max-w-[560px] mx-auto block"
             />
           </div>
           <div className="p-6 sm:p-8">
-            <div className="text-xs text-gray-400 mb-2">{article.date} · 건설업 현장 소식</div>
+            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+              <time dateTime={article.date}>{article.date}</time>
+              <span>· {article.sourceLabel || '건설UP 편집부'}</span>
+              {article.sourceUrl && (
+                <a
+                  href={article.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-[#f97316] underline"
+                >
+                  원문 출처 확인
+                </a>
+              )}
+            </div>
             <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
               {article.title}
             </h1>
@@ -95,7 +108,7 @@ export default function NewsDetail({ slug }: Props) {
                   {block.image && (
                     <img
                       src={block.image}
-                      alt=""
+                      alt={`${article.title}${block.subtitle ? ` - ${block.subtitle}` : ''} 설명 이미지`}
                       loading="lazy"
                       className="w-full max-w-[440px] mx-auto block rounded-xl border border-gray-200 mb-3"
                     />
@@ -121,6 +134,24 @@ export default function NewsDetail({ slug }: Props) {
                 구인 공고 보기 →
               </Link>
             </div>
+
+            {relatedArticles.length > 0 && (
+              <section className="mt-7 border-t border-gray-100 pt-6" aria-labelledby="related-news-title">
+                <h2 id="related-news-title" className="mb-3 text-base font-extrabold text-[#1e3a5f]">관련 현장 소식</h2>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {relatedArticles.map((item) => (
+                    <Link
+                      key={item.slug}
+                      href={`/news/${item.slug}`}
+                      className="rounded-xl border border-gray-200 bg-gray-50 p-3 no-underline transition-colors hover:border-[#f97316]"
+                    >
+                      <span className="line-clamp-2 text-xs font-bold leading-snug text-[#1e3a5f]">{item.title}</span>
+                      <time dateTime={item.date} className="mt-2 block text-[11px] text-gray-400">{item.date}</time>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* 이전/다음 글 */}
             {(prevArticle || nextArticle) && (

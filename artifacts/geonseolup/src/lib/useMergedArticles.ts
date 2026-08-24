@@ -3,6 +3,9 @@ import { INFO_ARTICLES, getArticleImage, type InfoArticle } from './infoData';
 
 export interface DisplayArticle extends InfoArticle {
   imageSrc: string;
+  publishedAt?: string;
+  updatedAt?: string;
+  sourceLabel: string;
 }
 
 interface BlogArticleApiRow {
@@ -12,12 +15,18 @@ interface BlogArticleApiRow {
   emoji: string;
   body: InfoArticle['body'];
   imageUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 let cache: DisplayArticle[] | null = null;
 
 function staticOnly(): DisplayArticle[] {
-  return INFO_ARTICLES.map((a) => ({ ...a, imageSrc: getArticleImage(a.slug) }));
+  return INFO_ARTICLES.map((a) => ({
+    ...a,
+    imageSrc: getArticleImage(a.slug),
+    sourceLabel: '건설UP 편집부 자체 제작',
+  }));
 }
 
 /**
@@ -46,6 +55,9 @@ export function useMergedArticles() {
           emoji: r.emoji,
           body: r.body,
           imageSrc: r.imageUrl || getArticleImage(r.slug),
+          publishedAt: r.createdAt,
+          updatedAt: r.updatedAt,
+          sourceLabel: '건설UP 편집부',
         }));
         const staticArticles = staticOnly().filter(
           (s) => !dynamic.some((d) => d.slug === s.slug)

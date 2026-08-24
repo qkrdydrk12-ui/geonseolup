@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbLoadPublicJobs } from '@/lib/firebase';
+import { fbLoadPublicJobs, isJobActive } from '@/lib/firebase';
 import { SAMPLE_JOBS as RAW_SAMPLE_JOBS } from '@/data/sampleJobs';
 import { sanitizeClientJob } from '@/lib/phone';
 
@@ -9,6 +9,7 @@ import { sanitizeClientJob } from '@/lib/phone';
 const SAMPLE_JOBS = RAW_SAMPLE_JOBS.map(sanitizeClientJob);
 import { isAutoHidden, WELD_SUBS, isWeld, getJobIcon, JOB_ICON_BG, isNew } from '@/lib/utils';
 import { getToken, apiVerify } from '@/lib/adminAuth';
+import { usePageMeta } from '@/lib/seo';
 import JobCard from '@/components/JobCard';
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, isPushMarkedSubscribed } from '@/lib/push';
 
@@ -280,6 +281,14 @@ function filterAndSort(jobs: Job[], state: AppState): Job[] {
   return list;
 }
 
+function matchesSeoLanding(job: Job, region: string, jobType: string): boolean {
+  if (job.hidden || job.status === 'reserved' || !isJobActive(job)) return false;
+  const regionMatches = region === '전체' || (job.region || '').includes(region);
+  const jobMatches = jobType === '전체'
+    || (isWeld(jobType) ? isWeld(job.job || '') : job.job === jobType);
+  return regionMatches && jobMatches;
+}
+
 interface HomeProps {
   // /jobs/:region/:job SEO 랜딩 라우트에서 넘어오는 초기 필터값.
   // 지정 안 하면 기존과 동일하게 '전체'/'전체'로 시작.
@@ -288,6 +297,7 @@ interface HomeProps {
 }
 
 export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
+  const isSeoLanding = !!(initialRegion || initialJob);
   const [state, setState] = useState<AppState>(() => {
     const initial = {
       keyword: '',
@@ -303,7 +313,9 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
     return initial;
   });
   const [searchInput, setSearchInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [seoMetaReady, setSeoMetaReady] = useState(!isSeoLanding);
   const [loadMoreBusy, setLoadMoreBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [regionOpen, setRegionOpen] = useState(false);
@@ -328,16 +340,30 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // /jobs/:region/:job 랜딩페이지로 들어온 경우 브라우저 탭 제목도 맞춰준다.
-  // (서버 프리렌더는 api-server가 별도로 처리 — 이건 SPA 내 클라이언트 네비게이션용)
-  useEffect(() => {
-    if (initialRegion || initialJob) {
-      const parts = [initialRegion, initialJob, '구인 공고'].filter((p) => p && p !== '전체');
-      document.title = `${parts.join(' ')} - 건설UP`;
-    } else {
-      document.title = '건설UP - 건설 현장 일자리 정보';
-    }
-  }, [initialRegion, initialJob]);
+  const seoLandingCount = isSeoLanding
+    ? state.allJobs.filter((job) => matchesSeoLanding(
+        job,
+        initialRegion || '전체',
+        initialJob || '전체'
+      )).length
+    : state.filtered.length;
+  const landingParts = [initialRegion || '전체', initialJob || '전체', '구인 공고'];
+  const landingTitle = isSeoLanding
+    ? `${landingParts.join(' ')} (${seoLandingCount}건) - 건설UP`
+    : '건설UP - 건설 현장 일자리 정보';
+  const landingDescription = isSeoLanding
+    ? `${initialRegion || '전국'} 지역 ${initialJob || '건설'} 실시간 구인 공고 ${seoLandingCount}건. 전국 건설 현장 일자리 정보를 건설UP에서 확인하세요.`
+    : '전국 건설 현장 구인 공고를 지역과 직종별로 찾고, 급여·숙식·근무 조건을 비교할 수 있습니다.';
+  const landingPath = isSeoLanding
+    ? `/jobs/${encodeURIComponent(initialRegion || '전체')}/${encodeURIComponent(initialJob || '전체')}`
+    : '/';
+  usePageMeta({
+    title: landingTitle,
+    description: landingDescription,
+    path: landingPath,
+    robots: isSeoLanding && seoLandingCount === 0 ? 'noindex,follow' : 'index,follow',
+    enabled: !isSeoLanding || (!loading && seoMetaReady),
+  });
 
   // 관리자 상태 실시간 감지 — 서버 토큰 검증 후에만 isAdmin=true
   // getToken() 값이 있어도 apiVerify() 실패하면 false 유지 (stale 토큰 방지)
@@ -392,14 +418,29 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
   useEffect(() => {
     let active = true;
     async function load() {
-      const fetched = await fbLoadPublicJobs();
-      if (!active) return;
-      const data = fetched && fetched.length > 0 ? fetched : SAMPLE_JOBS;
-      setState((prev) => {
-        const filtered = filterAndSort(data, { ...prev, allJobs: data });
-        return { ...prev, allJobs: data, filtered };
-      });
-      setLoading(false);
+      try {
+        const fetched = await fbLoadPublicJobs({
+          allowCacheFallback: !isSeoLanding,
+          throwOnError: isSeoLanding,
+        });
+        if (!active) return;
+        // SEO 랜딩에서는 빈 API 응답을 샘플 공고로 바꾸지 않는다. 서버가 0건/noindex로
+        // 응답한 뒤 클라이언트가 샘플 기준 index로 뒤집는 메타 불일치를 막기 위함이다.
+        const data = fetched.length > 0 ? fetched : (isSeoLanding ? [] : SAMPLE_JOBS);
+        setState((prev) => {
+          const filtered = filterAndSort(data, { ...prev, allJobs: data });
+          return { ...prev, allJobs: data, filtered };
+        });
+        setLoadError(false);
+        setSeoMetaReady(true);
+        setLoading(false);
+      } catch {
+        if (!active) return;
+        // 일시적 API 실패는 "검색 결과 0건"이 아니다. 오류 화면을 보여주되,
+        // 서버가 최초 HTML에 넣은 title/canonical/robots는 그대로 보존한다.
+        setLoadError(true);
+        setLoading(false);
+      }
     }
     load();
     // 주기적 갱신 + 탭 복귀 시 갱신 (실시간 구독 대신 캐시 폴링으로 읽기 절약)
@@ -830,6 +871,19 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
                 <div key={i} className="bg-white rounded-xl border border-gray-200 h-48 animate-pulse" />
               ))}
             </div>
+          ) : loadError ? (
+            <div className="text-center py-16 text-gray-500 col-span-full" role="alert">
+              <div className="text-4xl mb-3" aria-hidden="true">⚠️</div>
+              <div className="text-lg font-bold text-gray-700 mb-1.5">공고를 불러오지 못했습니다</div>
+              <div className="text-sm mb-4">잠시 후 다시 시도해 주세요.</div>
+              <button
+                type="button"
+                className="min-h-11 rounded-lg bg-[#1e3a5f] px-5 py-2 text-sm font-bold text-white"
+                onClick={() => window.location.reload()}
+              >
+                다시 시도
+              </button>
+            </div>
           ) : state.filtered.length === 0 ? (
             <div className="text-center py-16 text-gray-400 col-span-full">
               <div className="text-5xl mb-3">🔍</div>
@@ -867,48 +921,6 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
         <AdSlot storageKey="cj_ad_main_bottom" minHeight={homeSettings.adBottomHeight} maxWidth={homeSettings.adMaxWidth} />
 
       </div>
-
-      {/* 푸터 */}
-      <footer style={{ background: '#1e3a5f' }} className="mt-4 py-6 text-center text-white">
-        <div className="flex flex-wrap items-center justify-center gap-4 mb-3 text-sm">
-          <a href="/" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
-            🏠 홈
-          </a>
-          <span className="text-white/30">|</span>
-          <a href="/admin" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
-            ⚙️ 관리자
-          </a>
-          <span className="text-white/30">|</span>
-          <a href="/info" className="text-white/80 hover:text-white no-underline transition-colors">
-            정보/꿀팁
-          </a>
-          <span className="text-white/30">|</span>
-          <a href="/news" className="text-white/80 hover:text-white no-underline transition-colors">
-            현장 소식
-          </a>
-          <span className="text-white/30">|</span>
-          <a href="/terms" className="text-white/80 hover:text-white no-underline transition-colors">
-            이용약관
-          </a>
-          <span className="text-white/30">|</span>
-          <a href="/privacy" className="text-white/80 hover:text-white no-underline transition-colors">
-            개인정보처리방침
-          </a>
-          <span className="text-white/30">|</span>
-          <a href="/contact" className="text-white/80 hover:text-white no-underline transition-colors">
-            문의하기
-          </a>
-        </div>
-        <p className="text-sm font-bold mb-1">
-          {localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보'}
-        </p>
-        <p className="text-xs text-white/70 mb-2">
-          {localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC/자동) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장'}
-        </p>
-        <p className="text-[11px] text-white/45">
-          {localStorage.getItem('cj_footer_notice') || '※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.'}
-        </p>
-      </footer>
 
       {/* 스크롤 탑 */}
       <ScrollTopButton />

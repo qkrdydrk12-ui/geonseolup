@@ -14,8 +14,11 @@ import NewsDetail from '@/pages/NewsDetail';
 import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
 import Wages from '@/pages/Wages';
+import About from '@/pages/About';
 import VisitorWidget from '@/components/VisitorWidget';
+import Footer from '@/components/Footer';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
+import { usePageMeta } from '@/lib/seo';
 
 // ── 관리자가 저장한 head 코드를 <head>에 동적으로 주입 ──────────────────────
 function injectHeadCode(raw: string) {
@@ -122,6 +125,12 @@ function useReservationScheduler() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function NotFound() {
+  usePageMeta({
+    title: '페이지를 찾을 수 없습니다 - 건설UP',
+    description: '요청하신 페이지를 찾을 수 없습니다. 건설UP 홈에서 최신 건설 현장 일자리를 확인하세요.',
+    path: window.location.pathname,
+    robots: 'noindex,follow',
+  });
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#f1f5f9' }}>
       <div className="text-center text-gray-500">
@@ -197,6 +206,9 @@ function Router() {
       <Route path="/terms">
         <Terms />
       </Route>
+      <Route path="/about">
+        <About />
+      </Route>
       <Route path="/privacy">
         <Privacy />
       </Route>
@@ -243,9 +255,16 @@ function App() {
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <ScrollToTop />
       <Router />
+      <PublicFooter />
       <VisitorWidget />
     </WouterRouter>
   );
+}
+
+function PublicFooter() {
+  const [pathname] = useLocation();
+  if (pathname.startsWith('/admin') || pathname.startsWith('/detail/')) return null;
+  return <Footer />;
 }
 
 export default App;

@@ -180,6 +180,14 @@ function setCanonical(html: string, url: string): string {
   );
 }
 
+function setRobots(html: string, content: "index,follow" | "noindex,follow" | "noindex,nofollow"): string {
+  const tag = `<meta name="robots" content="${content}" />`;
+  if (/<meta[^>]*name=["']robots["'][^>]*>/i.test(html)) {
+    return html.replace(/<meta[^>]*name=["']robots["'][^>]*>/i, tag);
+  }
+  return html.replace("</head>", `  ${tag}\n  </head>`);
+}
+
 // 지역×직종 조합별 공고 수 집계 (공고가 있는 조합만) — sitemap과 랜딩페이지가 공유.
 function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string, number> {
   const counts = new Map<string, number>();
@@ -191,6 +199,19 @@ function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string,
     counts.set(key, (counts.get(key) || 0) + 1);
   }
   return counts;
+}
+
+const WELD_JOB_TYPES = new Set(["용접", "TIG", "아크", "CO2", "PVC", "자동"]);
+
+function matchesJobsLanding(job: Record<string, unknown>, region: string, jobType: string): boolean {
+  const jobRegion = typeof job.region === "string" ? job.region : "";
+  const currentJobType = typeof job.job === "string" ? job.job : "";
+  const regionMatches = region === "전체" || jobRegion.includes(region);
+  const jobMatches = jobType === "전체"
+    || (WELD_JOB_TYPES.has(jobType)
+      ? WELD_JOB_TYPES.has(currentJobType)
+      : currentJobType === jobType);
+  return regionMatches && jobMatches;
 }
 
 // ── GET /{key}.txt — IndexNow 소유 확인 키 파일 ──────────────────────────────
@@ -229,6 +250,10 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/wages", changefreq: "daily", priority: "0.8" },
       { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
+      { loc: "/about", changefreq: "monthly", priority: "0.6" },
+      { loc: "/terms", changefreq: "yearly", priority: "0.3" },
+      { loc: "/privacy", changefreq: "yearly", priority: "0.3" },
+      { loc: "/contact", changefreq: "yearly", priority: "0.5" },
       ...infoArticles.map((a) => ({
         loc: `/info/${encodeURIComponent(a.slug)}`, changefreq: "monthly", priority: "0.6",
         lastmod: toLastmod(a),
@@ -451,7 +476,8 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     try {
       const template = await getIndexTemplate();
       res.set("Content-Type", "text/html; charset=utf-8");
-      res.status(200).send(template);
+      res.set("Retry-After", "300");
+      res.status(503).send(template);
     } catch {
       res.status(500).send("Internal Server Error");
     }
@@ -468,10 +494,7 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
   try {
     const [template, { jobs }] = await Promise.all([getIndexTemplate(), getPublicJobs()]);
 
-    const matched = jobs.filter(
-      (j) => (typeof j.region === "string" ? j.region : "") === region &&
-             (typeof j.job === "string" ? j.job : "") === jobType
-    );
+    const matched = filterActiveJobs(jobs).filter((job) => matchesJobsLanding(job, region, jobType));
 
     const pageTitle = escapeHtmlAttr(`${region} ${jobType} 구인 공고 (${matched.length}건) - 건설UP`);
     const pageDesc = escapeHtmlAttr(
@@ -514,6 +537,8 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     );
     // canonical — 홈 URL 고정값을 이 랜딩페이지 URL로 교체 (동일한 버그, 동일한 이유로 수정).
     html = setCanonical(html, pageUrl);
+    // 검색 결과가 0건인 필터 랜딩만 noindex. 공고 자체나 유효한 필터 페이지는 계속 색인한다.
+    html = setRobots(html, matched.length === 0 ? "noindex,follow" : "index,follow");
     // BreadcrumbList: 홈 > 지역 직종 구인 공고
     const breadcrumbLd = buildBreadcrumbLd([
       { name: "건설UP", url: SITE_URL },
@@ -556,7 +581,8 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     try {
       const template = await getIndexTemplate();
       res.set("Content-Type", "text/html; charset=utf-8");
-      res.status(200).send(template);
+      res.set("Retry-After", "300");
+      res.status(503).send(template);
     } catch {
       res.status(500).send("Internal Server Error");
     }
@@ -625,6 +651,80 @@ function replaceMetaTags(template: string, opts: { title: string; desc: string; 
   html = html.replace(/(<meta[^>]*name=["']twitter:image["'][^>]*content=)["'][^"']*["']/, `$1"${opts.image}"`);
   html = setCanonical(html, opts.url);
   return html;
+}
+
+const TRUST_PAGE_META: Record<string, { title: string; desc: string; heading: string; summary: string }> = {
+  "/about": {
+    title: "건설UP 소개 | 건설 현장 일자리 정보 서비스",
+    desc: "건설UP의 운영 목적, 공고 관리 원칙, 건설 근로자를 위한 구인 정보와 실무 콘텐츠 제공 기준을 안내합니다.",
+    heading: "건설UP 소개",
+    summary: "건설UP은 전국 건설 현장 구인 정보와 현장 근로자에게 필요한 실무 콘텐츠를 제공하는 정보 서비스입니다. 공고는 등록 후 48시간 동안 모집 중으로 공개하며, 지원 전 근로 조건을 직접 확인하도록 안내합니다.",
+  },
+  "/terms": {
+    title: "이용약관 | 건설UP",
+    desc: "건설UP 건설 현장 구인 정보 서비스의 이용 조건, 게시물 관리 기준, 이용자 책임과 면책 사항을 안내합니다.",
+    heading: "이용약관",
+    summary: "건설UP 서비스 이용 조건과 게시물 관리 기준, 이용자와 서비스의 책임 범위를 안내합니다.",
+  },
+  "/privacy": {
+    title: "개인정보처리방침 | 건설UP",
+    desc: "건설UP이 구인 등록과 서비스 운영 과정에서 처리하는 개인정보, 이용 목적, 보유 기준과 이용자 문의 방법을 안내합니다.",
+    heading: "개인정보처리방침",
+    summary: "구인 공고와 담당자 연락처, 중복 방지용 정보, 서비스 운영 기록의 처리 목적과 보호 기준을 안내합니다.",
+  },
+  "/contact": {
+    title: "문의하기 | 건설UP",
+    desc: "건설UP 서비스 이용 문의, 허위·과장 공고 신고, 개인정보 문의와 개선 제안을 접수하는 방법을 안내합니다.",
+    heading: "건설UP 문의하기",
+    summary: "서비스 이용 문의, 허위·과장 공고 신고, 개인정보 문의와 개선 제안을 접수합니다.",
+  },
+};
+
+for (const [path, meta] of Object.entries(TRUST_PAGE_META)) {
+  router.get(path, async (_req: Request, res: Response) => {
+    try {
+      const template = await getIndexTemplate();
+      const pageUrl = `${SITE_URL}${path}`;
+      let html = replaceMetaTags(template, {
+        title: meta.title,
+        desc: meta.desc,
+        url: pageUrl,
+        image: `${SITE_URL}/og-image.png?v=2`,
+      });
+      const ld = {
+        "@context": "https://schema.org/",
+        "@type": "WebPage",
+        name: meta.heading,
+        description: meta.desc,
+        url: pageUrl,
+        isPartOf: { "@type": "WebSite", name: "건설UP", url: SITE_URL },
+        inLanguage: "ko",
+      };
+      html = html.replace(
+        "</head>",
+        `  <script type="application/ld+json">${escapeJsonForScriptTag(JSON.stringify(ld))}</script>\n  ${buildBreadcrumbLd([
+          { name: "건설UP", url: `${SITE_URL}/` },
+          { name: meta.heading, url: pageUrl },
+        ])}\n  </head>`
+      );
+      const fallbackBody = `
+    <div id="root">
+      <main style="max-width:760px;margin:0 auto;padding:40px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.7">
+        <h1 style="font-size:24px;font-weight:700;margin:0 0 14px">${escapeHtmlAttr(meta.heading)}</h1>
+        <p style="margin:0 0 20px;color:#334155">${escapeHtmlAttr(meta.summary)}</p>
+        <p><a href="/" style="color:#f97316;font-weight:700;text-decoration:underline">건설UP 홈으로 이동</a></p>
+      </main>
+    </div>
+    <script type="module"`;
+      html = html.replace(/<div id="root">[\s\S]*?<script type="module"/, fallbackBody);
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+      res.send(html);
+    } catch (err) {
+      logger.error({ err, path }, "[trust-page-seo] 렌더링 실패");
+      res.status(500).send("Internal Server Error");
+    }
+  });
 }
 
 router.get("/info", async (_req: Request, res: Response) => {
@@ -724,7 +824,8 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
     try {
       const template = await getIndexTemplate();
       res.set("Content-Type", "text/html; charset=utf-8");
-      res.status(200).send(template);
+      res.set("Retry-After", "300");
+      res.status(503).send(template);
     } catch {
       res.status(500).send("Internal Server Error");
     }
@@ -839,7 +940,8 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
     try {
       const template = await getIndexTemplate();
       res.set("Content-Type", "text/html; charset=utf-8");
-      res.status(200).send(template);
+      res.set("Retry-After", "300");
+      res.status(503).send(template);
     } catch {
       res.status(500).send("Internal Server Error");
     }

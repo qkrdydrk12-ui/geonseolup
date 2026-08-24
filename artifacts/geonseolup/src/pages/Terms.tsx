@@ -1,6 +1,13 @@
 import Header from '@/components/Header';
+import { usePageMeta } from '@/lib/seo';
 
 export default function Terms() {
+  usePageMeta({
+    title: '이용약관 | 건설UP',
+    description: '건설UP 건설 현장 구인 정보 서비스의 이용 조건, 게시물 관리 기준, 이용자 책임과 면책 사항을 안내합니다.',
+    path: '/terms',
+  });
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
       <Header />

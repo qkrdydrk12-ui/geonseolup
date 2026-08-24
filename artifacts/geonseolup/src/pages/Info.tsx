@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import { useMergedArticles } from '@/lib/useMergedArticles';
+import { usePageMeta } from '@/lib/seo';
 
 function WageBanner() {
   return (
@@ -25,11 +25,11 @@ function WageBanner() {
 export default function Info() {
   const { articles } = useMergedArticles();
 
-  useEffect(() => {
-    document.title = '정보/꿀팁 — 건설UP';
-    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (meta) meta.content = '건설 현장 일자리 초보 가이드, 안전수칙, 일당 높은 현장 찾는 법 등 실용 정보를 모았습니다.';
-  }, []);
+  usePageMeta({
+    title: '건설 현장 정보·꿀팁 | 건설UP',
+    description: '건설 일용직 급여, 세금, 안전수칙, 현장 용어와 취업 준비에 필요한 실용 정보를 건설UP 편집부가 정리합니다.',
+    path: '/info',
+  });
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
