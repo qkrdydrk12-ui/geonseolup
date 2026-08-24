@@ -1,8 +1,8 @@
+import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 import { renderRichText } from '@/lib/richText';
-import { usePageMeta } from '@/lib/seo';
 
 interface Props {
   slug: string;
@@ -12,14 +12,15 @@ export default function InfoDetail({ slug }: Props) {
   const { articles, loading } = useMergedArticles();
   const article = articles.find((a) => a.slug === slug);
 
-  usePageMeta({
-    title: article ? `${article.title} | 건설UP` : '정보 글을 찾을 수 없습니다 | 건설UP',
-    description: article?.description || '건설 현장 일자리 실용 정보를 모았습니다.',
-    path: article ? `/info/${encodeURIComponent(slug)}` : '/info',
-    image: article?.imageSrc,
-    robots: !loading && !article ? 'noindex,follow' : 'index,follow',
-    type: article ? 'article' : 'website',
-  });
+  useEffect(() => {
+    if (article) {
+      document.title = `${article.title} — 건설UP`;
+      let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+      if (meta) meta.content = article.description;
+    } else {
+      document.title = '페이지를 찾을 수 없습니다 — 건설UP';
+    }
+  }, [article]);
 
   if (!article) {
     if (loading) {
@@ -47,13 +48,6 @@ export default function InfoDetail({ slug }: Props) {
   const currentIdx = articles.findIndex((a) => a.slug === slug);
   const prevArticle = currentIdx > 0 ? articles[currentIdx - 1] : null;
   const nextArticle = currentIdx < articles.length - 1 ? articles[currentIdx + 1] : null;
-  const relatedArticles = articles.filter((item) => item.slug !== slug).slice(0, 3);
-  const publishedLabel = article.publishedAt
-    ? new Date(article.publishedAt).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
-    : null;
-  const updatedLabel = article.updatedAt && article.updatedAt !== article.publishedAt
-    ? new Date(article.updatedAt).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
-    : null;
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -79,7 +73,7 @@ export default function InfoDetail({ slug }: Props) {
             <span className="absolute text-6xl">{article.emoji}</span>
             <img
               src={article.imageSrc}
-              alt={`${article.title} 대표 이미지`}
+              alt=""
               className="relative w-full h-full object-cover"
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
@@ -89,15 +83,6 @@ export default function InfoDetail({ slug }: Props) {
             <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
               {article.title}
             </h1>
-            <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
-              <span>{article.sourceLabel}</span>
-              {publishedLabel && (
-                <time dateTime={article.publishedAt}>발행 {publishedLabel}</time>
-              )}
-              {updatedLabel && (
-                <time dateTime={article.updatedAt}>수정 {updatedLabel}</time>
-              )}
-            </div>
             <p className="text-sm text-gray-400 mb-6 pb-5 border-b border-gray-100">{article.description}</p>
 
           <div className="space-y-5 text-[15px] text-gray-700 leading-relaxed">
@@ -109,7 +94,7 @@ export default function InfoDetail({ slug }: Props) {
                 {block.image && (
                   <img
                     src={block.image}
-                      alt={`${article.title}${block.subtitle ? ` - ${block.subtitle}` : ''} 설명 이미지`}
+                    alt=""
                     loading="lazy"
                     className="w-full rounded-xl border border-gray-200 mb-3"
                   />
@@ -138,24 +123,6 @@ export default function InfoDetail({ slug }: Props) {
           </div>
           </div>
         </article>
-
-        {relatedArticles.length > 0 && (
-          <section className="mt-5" aria-labelledby="related-info-title">
-            <h2 id="related-info-title" className="mb-3 text-base font-extrabold text-[#1e3a5f]">함께 읽으면 좋은 정보</h2>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {relatedArticles.map((item) => (
-                <Link
-                  key={item.slug}
-                  href={`/info/${item.slug}`}
-                  className="rounded-xl border border-gray-200 bg-white p-4 no-underline transition-colors hover:border-[#f97316]"
-                >
-                  <span className="mb-2 block text-2xl" aria-hidden="true">{item.emoji}</span>
-                  <span className="line-clamp-2 text-sm font-bold leading-snug text-[#1e3a5f]">{item.title}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* 이전 / 다음 */}
         <div className="flex gap-3 mt-4">

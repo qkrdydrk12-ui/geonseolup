@@ -29,11 +29,7 @@ interface SiteNewsApiRow {
 let cache: DisplayNewsArticle[] | null = null;
 
 function staticOnly(): DisplayNewsArticle[] {
-  return NEWS_NEWEST_FIRST.map((a) => ({
-    ...a,
-    imageSrc: getNewsImage(a.slug),
-    sourceLabel: '건설UP 편집부 정리',
-  }));
+  return NEWS_NEWEST_FIRST.map((a) => ({ ...a, imageSrc: getNewsImage(a.slug) }));
 }
 
 /**

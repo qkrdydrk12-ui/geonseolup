@@ -228,10 +228,7 @@ export function isJobActive(j: Job): boolean {
   return Date.now() - t < JOB_ACTIVE_MS;
 }
 
-export async function fbLoadPublicJobs(
-  options: { allowCacheFallback?: boolean; throwOnError?: boolean } = {}
-): Promise<Job[]> {
-  const allowCacheFallback = options.allowCacheFallback !== false;
+export async function fbLoadPublicJobs(): Promise<Job[]> {
   try {
     const res = await fetch('/api/jobs', { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -245,15 +242,11 @@ export async function fbLoadPublicJobs(
     // 이 기기가 마지막으로 받은 실제 공고를 보여준다 (샘플 폴백보다 우선).
     // 폴백에는 마감된 공고가 섞여 있을 수 있으므로 활성만 남기고,
     // 원본 번호가 남아 있을 수 있으므로 반드시 정화를 거친다.
-    if (allowCacheFallback) {
-      const lastGood = readPublicJobsCache().filter(isJobActive).map(sanitizeClientJob);
-      if (lastGood.length > 0) return lastGood;
-    }
+    const lastGood = readPublicJobsCache().filter(isJobActive).map(sanitizeClientJob);
+    if (lastGood.length > 0) return lastGood;
     return jobs;
   } catch (e) {
-    if (options.throwOnError) throw e;
     console.warn('[api] fbLoadPublicJobs failed:', e);
-    if (!allowCacheFallback) return [];
     // 서버 미응답 시: 직전 캐시 → 로컬 저장본 순으로 폴백 (활성 공고만, 번호 정화)
     const lastGood = readPublicJobsCache().filter(isJobActive).map(sanitizeClientJob);
     if (lastGood.length > 0) return lastGood;

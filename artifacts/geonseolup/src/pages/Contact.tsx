@@ -1,15 +1,9 @@
 import { useState } from 'react';
 import Header from '@/components/Header';
-import { usePageMeta } from '@/lib/seo';
 
 export default function Contact() {
   const [copied, setCopied] = useState(false);
   const email = 'qkrdydrk@naver.com';
-  usePageMeta({
-    title: '문의하기 | 건설UP',
-    description: '건설UP 서비스 이용 문의, 허위·과장 공고 신고, 개인정보 문의와 개선 제안을 접수하는 방법을 안내합니다.',
-    path: '/contact',
-  });
 
   function handleCopy() {
     navigator.clipboard.writeText(email).then(() => {

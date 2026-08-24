@@ -1,7 +1,7 @@
+import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import { useMergedNews } from '@/lib/useMergedNews';
-import { usePageMeta } from '@/lib/seo';
 
 function formatDate(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00+09:00`);
@@ -13,11 +13,11 @@ function formatDate(dateStr: string): string {
 export default function News() {
   const { articles, loading } = useMergedNews();
 
-  usePageMeta({
-    title: '건설업 현장 소식 | 건설UP',
-    description: '건설 현장 착공, 투자, 인력 수요와 업계 변화를 현장 근로자 관점에서 쉽게 정리한 최신 소식입니다.',
-    path: '/news',
-  });
+  useEffect(() => {
+    document.title = '건설업 현장 소식 — 건설UP';
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (meta) meta.content = '대형 현장 착공, 투자, 안전 기준 등 건설업계 소식을 현장 근로자 시각에서 정리했습니다.';
+  }, []);
 
   const isEmpty = !loading && articles.length === 0;
 

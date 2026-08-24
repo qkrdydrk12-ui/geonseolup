@@ -11,8 +11,6 @@ import {
   isContactBlocked, recordContactReveal, getTodayContactCount, getContactDailyLimit,
 } from '@/lib/utils';
 import { maskPhonesInText, sanitizeClientJob } from '@/lib/phone';
-import { usePageMeta } from '@/lib/seo';
-import JobReportButton from '@/components/JobReportButton';
 
 interface Props {
   id: string;
@@ -48,19 +46,6 @@ function rankRelated(pool: Job[], id: string, region: string, job: string, title
 // 실패해도(네트워크 오류 등) 무시하고 조용히 넘어간다 (부가 기능).
 function recordServerView(id: string): void {
   fetch(`/api/jobs/${encodeURIComponent(id)}/view`, { method: 'POST' }).catch(() => {});
-}
-
-function formatAbsoluteDate(date: string): string {
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 export default function Detail({ id }: Props) {
@@ -134,33 +119,24 @@ export default function Detail({ id }: Props) {
     load();
   }, [id]);
 
-  const metaClosed =
-    job?.closed === true ||
-    (job?.closed === undefined && !!job?.date && Date.now() - new Date(job.date).getTime() >= 48 * 3600 * 1000);
-  const mealYes = !!job?.meal?.includes('제공') && !job?.meal?.includes('미제공');
-  const lodgingYes = !!job?.lodging?.includes('제공') && !job?.lodging?.includes('미제공');
-  const staySummary = mealYes && lodgingYes
-    ? '숙식 제공'
-    : [lodgingYes && '숙소 제공', mealYes && '식사 제공'].filter(Boolean).join(' · ');
-  const metaCore = job
-    ? [job.region && `[${job.region}]`, job.job, job.salary && `일당 ${job.salary}`, staySummary]
+  // 브라우저 제목/설명을 공고 내용에 맞춰 갱신 (서버 SEO 태그와 동일한 규칙)
+  useEffect(() => {
+    if (!job) return;
+    const mealYes = !!job.meal?.includes('제공') && !job.meal?.includes('미제공');
+    const lodgYes = !!job.lodging?.includes('제공') && !job.lodging?.includes('미제공');
+    const stay = mealYes && lodgYes
+      ? '숙식 제공'
+      : [lodgYes && '숙소 제공', mealYes && '식사 제공'].filter(Boolean).join(' · ');
+    const core =
+      [job.region && `[${job.region}]`, job.job, job.salary && `일당 ${job.salary}`, stay]
         .filter(Boolean)
-        .join(' ') || job.title
-    : '건설 현장 구인 공고';
-  usePageMeta({
-    title: `${metaClosed ? '[모집마감] ' : ''}${metaCore} - 건설UP`,
-    description: job
-      ? [
-          metaClosed ? '모집이 마감된 공고입니다.' : '모집 중인 건설 현장 공고입니다.',
-          job.region && `지역 ${job.region}`,
-          job.job && `직종 ${job.job}`,
-          job.salary && `급여 ${job.salary}`,
-          '지원 전 담당자에게 근로 조건을 직접 확인하세요.',
-        ].filter(Boolean).join(' | ').slice(0, 160)
-      : '건설UP 건설 현장 구인 공고 상세 정보입니다.',
-    path: `/detail/${encodeURIComponent(id)}`,
-    robots: !loading && !job ? 'noindex,follow' : 'index,follow',
-  });
+        .join(' ') || job.title;
+    const closedNow =
+      job.closed === true ||
+      (job.closed === undefined && !!job.date && Date.now() - new Date(job.date).getTime() >= 48 * 3600 * 1000);
+    document.title = `${closedNow ? '[모집마감] ' : ''}${core} - 건설UP`;
+    return () => { document.title = '건설UP - 건설 현장 일자리 정보'; };
+  }, [job]);
 
   async function doShare() {
     const url = location.href;
@@ -420,11 +396,7 @@ export default function Detail({ id }: Props) {
                     </span>
                   ),
                 },
-                {
-                  ico: '🕐',
-                  key: '등록일',
-                  val: <time dateTime={job.date} title={formatAbsoluteDate(job.date)}>{formatDate(job.date)}</time>,
-                },
+                { ico: '🕐', key: '등록일', val: formatDate(job.date) },
                 job.detail ? { ico: '📝', key: '비고', val: maskPhonesInText(job.detail), full: true } : null,
               ]
                 .filter(Boolean)
@@ -462,20 +434,6 @@ export default function Detail({ id }: Props) {
             </div>
           )}
         </div>
-
-        <section className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <h2 className="mb-2 font-extrabold text-[#1e3a5f]">지원 전 꼭 확인하세요</h2>
-          <p className="leading-relaxed">
-            이 공고는 등록자가 제공한 정보를 바탕으로 하며 건설UP이 근로 조건을 보증하지 않습니다.
-            급여, 숙식, 투입일, 현장명과 담당자 신원을 지원 전에 직접 확인하세요.
-          </p>
-          <p className="mt-2 text-xs text-amber-800">
-            정보 기준: <time dateTime={job.date}>{formatAbsoluteDate(job.date)}</time> 등록 · 공고는 등록 후 48시간 동안 모집 중으로 공개됩니다.
-          </p>
-          <div className="mt-3">
-            <JobReportButton job={job} />
-          </div>
-        </section>
 
         {/* 비슷한 일자리 — 마감 공고에서는 마감 배너 바로 아래에 표시됨 */}
         {!isClosed && relatedSection}
