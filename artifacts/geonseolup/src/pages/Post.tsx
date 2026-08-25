@@ -42,6 +42,7 @@ export default function Post() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [autoPublished, setAutoPublished] = useState(false);
+  const [wasBumped, setWasBumped] = useState(false); // 2026-08-25: 신규 등록이 아니라 기존 공고 끌올인 경우
   const [error, setError] = useState('');
   const [parseText, setParseText] = useState('');
   const [parsedOnce, setParsedOnce] = useState(false);
@@ -120,16 +121,19 @@ export default function Post() {
     localStorage.setItem('cj_post_log', JSON.stringify(log));
   }
 
-  async function checkCooldownServer(contact: string): Promise<{ allowed: boolean; remainingMins?: number }> {
+  async function checkCooldownServer(
+    contact: string,
+    formData: Record<string, unknown>
+  ): Promise<{ allowed: boolean; remainingMins?: number; bumped?: boolean; bumpedJobId?: string }> {
     try {
       const res = await fetch('/api/post-cooldown', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: contact }),
+        body: JSON.stringify({ phone: contact, formData }),
       });
-      return await res.json() as { allowed: boolean; remainingMins?: number };
+      return await res.json() as { allowed: boolean; remainingMins?: number; bumped?: boolean; bumpedJobId?: string };
     } catch {
-      return { allowed: true }; // 서버 오류 시 허용
+      return { allowed: true, bumped: false }; // 서버 오류 시 허용(신규 등록으로 폴백)
     }
   }
 
@@ -148,8 +152,13 @@ export default function Post() {
 
     setSubmitting(true);
     try {
-      // 서버 쿨타임 확인 + 기록 (브라우저 우회 방지)
-      const cooldownResult = await checkCooldownServer(form.contact);
+      // 서버 쿨타임 확인 + 기록 (브라우저 우회 방지) — 아직 모집 중인 같은 번호 공고가
+      // 있으면 새로 만들지 않고 그 공고를 끌어올린다(2026-08-25, 중복 방지).
+      // salaryNum도 같이 보내 끌올 시 급여 표시가 최신 salary 텍스트와 어긋나지 않게 한다.
+      const cooldownResult = await checkCooldownServer(form.contact, {
+        ...form,
+        salaryNum: parseSalaryNum(form.salary),
+      });
       if (!cooldownResult.allowed) {
         const mins = cooldownResult.remainingMins ?? 30;
         setError(`동일 연락처로 이미 등록된 공고가 있습니다. ${mins}분 후 다시 시도해주세요. (30분 쿨타임)`);
@@ -157,25 +166,34 @@ export default function Post() {
         return;
       }
 
-      const isReviewMode = localStorage.getItem('cj_review_mode') === 'on';
-      if (isReviewMode) {
-        await fbAddPending({
-          ...form,
-          salaryNum: parseSalaryNum(form.salary),
-          date: new Date().toISOString(),
-          status: 'pending',
-          hidden: false,
-        });
-        setAutoPublished(false);
-      } else {
-        await fbAddJob({
-          ...form,
-          salaryNum: parseSalaryNum(form.salary),
-          date: new Date().toISOString(),
-          hidden: false,
-        });
-        await fbInvalidatePublicCache(); // 새 글 즉시 노출
+      if (cooldownResult.bumped) {
+        // 기존 활성 공고를 서버에서 이미 최신 내용+최신 시각으로 갱신했다 — 새 문서를 또 만들지 않는다.
+        await fbInvalidatePublicCache();
+        setWasBumped(true);
         setAutoPublished(true);
+      } else {
+        const isReviewMode = localStorage.getItem('cj_review_mode') === 'on';
+        if (isReviewMode) {
+          await fbAddPending({
+            ...form,
+            salaryNum: parseSalaryNum(form.salary),
+            date: new Date().toISOString(),
+            status: 'pending',
+            hidden: false,
+            source: 'public', // 2026-08-25: 카톡 자동화(business3)와 구분해 자연유입 추이 추적용
+          });
+          setAutoPublished(false);
+        } else {
+          await fbAddJob({
+            ...form,
+            salaryNum: parseSalaryNum(form.salary),
+            date: new Date().toISOString(),
+            hidden: false,
+            source: 'public', // 2026-08-25: 카톡 자동화(business3)와 구분해 자연유입 추이 추적용
+          });
+          await fbInvalidatePublicCache(); // 새 글 즉시 노출
+          setAutoPublished(true);
+        }
       }
       recordPostLocal(form.contact); // UI 즉시 반영용 (로컬 보조)
       setDone(true);
@@ -192,10 +210,12 @@ export default function Post() {
         <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center border border-gray-200">
           <div className="text-6xl mb-4">{autoPublished ? '🎉' : '✅'}</div>
           <h2 className="text-xl font-extrabold text-[#1e3a5f] mb-2">
-            {autoPublished ? '공고가 등록됐습니다!' : '구인 신청이 완료됐습니다!'}
+            {wasBumped ? '공고가 끌어올려졌습니다!' : autoPublished ? '공고가 등록됐습니다!' : '구인 신청이 완료됐습니다!'}
           </h2>
           <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-            {autoPublished
+            {wasBumped
+              ? '이미 모집 중인 동일 연락처 공고가 있어, 새로 만들지 않고 최신 내용으로 갱신해 맨 위로 올렸습니다.'
+              : autoPublished
               ? '공고가 즉시 메인 페이지에 노출됩니다.'
               : '관리자 검토 후 공고가 등록됩니다. 빠른 시간 내에 처리해드리겠습니다.'}
           </p>

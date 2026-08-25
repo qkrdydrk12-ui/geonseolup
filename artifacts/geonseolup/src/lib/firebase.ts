@@ -87,6 +87,9 @@ export interface Job {
   _deleted?: boolean;
   _createdAt?: unknown;
   dispatchMode?: 'natural' | 'manual';
+  // 등록 경로 구분 (2026-08-25 신설) — 'public': 사이트 등록 폼(/post)으로 방문자가 직접 등록,
+  // 'kakao': 카톡 자동화(business3-band-collect)가 등록. 자연 유입 추이 추적용, 과거 문서는 값 없음.
+  source?: 'public' | 'kakao';
   // 확장 필드
   company?: string;
   headcount?: string;
