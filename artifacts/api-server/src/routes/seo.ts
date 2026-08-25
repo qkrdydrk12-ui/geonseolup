@@ -336,7 +336,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
       const expiredHtml = template
         .replace(/<title>[^<]*<\/title>/, "<title>만료된 공고입니다 - 건설UP</title>")
         .replace(
-          /<div id="root">[\s\S]*?<script type="module"/,
+          /<div id="root">[\s\S]*?<\/body>/,
           `
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6;text-align:center">
@@ -345,7 +345,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
         <p><a href="/" style="color:#f97316;font-weight:700;text-decoration:underline">건설UP 홈에서 다른 공고 보기 →</a></p>
       </div>
     </div>
-    <script type="module"`
+  </body>`
         );
       res.set("Content-Type", "text/html; charset=utf-8");
       res.status(410).send(expiredHtml);
@@ -466,9 +466,13 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
           <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
         </p>
       </div>
-    </div>
-    <script type="module"`;
-    html = html.replace(/<div id="root">[\s\S]*?<script type="module"/, fallbackBody);
+    </div>`;
+    // ⚠️ 2026-08-26 수정: Vite 빌드가 <script type="module">을 <head>(root div보다 앞)에
+    // 넣어서, "root div 뒤에 script type=module이 온다"고 가정한 기존 정규식이 전혀 매치되지
+    // 않아 이 폴백 본문이 실제로는 한 번도 반영된 적이 없었다(실사용자는 JS로 정상 렌더되니
+    // 못 느꼈지만, JS 미실행 크롤러는 계속 일반 홈페이지 소개문구만 보고 있었음). </body> 직전까지
+    // 매치하도록 수정.
+    html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
 
     res.set("Content-Type", "text/html; charset=utf-8");
     res.set("Cache-Control", "public, max-age=60"); // 짧게 — 공고 상태(마감 등) 변경 반영
@@ -572,9 +576,8 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
           <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
         </p>
       </div>
-    </div>
-    <script type="module"`;
-    html = html.replace(/<div id="root">[\s\S]*?<script type="module"/, fallbackBody);
+    </div>`;
+    html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
 
     res.set("Content-Type", "text/html; charset=utf-8");
     res.set("Cache-Control", "public, max-age=120");
@@ -740,9 +743,8 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
           <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
         </p>
       </div>
-    </div>
-    <script type="module"`;
-        html = html.replace(/<div id="root">[\s\S]*?<script type="module"/, fallbackBody);
+    </div>`;
+        html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
       }
     }
     res.set("Content-Type", "text/html; charset=utf-8");
@@ -858,9 +860,8 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
           <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
         </p>
       </div>
-    </div>
-    <script type="module"`;
-        html = html.replace(/<div id="root">[\s\S]*?<script type="module"/, fallbackBody);
+    </div>`;
+        html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
       }
     }
     res.set("Content-Type", "text/html; charset=utf-8");
