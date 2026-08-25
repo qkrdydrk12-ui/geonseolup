@@ -14,6 +14,7 @@ import threadsImageRouter from "./threadsImage";
 import wageRatesRouter from "./wageRates";
 import siteNewsRouter from "./siteNews";
 import blogArticlesRouter from "./blogArticles";
+import relatedLinksRouter from "./relatedLinks";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(threadsImageRouter);
 router.use(wageRatesRouter);
 router.use(siteNewsRouter);
 router.use(blogArticlesRouter);
+router.use(relatedLinksRouter);
 
 export default router;

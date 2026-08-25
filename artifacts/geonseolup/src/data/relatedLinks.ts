@@ -1,5 +1,8 @@
-// 내부링크 보강용 관련 글 매핑 (2026-08-25 신설)
-// 키: `news:${slug}` 또는 `info:${slug}` — RelatedLinks 컴포넌트가 이 키로 조회한다.
+// ⚠️ 사용 중단됨 (2026-08-25) — 데이터를 Postgres `related_links` 테이블로 이전했다.
+// RelatedLinks.tsx는 이제 이 파일을 import하지 않고 `/api/related-links`에서 가져온다.
+// 이 파일은 그 시점 62개 항목의 원본(시드 데이터) 백업 용도로만 남겨둔다 — 새로 고치지 않는다.
+// 새 글의 관련 글 등록은 `POST /api/admin/related-links` 를 쓴다(business1a-site-instagram.txt,
+// business2-blog.txt에 반영됨).
 export interface RelatedLinkEntry {
   type: "news" | "info";
   slug: string;

@@ -4,6 +4,7 @@ import { getClosesAt, getPostedAt, isJobClosed, isJobExpired, ACTIVE_HOURS } fro
 import { logger } from "../lib/logger.js";
 import { getAllInfoOverrides } from "../lib/infoOverrides.js";
 import { INDEXNOW_KEY } from "../lib/indexNow.js";
+import { getRelatedLinksMap } from "./relatedLinks.js";
 
 const router = Router();
 
@@ -55,6 +56,33 @@ function escapeHtmlAttr(str: string): string {
 // "</script" 시퀀스가 JSON 문자열 값 안에 있으면 실제로 스크립트가 조기 종료되므로 반드시 처리해야 한다.
 function escapeJsonForScriptTag(json: string): string {
   return json.replace(/<\/script/gi, "<\\/script");
+}
+
+// "관련 글" 섹션을 순수 HTML(<a> 태그)로 렌더링 — 크롤러가 JS 실행 없이도 내부링크를 바로 읽게
+// 한다(2026-08-25 신설). 프론트 RelatedLinks.tsx와 시각적으로 대응하는 최소 버전.
+async function buildRelatedLinksHtml(currentKey: string): Promise<string> {
+  try {
+    const map = await getRelatedLinksMap();
+    const items = map[currentKey];
+    if (!items || items.length === 0) return "";
+    const cards = items
+      .map((item) => {
+        const isNews = item.type === "news";
+        const label = isNews ? "현장 소식" : "건설꿀팁";
+        const accent = isNews ? "#1e3a5f" : "#f97316";
+        return `<a href="/${item.type}/${encodeURIComponent(item.slug)}" style="display:block;text-decoration:none;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:${accent};margin-bottom:4px;">${label}</div>
+          <div style="font-size:13px;font-weight:600;color:#1e3a5f;">${escapeHtmlAttr(item.title)}</div>
+        </a>`;
+      })
+      .join("\n");
+    return `<div style="margin-top:24px;">
+      <p style="font-size:12px;font-weight:700;color:#9ca3af;margin:0 0 8px;">관련 글</p>
+      ${cards}
+    </div>`;
+  } catch {
+    return "";
+  }
 }
 
 // ── salaryNum 안전망: salary 텍스트에서 숫자를 추출 ──────────────────────────
@@ -699,12 +727,14 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
         const bodyHtml = full.body
           .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(b.text)}</p>`)
           .join("\n");
+        const relatedHtml = await buildRelatedLinksHtml(`info:${slug}`);
         const fallbackBody = `
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
         <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(meta.title)}</h1>
         <p style="margin:0 0 16px;color:#64748b;font-size:14px">${escapeHtmlAttr(meta.description)}</p>
         ${bodyHtml}
+        ${relatedHtml}
         <p style="margin:0;color:#64748b;font-size:14px">
           페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
           <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
@@ -816,11 +846,13 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
             return headingHtml + bodyHtml;
           })
           .join("\n");
+        const relatedHtml = await buildRelatedLinksHtml(`news:${slug}`);
         const fallbackBody = `
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
         <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(meta.title)}</h1>
         ${paragraphs}
+        ${relatedHtml}
         <p style="margin:0;color:#64748b;font-size:14px">
           페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
           <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
