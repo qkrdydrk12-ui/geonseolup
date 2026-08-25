@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
+import RelatedLinks from '@/components/RelatedLinks';
 import { useMergedNews } from '@/lib/useMergedNews';
 
 interface Props {
@@ -120,6 +121,8 @@ export default function NewsDetail({ slug }: Props) {
                 구인 공고 보기 →
               </Link>
             </div>
+
+            <RelatedLinks currentKey={`news:${article.slug}`} />
 
             {/* 이전/다음 글 */}
             {(prevArticle || nextArticle) && (
