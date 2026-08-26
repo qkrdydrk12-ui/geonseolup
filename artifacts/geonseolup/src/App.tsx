@@ -122,12 +122,21 @@ function useReservationScheduler() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function NotFound() {
+  // 실제 렌더링에 쓰이는 유일한 404 컴포넌트 (pages/not-found.tsx는 어디서도 import되지
+  // 않는 죽은 코드였다 — 2026-08-26 정리, 삭제).
+  useEffect(() => {
+    document.title = '페이지를 찾을 수 없습니다 — 건설UP';
+  }, []);
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#f1f5f9' }}>
       <div className="text-center text-gray-500">
         <div className="text-6xl mb-4">😔</div>
         <h2 className="text-xl font-bold text-gray-700 mb-2">페이지를 찾을 수 없습니다</h2>
-        <a href="/" className="text-[#f97316] font-semibold underline">홈으로 이동</a>
+        <p className="text-sm text-gray-400 mb-4">주소가 잘못되었거나 삭제된 페이지일 수 있습니다.</p>
+        <div className="flex items-center justify-center gap-3">
+          <a href="/" className="text-white bg-[#f97316] font-bold no-underline px-4 py-2 rounded-lg hover:opacity-90 transition-opacity">홈으로 이동</a>
+          <a href="/info" className="text-[#1e3a5f] font-semibold no-underline px-4 py-2 rounded-lg border border-gray-200 hover:border-[#f97316] transition-colors">건설꿀팁 보기</a>
+        </div>
       </div>
     </div>
   );
