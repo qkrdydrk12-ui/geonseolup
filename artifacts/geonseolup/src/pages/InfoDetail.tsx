@@ -75,7 +75,7 @@ export default function InfoDetail({ slug }: Props) {
             <span className="absolute text-6xl">{article.emoji}</span>
             <img
               src={article.imageSrc}
-              alt=""
+              alt={article.title}
               className="relative w-full h-full object-cover"
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
@@ -96,7 +96,7 @@ export default function InfoDetail({ slug }: Props) {
                 {block.image && (
                   <img
                     src={block.image}
-                    alt=""
+                    alt={block.subtitle || article.title}
                     loading="lazy"
                     className="w-full rounded-xl border border-gray-200 mb-3"
                   />

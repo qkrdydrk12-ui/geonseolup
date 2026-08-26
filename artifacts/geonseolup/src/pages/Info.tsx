@@ -59,7 +59,7 @@ export default function Info() {
                   <span className="absolute text-5xl">{article.emoji}</span>
                   <img
                     src={article.imageSrc}
-                    alt=""
+                    alt={article.title}
                     loading="lazy"
                     className="relative w-full h-full object-cover"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}

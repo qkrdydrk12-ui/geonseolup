@@ -70,7 +70,7 @@ export default function NewsDetail({ slug }: Props) {
           <div style={{ background: '#0d0d0d' }}>
             <img
               src={article.imageSrc}
-              alt=""
+              alt={article.title}
               className="w-full max-w-[560px] mx-auto block"
             />
           </div>
@@ -97,7 +97,7 @@ export default function NewsDetail({ slug }: Props) {
                   {block.image && (
                     <img
                       src={block.image}
-                      alt=""
+                      alt={block.subtitle || article.title}
                       loading="lazy"
                       className="w-full max-w-[440px] mx-auto block rounded-xl border border-gray-200 mb-3"
                     />

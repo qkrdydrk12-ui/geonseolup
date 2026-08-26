@@ -42,7 +42,8 @@ export default function Contact() {
 
           <p className="leading-relaxed">
             서비스 이용 중 불편한 점, 허위 공고 신고, 개선 제안 등 모든 문의를 아래 이메일로 보내주세요.<br />
-            확인 후 최대한 빠르게 답변 드리겠습니다.
+            확인 후 최대한 빠르게 답변 드리겠습니다. 공고를 신고하실 때는 해당 공고의 제목이나 페이지 링크를
+            함께 보내주시면 더 빠르게 확인할 수 있습니다.
           </p>
 
           <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">

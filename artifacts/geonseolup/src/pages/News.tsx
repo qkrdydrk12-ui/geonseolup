@@ -46,7 +46,7 @@ export default function News() {
                   <div className="relative aspect-[16/9] overflow-hidden" style={{ background: '#0d0d0d' }}>
                     <img
                       src={article.imageSrc}
-                      alt=""
+                      alt={article.title}
                       loading="lazy"
                       className="w-full h-full object-contain"
                     />
