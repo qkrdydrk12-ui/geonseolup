@@ -875,10 +875,9 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
             🏠 홈
           </a>
           <span className="text-white/30">|</span>
-          <a href="/admin" className="text-white/80 hover:text-white no-underline flex items-center gap-1 transition-colors">
-            ⚙️ 관리자
-          </a>
-          <span className="text-white/30">|</span>
+          {/* "⚙️ 관리자" 공개 링크는 제거 (2026-08-26) — /admin은 robots.txt로도 이미
+              크롤링 차단 중이며, 방문자 화면에 관리자 진입 링크를 노출할 이유가 없다.
+              실제 관리 기능/권한 체크는 그대로 유지, 접근은 직접 URL로만 가능. */}
           <a href="/info" className="text-white/80 hover:text-white no-underline transition-colors">
             정보/꿀팁
           </a>
