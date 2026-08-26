@@ -264,6 +264,11 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/wages", changefreq: "daily", priority: "0.8" },
       { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
+      // 2026-08-26 추가 — 신뢰도 페이지(약관/개인정보/문의)가 사이트맵에서 빠져있었음.
+      // 자주 안 바뀌는 정적 페이지라 changefreq는 낮게, priority도 콘텐츠 페이지보단 낮게.
+      { loc: "/terms", changefreq: "yearly", priority: "0.3" },
+      { loc: "/privacy", changefreq: "yearly", priority: "0.3" },
+      { loc: "/contact", changefreq: "yearly", priority: "0.4" },
       ...infoArticles.map((a) => ({
         loc: `/info/${encodeURIComponent(a.slug)}`, changefreq: "monthly", priority: "0.6",
         lastmod: toLastmod(a),
@@ -667,6 +672,126 @@ function replaceMetaTags(template: string, opts: { title: string; desc: string; 
   html = setCanonical(html, opts.url);
   return html;
 }
+
+// ── 구인글 등록 / 일당 시세 / 건설 추천템 (2026-08-26 신설) ─────────────────────
+// 이 세 페이지는 서버 렌더링 경로가 아예 없어서, 원본 index.html에 고정된 홈 URL의
+// canonical을 그대로 물려받고 있었다 — 즉 "이 페이지는 홈페이지의 중복"이라고
+// 검색엔진에 잘못 알려주는 상태였다(title/description도 홈 문구 그대로). title/desc는
+// 실제 화면에 있는 문구(Post.tsx/Wages.tsx/Shop.tsx의 h1·부제)를 그대로 가져다 썼다.
+router.get("/post", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "구인글 등록 | 건설UP",
+      desc: "건설 현장 구인 정보를 무료로 등록하세요. 지역·직종·급여 등 현장 정보를 입력해 바로 공고를 올릴 수 있습니다.",
+      url: `${SITE_URL}/post`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[post-form-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/wages", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      // Wages.tsx가 클라이언트에서 쓰는 것과 동일한 문구(useEffect로 document.title 갱신) —
+      // 서버 렌더링 초기 HTML에도 같은 값을 심어 크롤러·SNS 공유 미리보기에서 일치시킨다.
+      title: "이번주 건설현장 일당 시세 — 건설UP",
+      desc: "평택·용인·화성·청주 등 반도체·건설현장 지역별·직종별 일당 시세를 매주 정리해서 알려드립니다.",
+      url: `${SITE_URL}/wages`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[wages-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/shop", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설 추천템 | 건설UP",
+      desc: "건설 현장에서 실제로 쓰는 안전화·장갑 등 실사용 추천 장비·용품을 모았습니다.",
+      url: `${SITE_URL}/shop`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[shop-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// ── 이용약관 / 개인정보처리방침 / 소개·문의 (2026-08-26 신설) ────────────────────
+// 셋 다 정적 콘텐츠 페이지라 지금까지 서버 렌더링 title/description이 없어서
+// 전부 홈페이지 기본 문구("건설UP - 건설 현장 일자리 정보")를 그대로 물려받고
+// 있었다 — 실제 페이지 내용(Terms.tsx/Privacy.tsx/Contact.tsx)을 그대로 요약해
+// 각자 고유한 title/description을 부여한다(canonical은 replaceMetaTags가 같이 처리).
+router.get("/terms", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "이용약관 | 건설UP",
+      desc: "건설UP 건설 현장 구인·구직 정보 서비스의 이용약관입니다. 서비스 내용, 게시물 관리 기준, 면책사항을 안내합니다.",
+      url: `${SITE_URL}/terms`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[terms-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/privacy", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "개인정보처리방침 | 건설UP",
+      desc: "건설UP이 수집하는 개인정보 항목(연락처·방문 통계)과 이용 목적, 보유 기간을 안내하는 개인정보처리방침입니다.",
+      url: `${SITE_URL}/privacy`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[privacy-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/contact", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설UP 소개 및 문의하기",
+      desc: "건설UP은 전국 건설 현장 구인·구직 정보를 지역별·직종별로 제공하는 서비스입니다. 허위 공고 신고, 기능 제안, 개인정보 문의를 이메일로 받습니다.",
+      url: `${SITE_URL}/contact`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[contact-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 router.get("/info", async (_req: Request, res: Response) => {
   try {
