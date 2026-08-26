@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 
 interface WageRate {
   id: number;
@@ -146,6 +147,7 @@ export default function Wages() {
           최신 구인공고는 <a href="/" className="text-[#f97316] font-semibold no-underline">건설UP 메인 페이지</a>에서 확인하세요.
         </p>
       </main>
+      <Footer />
     </div>
   );
 }

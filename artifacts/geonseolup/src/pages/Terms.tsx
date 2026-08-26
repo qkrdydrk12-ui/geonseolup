@@ -1,4 +1,5 @@
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 
 export default function Terms() {
   return (
@@ -24,12 +25,13 @@ export default function Terms() {
               <li>허위·과장된 구인 정보 게시를 금지합니다.</li>
               <li>동일 연락처로 30분 이내 중복 게시를 제한합니다.</li>
               <li>서비스 운영자는 부적절한 게시물을 사전 통보 없이 삭제할 수 있습니다.</li>
+              <li>허위·부적절한 게시물로 신고된 내용은 운영자가 확인 후 삭제 등 조치를 취할 수 있습니다.</li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-base font-bold text-gray-800 mb-2">제4조 (면책사항)</h2>
-            <p>건설UP은 게시된 구인 정보의 정확성·신뢰성을 보증하지 않습니다. 이용자는 직접 확인 후 거래하시기 바라며, 이로 인해 발생하는 손해에 대해 서비스는 책임을 지지 않습니다.</p>
+            <p>건설UP은 게시된 구인 정보의 정확성·신뢰성을 보증하지 않으며, 채용 여부·근무 조건·급여 지급 등 실제 고용 결과를 보증하지 않습니다. 이용자는 직접 확인 후 거래하시기 바라며, 이로 인해 발생하는 손해에 대해 서비스는 책임을 지지 않습니다. 외부 사이트나 외부 연락처를 통한 거래·상담은 해당 당사자 간 책임이며, 서비스는 이에 대해 관여하지 않습니다.</p>
           </section>
 
           <section>
@@ -37,9 +39,15 @@ export default function Terms() {
             <p>본 약관은 관계 법령 변경 또는 서비스 정책에 따라 변경될 수 있으며, 변경 시 서비스 내 공지를 통해 안내합니다.</p>
           </section>
 
+          <section>
+            <h2 className="text-base font-bold text-gray-800 mb-2">제6조 (문의)</h2>
+            <p>서비스 이용과 관련한 문의, 게시물 신고·수정·삭제 요청은 <a href="/contact" className="text-[#f97316] font-semibold no-underline">문의하기</a> 페이지를 통해 접수하실 수 있습니다.</p>
+          </section>
+
           <p className="text-xs text-gray-400 pt-4 border-t border-gray-100">시행일: 2026년 1월 1일</p>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

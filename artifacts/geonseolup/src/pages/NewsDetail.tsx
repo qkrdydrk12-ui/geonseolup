@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import RelatedLinks from '@/components/RelatedLinks';
 import { useMergedNews } from '@/lib/useMergedNews';
 import { renderRichText } from '@/lib/richText';
@@ -155,6 +156,7 @@ export default function NewsDetail({ slug }: Props) {
           </div>
         </article>
       </main>
+      <Footer />
     </div>
   );
 }

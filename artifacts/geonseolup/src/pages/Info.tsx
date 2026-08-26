@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 
 function WageBanner() {
@@ -80,6 +81,7 @@ export default function Info() {
           ))}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

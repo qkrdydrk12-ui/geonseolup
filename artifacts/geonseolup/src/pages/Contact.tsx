@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 
 export default function Contact() {
   const [copied, setCopied] = useState(false);
@@ -29,6 +30,11 @@ export default function Contact() {
             항상 최신 정보만 노출되도록 운영하고 있습니다. 처음 건설 현장 일을 시작하는 분들을 위한 실무 가이드({' '}
             <a href="/info" className="text-[#f97316] font-semibold no-underline">정보/꿀팁</a>
             )도 함께 제공합니다.
+          </p>
+          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 leading-relaxed">
+            공고 내용은 등록 시점의 정보이므로, 지원 전 근무조건과 연락처를 직접 한 번 더 확인해 주시기 바랍니다.
+            건설UP은 정보 게시·연결 서비스이며 채용이나 근무 결과를 보증하지 않습니다.
+            허위·과장되었거나 부적절한 공고를 발견하시면 아래 이메일로 신고해 주세요.
           </p>
         </div>
 
@@ -71,6 +77,7 @@ export default function Contact() {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import RelatedLinks from '@/components/RelatedLinks';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 import { renderRichText } from '@/lib/richText';
@@ -156,6 +157,7 @@ export default function InfoDetail({ slug }: Props) {
           </Link>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
