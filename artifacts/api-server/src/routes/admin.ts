@@ -12,6 +12,7 @@ import { getPopularJobIds } from "../lib/jobViews.js";
 import { countSubscriptions } from "../lib/pushSubscriptions.js";
 import { countEmailSubscribers } from "../lib/emailSubscribers.js";
 import { getCurrentThreadsToken } from "../lib/threadsToken.js";
+import { isIndexingConfigured } from "../lib/googleIndexing.js";
 import { listPendingDrafts, markDraftPublished, markDraftRejected, getDraftById, generateDraftImage, deleteLegacyPendingDrafts } from "../lib/threadsDrafts.js";
 import { publishToThreads } from "../lib/threadsPublish.js";
 import { recordPublishedPost, listPendingComments, approveAndReply, dismissComment, pollForNewComments } from "../lib/threadsComments.js";
@@ -139,6 +140,9 @@ router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Resp
           }
         : { configured: false },
       threadsPendingDrafts: pendingDrafts.length,
+      // 2026-08-26: Google Indexing API(신규 구인공고 즉시 알림) 자격증명 설정 여부만 확인
+      // (값 자체는 절대 노출 안 함 — 있는지 없는지만 boolean으로).
+      googleIndexingConfigured: isIndexingConfigured(),
     });
   } catch (err) {
     res.status(500).json({ ok: false, message: String(err) });
