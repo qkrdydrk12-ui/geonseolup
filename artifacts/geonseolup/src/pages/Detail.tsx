@@ -164,6 +164,15 @@ export default function Detail({ id }: Props) {
     alert('링크가 복사됐습니다!');
   }
 
+  // 공고 단위 신고 — 별도 신고 API 없이 문의 이메일에 공고 제목·링크를 미리 채워 보낸다
+  // (기존 문의 채널을 그대로 활용, 새 백엔드/DB 없이 저위험으로 추가).
+  function doReport() {
+    if (!job) return;
+    const subject = `[공고 신고] ${job.title}`;
+    const body = `신고 사유를 적어주세요.\n\n---\n공고 제목: ${job.title}\n공고 링크: ${location.href}`;
+    window.location.href = `mailto:qkrdydrk@naver.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#f1f5f9' }}>
@@ -287,6 +296,12 @@ export default function Detail({ id }: Props) {
             onClick={doShare}
           >
             💛 카카오 공유
+          </button>
+          <button
+            className="flex items-center gap-[5px] px-3 py-2 rounded-lg text-sm font-bold cursor-pointer border-[1.5px] border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition-all font-[inherit] ml-auto"
+            onClick={doReport}
+          >
+            🚨 신고
           </button>
         </div>
 
