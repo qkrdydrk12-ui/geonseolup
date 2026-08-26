@@ -938,6 +938,7 @@ function ScrollTopButton() {
     <button
       className="fixed bottom-20 right-[18px] w-11 h-11 bg-[#1e3a5f] text-white border-none rounded-full text-lg cursor-pointer shadow-md z-[150] flex items-center justify-center hover:bg-[#f97316] hover:-translate-y-0.5 transition-all"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      aria-label="맨 위로"
     >
       ↑
     </button>

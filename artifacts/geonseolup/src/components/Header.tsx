@@ -31,6 +31,7 @@ function ContactModal({ isOpen, onClose }: ContactModalProps) {
           <button
             className="absolute top-3 right-3.5 bg-white/20 border-none text-white w-7 h-7 rounded-full text-base leading-none cursor-pointer flex items-center justify-center hover:bg-white/35 transition-colors"
             onClick={onClose}
+            aria-label="닫기"
           >
             ✕
           </button>
