@@ -831,10 +831,37 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
               ))}
             </div>
           ) : state.filtered.length === 0 ? (
-            <div className="text-center py-16 text-gray-400 col-span-full">
-              <div className="text-5xl mb-3">🔍</div>
-              <div className="text-lg font-bold text-gray-700 mb-1.5">검색 결과가 없습니다</div>
-              <div className="text-sm">다른 키워드나 필터를 사용해 보세요</div>
+            <div className="py-10 col-span-full">
+              {/* 구글 등 검색엔진에 예전에 캐시된 지역×직종 링크로 들어왔는데 지금은 그
+                  조합에 공고가 없는 경우가 많다(공고 회전 주기가 48시간으로 짧음) — 빈
+                  화면 대신 지금 모집 중인 다른 공고를 보여줘서 이탈을 막는다(2026-08-26). */}
+              <div className="text-center text-gray-400 mb-6">
+                <div className="text-5xl mb-3">🔍</div>
+                <div className="text-lg font-bold text-gray-700 mb-1.5">이 조건에는 공고가 없습니다</div>
+                <div className="text-sm mb-3">다른 키워드나 필터를 사용해 보세요</div>
+                <button
+                  className="bg-white border-[1.5px] border-[#f97316] text-[#f97316] px-4 py-1.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#f97316] hover:text-white transition-all"
+                  onClick={resetAll}
+                >
+                  전체 공고 보기
+                </button>
+              </div>
+              {(() => {
+                const fallbackJobs = filterAndSort(state.allJobs, {
+                  ...state, keyword: '', region: '전체', job: '전체', weldSub: '전체', sort: 'newest',
+                }).slice(0, 6);
+                if (fallbackJobs.length === 0) return null;
+                return (
+                  <>
+                    <div className="text-sm font-bold text-gray-500 mb-2.5 px-0.5">🔥 지금 모집 중인 다른 일자리</div>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5">
+                      {fallbackJobs.map((job) => (
+                        <JobCard key={job.id} job={job} isAdmin={isAdmin} onDelete={isAdmin ? handleDeleteJob : undefined} />
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5 mt-0">
