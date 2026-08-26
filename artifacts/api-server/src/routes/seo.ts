@@ -208,6 +208,13 @@ function setCanonical(html: string, url: string): string {
   );
 }
 
+// robots 메타 태그 삽입 (2026-08-26 신설). 기본 템플릿엔 이 태그가 아예 없으므로
+// </head> 직전에 새로 끼워 넣는다 — 검색결과 0건 랜딩페이지처럼 "색인은 안 하되
+// 내부링크는 따라가게"(noindex, follow) 해야 하는 경우에 쓴다.
+function setRobotsMeta(html: string, content: string): string {
+  return html.replace("</head>", `  <meta name="robots" content="${escapeHtmlAttr(content)}" />\n  </head>`);
+}
+
 // 지역×직종 조합별 공고 수 집계 (공고가 있는 조합만) — sitemap과 랜딩페이지가 공유.
 function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string, number> {
   const counts = new Map<string, number>();
@@ -546,6 +553,9 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     );
     // canonical — 홈 URL 고정값을 이 랜딩페이지 URL로 교체 (동일한 버그, 동일한 이유로 수정).
     html = setCanonical(html, pageUrl);
+    // 결과 0건이면 noindex(색인 제외) + follow(내부링크는 계속 따라가게) — 빈 조합 페이지가
+    // 검색결과에 뜨는 것만 막고, 다른 지역/직종 링크 크롤링은 막지 않는다.
+    html = setRobotsMeta(html, matched.length > 0 ? "index, follow" : "noindex, follow");
     // BreadcrumbList: 홈 > 지역 직종 구인 공고
     const breadcrumbLd = buildBreadcrumbLd([
       { name: "건설UP", url: SITE_URL },
