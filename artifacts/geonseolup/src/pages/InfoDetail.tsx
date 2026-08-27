@@ -81,7 +81,9 @@ export default function InfoDetail({ slug }: Props) {
             />
           </div>
           <div className="p-6 sm:p-8">
-            <div className="text-4xl mb-4">{article.emoji}</div>
+            {/* 제목 위 대형 이모지 제거 (2026-08-27 사용자 지적 — "내용글 시작부에 이모지"가
+                유치해 보인다고 실측 지적됨). article.emoji 자체는 계속 받아오되(카드 썸네일
+                이미지 로딩 실패 시 대체용, 위 75번째 줄), 상세 페이지 제목 위 노출만 없앤다. */}
             <h1 className="text-xl sm:text-2xl font-bold text-[#1e3a5f] leading-snug mb-2">
               {article.title}
             </h1>
