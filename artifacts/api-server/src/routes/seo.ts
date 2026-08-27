@@ -506,9 +506,19 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
 // 지역×직종 SEO 랜딩페이지. "화성 조공 구인", "용인 용접 일당" 같은 롱테일 검색을
 // 겨냥한 전용 URL. React 쪽 Home 컴포넌트가 동일 필터로 렌더링하므로 실제 방문자
 // 경험은 동일하고, 여기서는 <head>와 크롤러용 폴백 본문만 채워준다.
+// 서치콘솔 실측 기준 검색어 표기(자연어)가 내부 직종 필드명과 달라 title이 검색어와
+// 어긋나는 경우의 표시용 별칭 (2026-08-28, gsc-opportunity-keywords 조사). 필터링에 쓰는
+// jobType 값 자체는 그대로 두고, title/description 표시 문구에만 이 별칭을 적용한다.
+// 예: 실제 검색은 "배관공"(노출 201, 클릭 2, CTR ~1%)인데 내부 직종명은 "배관"이라
+// title이 "용인 배관 구인 공고"로 나가 검색어와 미묘하게 안 맞았던 것으로 추정.
+const JOB_DISPLAY_ALIAS: Record<string, string> = {
+  "배관": "배관공",
+};
+
 router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
   const region = decodeURIComponent(String(req.params.region));
   const jobType = decodeURIComponent(String(req.params.job));
+  const jobDisplay = JOB_DISPLAY_ALIAS[jobType] ?? jobType;
   try {
     const [template, { jobs }] = await Promise.all([getIndexTemplate(), getPublicJobs()]);
 
@@ -517,9 +527,9 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
              (typeof j.job === "string" ? j.job : "") === jobType
     );
 
-    const pageTitle = escapeHtmlAttr(`${region} ${jobType} 구인 공고 (${matched.length}건) - 건설UP`);
+    const pageTitle = escapeHtmlAttr(`${region} ${jobDisplay} 구인 공고 (${matched.length}건) - 건설UP`);
     const pageDesc = escapeHtmlAttr(
-      `${region} 지역 ${jobType} 실시간 구인 공고 ${matched.length}건. 전국 건설 현장 일자리 정보를 건설UP에서 확인하세요.`.slice(0, 160)
+      `${region} 지역 ${jobDisplay} 실시간 구인 공고 ${matched.length}건. 전국 건설 현장 일자리 정보를 건설UP에서 확인하세요.`.slice(0, 160)
     );
     const pageUrl = `${SITE_URL}/jobs/${encodeURIComponent(region)}/${encodeURIComponent(jobType)}`;
 
@@ -554,7 +564,7 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     const regionJobRssUrl = `${SITE_URL}/rss/${encodeURIComponent(region)}/${encodeURIComponent(jobType)}`;
     html = html.replace(
       /<link rel=["']alternate["'] type=["']application\/rss\+xml["'][^>]*\/>/,
-      `<link rel="alternate" type="application/rss+xml" title="${escapeHtmlAttr(`건설UP ${region} ${jobType} 구인 공고`)}" href="${regionJobRssUrl}" />`
+      `<link rel="alternate" type="application/rss+xml" title="${escapeHtmlAttr(`건설UP ${region} ${jobDisplay} 구인 공고`)}" href="${regionJobRssUrl}" />`
     );
     // canonical — 홈 URL 고정값을 이 랜딩페이지 URL로 교체 (동일한 버그, 동일한 이유로 수정).
     html = setCanonical(html, pageUrl);
@@ -564,7 +574,7 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     // BreadcrumbList: 홈 > 지역 직종 구인 공고
     const breadcrumbLd = buildBreadcrumbLd([
       { name: "건설UP", url: SITE_URL },
-      { name: `${region} ${jobType} 구인 공고`, url: pageUrl },
+      { name: `${region} ${jobDisplay} 구인 공고`, url: pageUrl },
     ]);
     html = html.replace("</head>", `  ${breadcrumbLd}\n  </head>`);
 
@@ -583,7 +593,7 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     const fallbackBody = `
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
-        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(region)} ${escapeHtmlAttr(jobType)} 구인 공고</h1>
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(region)} ${escapeHtmlAttr(jobDisplay)} 구인 공고</h1>
         <p style="margin:0 0 16px;color:#334155">현재 ${matched.length}건의 공고가 등록되어 있습니다.</p>
         ${matched.length > 0 ? `<ul style="list-style:none;padding:0;margin:0 0 16px">${listItems}</ul>` : `<p style="margin:0 0 16px;color:#64748b">현재 조건에 맞는 공고가 없습니다. 다른 지역/직종도 확인해보세요.</p>`}
         <p style="margin:0;color:#64748b;font-size:14px">
