@@ -821,6 +821,18 @@ router.get("/info", async (_req: Request, res: Response) => {
   }
 });
 
+// 일반 blog-articles 글이 아니라 프론트에서 slug 기반으로 특수 렌더링하는 인터랙티브
+// 페이지(ShuttleScheduleYonginSK.tsx의 CUSTOM_INFO_PAGES와 대응) — 아래 404 처리에서
+// "존재하지 않는 글"로 오인되지 않도록 여기 등록해야 검색엔진이 실제로 색인할 수 있다
+// (2026-08-29 실측 — 등록 전엔 URL 검사에서 404로 색인 생성 요청이 거부됨).
+const CUSTOM_INFO_PAGES: Record<string, { title: string; description: string; imageUrl?: string }> = {
+  "yongin-sk-shuttle-schedule": {
+    title: "용인 셔틀버스 시간표 — SK 반도체 현장 통근버스 정류장 19곳",
+    description: "용인 셔틀버스(SK 반도체 현장 통근버스) 정류장 19곳 출근·퇴근 시간표를 한눈에. 용인 셔틀버스 시간표, 픽업 장소별로 눌러서 바로 확인하세요.",
+    imageUrl: "/images/shuttle-yongin-sk-hero.jpg",
+  },
+};
+
 router.get("/info/:slug", async (req: Request, res: Response) => {
   const slug = String(req.params.slug);
   try {
@@ -830,7 +842,8 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       // 관리자가 글 제목/설명을 수정했을 수 있으므로 덮어쓰기를 병합 (실패해도 원본으로 진행).
       getAllInfoOverrides().catch(() => ({}) as Record<string, { title: string; description: string }>),
     ]);
-    const base = metaList.find((a) => a.slug === slug);
+    const custom = CUSTOM_INFO_PAGES[slug];
+    const base = custom ? { slug, title: custom.title, description: custom.description, imageUrl: custom.imageUrl } : metaList.find((a) => a.slug === slug);
     const ov = overrides[slug];
     const meta = base
       ? { ...base, title: ov?.title || base.title, description: ov?.description || base.description }
