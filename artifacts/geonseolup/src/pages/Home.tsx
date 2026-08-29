@@ -91,14 +91,17 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
   );
 }
 
+interface ShuttleLink { label: string; href: string; icon?: string; color?: string }
+
 // 셔틀시간표 드롭다운 기본값 — 관리자 화면에서 안 바꿨을 때(또는 서버 응답 전 잠깐) 쓰는 기본 목록.
 // 실제 목록은 Firestore settings/shuttle_links로 관리자 화면에서 편집 가능(Admin.tsx 참고).
-const DEFAULT_SHUTTLE_LINKS: { label: string; href: string }[] = [
-  { label: '용인SK셔틀', href: '/info/yongin-sk-shuttle-schedule' },
-  { label: '평택삼성셔틀', href: '/info/pyeongtaek-samsung-shuttle-schedule' },
+// SK/삼성 각 회사 브랜드 색으로 구분(용인SK셔틀=SK 레드, 평택삼성셔틀=삼성 블루).
+const DEFAULT_SHUTTLE_LINKS: ShuttleLink[] = [
+  { label: '용인SK셔틀', href: '/info/yongin-sk-shuttle-schedule', icon: '🚍', color: '#EE1C25' },
+  { label: '평택삼성셔틀', href: '/info/pyeongtaek-samsung-shuttle-schedule', icon: '🚌', color: '#1428A0' },
 ];
 
-function loadShuttleLinksCache(): { label: string; href: string }[] {
+function loadShuttleLinksCache(): ShuttleLink[] {
   try {
     const raw = localStorage.getItem('cj_shuttle_links');
     if (!raw) return DEFAULT_SHUTTLE_LINKS;
@@ -120,7 +123,7 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
   useEffect(() => {
     fbGetSetting('shuttle_links').then((v) => {
       if (Array.isArray(v) && v.length > 0) {
-        setShuttleLinks(v as { label: string; href: string }[]);
+        setShuttleLinks(v as ShuttleLink[]);
         localStorage.setItem('cj_shuttle_links', JSON.stringify(v));
       }
     }).catch(() => {});
@@ -173,10 +176,11 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
                   <a
                     key={s.href}
                     href={s.href}
-                    className="block w-full px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-orange-50 no-underline"
+                    className="block w-full px-3 py-2.5 text-xs font-bold hover:bg-orange-50 no-underline"
+                    style={{ color: s.color || '#1f2937' }}
                     onClick={() => setShuttleOpen(false)}
                   >
-                    🚌 {s.label}
+                    {s.icon || '🚌'} {s.label}
                   </a>
                 ))}
               </div>

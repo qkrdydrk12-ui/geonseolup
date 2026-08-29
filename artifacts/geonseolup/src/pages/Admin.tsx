@@ -351,11 +351,12 @@ export default function Admin() {
   const [newJobInput, setNewJobInput] = useState('');
 
   // 셔틀시간표 드롭다운(홈 화면) 링크 목록 — 실제 반영 값은 Firestore settings/shuttle_links.
-  const DEFAULT_SHUTTLE_LINKS_ADMIN = [
-    { label: '용인SK셔틀', href: '/info/yongin-sk-shuttle-schedule' },
-    { label: '평택삼성셔틀', href: '/info/pyeongtaek-samsung-shuttle-schedule' },
+  // icon/color는 회사 브랜드 느낌을 내려고 넣은 선택 항목(예: SK 레드, 삼성 블루).
+  const DEFAULT_SHUTTLE_LINKS_ADMIN: { label: string; href: string; icon: string; color: string }[] = [
+    { label: '용인SK셔틀', href: '/info/yongin-sk-shuttle-schedule', icon: '🚍', color: '#EE1C25' },
+    { label: '평택삼성셔틀', href: '/info/pyeongtaek-samsung-shuttle-schedule', icon: '🚌', color: '#1428A0' },
   ];
-  const [shuttleLinks, setShuttleLinks] = useState<{ label: string; href: string }[]>(() => {
+  const [shuttleLinks, setShuttleLinks] = useState<{ label: string; href: string; icon?: string; color?: string }[]>(() => {
     try {
       const stored = localStorage.getItem('cj_shuttle_links');
       if (stored) {
@@ -557,7 +558,7 @@ export default function Admin() {
         try {
           const remote = await fbGetSetting('shuttle_links');
           if (Array.isArray(remote) && remote.length > 0) {
-            setShuttleLinks(remote as { label: string; href: string }[]);
+            setShuttleLinks(remote as { label: string; href: string; icon?: string; color?: string }[]);
             localStorage.setItem('cj_shuttle_links', JSON.stringify(remote));
           }
         } catch (e) {
@@ -3141,20 +3142,36 @@ export default function Admin() {
               </p>
               <div className="max-w-[680px] flex flex-col gap-2.5">
                 {shuttleLinks.map((s, i) => (
-                  <div key={i} className="flex gap-2 items-center">
+                  <div key={i} className="flex gap-2 items-center flex-wrap">
+                    <input
+                      type="text"
+                      value={s.icon ?? ''}
+                      onChange={(e) => setShuttleLinks((prev) => prev.map((x, idx) => (idx === i ? { ...x, icon: e.target.value } : x)))}
+                      placeholder="🚌"
+                      title="이모지"
+                      className="w-[48px] shrink-0 py-2 px-2 text-center border-[1.5px] border-gray-200 rounded-lg text-base outline-none font-[inherit] focus:border-[#f97316]"
+                    />
+                    <input
+                      type="color"
+                      value={s.color || '#1f2937'}
+                      onChange={(e) => setShuttleLinks((prev) => prev.map((x, idx) => (idx === i ? { ...x, color: e.target.value } : x)))}
+                      title="글씨 색"
+                      className="w-[36px] h-[36px] shrink-0 p-0.5 border-[1.5px] border-gray-200 rounded-lg cursor-pointer"
+                    />
                     <input
                       type="text"
                       value={s.label}
                       onChange={(e) => setShuttleLinks((prev) => prev.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))}
                       placeholder="표시 이름 (예: 용인SK셔틀)"
-                      className="w-[160px] shrink-0 py-2 px-3 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                      style={{ color: s.color || undefined }}
+                      className="w-[150px] shrink-0 py-2 px-3 border-[1.5px] border-gray-200 rounded-lg text-[13px] font-bold outline-none font-[inherit] focus:border-[#f97316]"
                     />
                     <input
                       type="text"
                       value={s.href}
                       onChange={(e) => setShuttleLinks((prev) => prev.map((x, idx) => (idx === i ? { ...x, href: e.target.value } : x)))}
                       placeholder="/info/글-슬러그"
-                      className="flex-1 py-2 px-3 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                      className="flex-1 min-w-[160px] py-2 px-3 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
                     />
                     <button
                       onClick={() => setShuttleLinks((prev) => prev.filter((_, idx) => idx !== i))}
@@ -3171,7 +3188,7 @@ export default function Admin() {
                 <div className="flex gap-2 mt-1">
                   <button
                     className="flex items-center gap-1.5 bg-white border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] py-2 px-4 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#1e3a5f] hover:text-white transition-all font-[inherit]"
-                    onClick={() => setShuttleLinks((prev) => [...prev, { label: '', href: '' }])}
+                    onClick={() => setShuttleLinks((prev) => [...prev, { label: '', href: '', icon: '🚌', color: '#1f2937' }])}
                   >
                     + 항목 추가
                   </button>
@@ -3179,7 +3196,12 @@ export default function Admin() {
                     className="bg-[#f97316] text-white border-none py-2 px-5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
                     onClick={async () => {
                       const cleaned = shuttleLinks
-                        .map((s) => ({ label: s.label.trim(), href: s.href.trim() }))
+                        .map((s) => ({
+                          label: s.label.trim(),
+                          href: s.href.trim(),
+                          icon: (s.icon || '').trim(),
+                          color: (s.color || '').trim(),
+                        }))
                         .filter((s) => s.label && s.href);
                       setShuttleLinks(cleaned);
                       localStorage.setItem('cj_shuttle_links', JSON.stringify(cleaned));
