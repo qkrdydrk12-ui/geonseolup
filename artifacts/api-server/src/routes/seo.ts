@@ -277,6 +277,13 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
         loc: `/news/${encodeURIComponent(a.slug)}`, changefreq: "monthly", priority: "0.6",
         lastmod: toLastmod(a),
       })),
+      // 클라이언트 전용 커스텀 페이지(CUSTOM_INFO_PAGES, 아래 /info/:slug 라우트 참고)도
+      // 일반 글과 동일하게 사이트맵에 넣어야 검색엔진이 발견할 수 있다(2026-08-29 추가 —
+      // URL 검사에선 색인 생성 요청으로 등록했지만 사이트맵 누락도 같이 발견해서 보강).
+      ...Object.keys(CUSTOM_INFO_PAGES).map((slug) => ({
+        loc: `/info/${encodeURIComponent(slug)}`, changefreq: "weekly", priority: "0.6",
+        lastmod: undefined as string | undefined,
+      })),
     ];
 
     const jobUrls = jobs
