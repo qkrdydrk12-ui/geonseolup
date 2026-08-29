@@ -15,6 +15,7 @@ interface BlogArticle {
   body: BodyBlock[];
   imageUrl: string | null;
   published: boolean;
+  scheduledAt: string | null;
   createdAt: string;
   createdBy?: string | null;
 }
@@ -25,10 +26,11 @@ interface ArticleForm {
   description: string;
   emoji: string;
   published: boolean;
+  scheduledAt: string; // datetime-local 문자열, 비워두면 즉시 공개
 }
 
 function emptyForm(): ArticleForm {
-  return { slug: '', title: '', description: '', emoji: '📝', published: true };
+  return { slug: '', title: '', description: '', emoji: '📝', published: true, scheduledAt: '' };
 }
 
 function slugify(title: string): string {
@@ -122,7 +124,10 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
 
   function startEdit(r: BlogArticle) {
     setEditingId(r.id);
-    setForm({ slug: r.slug, title: r.title, description: r.description, emoji: r.emoji, published: r.published });
+    setForm({
+      slug: r.slug, title: r.title, description: r.description, emoji: r.emoji, published: r.published,
+      scheduledAt: r.scheduledAt ? new Date(new Date(r.scheduledAt).getTime() + 9 * 3600000).toISOString().slice(0, 16) : '',
+    });
     setBlocks(r.body.length ? r.body : [{ subtitle: '', text: '' }]);
     setExistingImageUrl(r.imageUrl);
     setImageDataUrl(null);
@@ -137,7 +142,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     const a = INFO_ARTICLES.find((x) => x.slug === slug);
     if (!a) return;
     setEditingId(null);
-    setForm({ slug: a.slug, title: a.title, description: a.description, emoji: a.emoji, published: true });
+    setForm({ slug: a.slug, title: a.title, description: a.description, emoji: a.emoji, published: true, scheduledAt: '' });
     setBlocks(a.body.length ? a.body.map((b) => ({ ...b })) : [{ subtitle: '', text: '' }]);
     setExistingImageUrl(getArticleImage(a.slug));
     setImageDataUrl(null);
@@ -171,9 +176,13 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
 
     setSaving(true);
     try {
+      const scheduledAtIso = form.scheduledAt
+        ? new Date(`${form.scheduledAt}:00+09:00`).toISOString()
+        : null;
       const payload: Record<string, unknown> = {
         title, description, emoji: form.emoji.trim() || '📝',
         body: cleanBlocks, published: form.published,
+        scheduledAt: scheduledAtIso,
       };
       if (imageDataUrl) payload.imageBase64 = imageDataUrl;
       if (editingId) {
@@ -304,6 +313,11 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
             <input type="checkbox" checked={form.published} onChange={(e) => setField('published', e.target.checked)} />
             바로 공개 (해제하면 비공개 초안으로 저장)
           </label>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">예약 발행 시각 (비워두면 즉시 공개)</label>
+            <input type="datetime-local" value={form.scheduledAt} onChange={(e) => setField('scheduledAt', e.target.value)} className={inputCls} />
+            <p className="text-[11px] text-gray-400 mt-1">미래 시각을 넣으면 그 시각 전까지 목록에서 숨겨집니다. "바로 공개"는 켠 상태로 두세요.</p>
+          </div>
         </div>
         <div className="flex gap-2 mt-4">
           <button type="button" onClick={handleSave} disabled={saving} className="bg-[#f97316] text-white border-none px-6 py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors disabled:opacity-50 font-[inherit]">
@@ -331,12 +345,18 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
                     <span>{r.emoji}</span>
                     <span className="font-bold text-sm text-gray-900">{r.title}</span>
                     {!r.published && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">비공개</span>}
+                    {r.scheduledAt && new Date(r.scheduledAt).getTime() > Date.now() && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">예약</span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>
                   <p className="text-[11px] text-gray-400 mt-1">/info/{r.slug}</p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
                     {new Date(r.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })} 등록
                     {' · '}올린 곳: {r.createdBy ? r.createdBy.split('|')[0]!.trim() : '기록 없음 (예전 글)'}
+                    {r.scheduledAt && new Date(r.scheduledAt).getTime() > Date.now() && (
+                      <> {' · '}<span className="text-blue-500 font-semibold">{new Date(r.scheduledAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })} 예약 발행</span></>
+                    )}
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
