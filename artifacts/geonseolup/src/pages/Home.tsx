@@ -10,7 +10,6 @@ const SAMPLE_JOBS = RAW_SAMPLE_JOBS.map(sanitizeClientJob);
 import { isAutoHidden, WELD_SUBS, isWeld, getJobIcon, JOB_ICON_BG, isNew } from '@/lib/utils';
 import { getToken, apiVerify } from '@/lib/adminAuth';
 import JobCard from '@/components/JobCard';
-import { isPushSupported, subscribeToPush, unsubscribeFromPush, isPushMarkedSubscribed } from '@/lib/push';
 
 const DEFAULT_AUTO_HIDE = 0;
 
@@ -92,41 +91,28 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
   );
 }
 
-// 알림 구독(웹 푸시 + 이메일) 바 — 현재 선택된 지역/직종 필터를 그대로 구독 조건으로 쓴다.
-function SubscribeBar({ region, job }: { region: string; job: string }) {
-  const [pushOn, setPushOn] = useState(isPushMarkedSubscribed());
-  const [pushBusy, setPushBusy] = useState(false);
+// 셔틀시간표 드롭다운 항목 — 나중에 현장이 늘어나면 이 배열에만 추가하면 된다.
+const SHUTTLE_LINKS: { label: string; href: string }[] = [
+  { label: '용인SK셔틀', href: '/info/yongin-sk-shuttle-schedule' },
+  { label: '평택삼성셔틀', href: '/info/pyeongtaek-samsung-shuttle-schedule' },
+];
 
+// 알림 구독(웹 푸시 + 이메일) 바 — 현재 선택된 지역/직종 필터를 그대로 구독 조건으로 쓴다.
+// "브라우저 알림" 버튼은 2026-08-29부터 상단 헤더로 이동함(Header.tsx 참고) — 여기선 링크 버튼만 남긴다.
+function SubscribeBar({ region, job }: { region: string; job: string }) {
+  const [shuttleOpen, setShuttleOpen] = useState(false);
   const filterLabel = [region !== '전체' ? region : '', job !== '전체' ? job : ''].filter(Boolean).join(' ') || '전체';
 
-  async function handlePushToggle() {
-    if (pushBusy) return;
-    setPushBusy(true);
-    try {
-      if (pushOn) {
-        await unsubscribeFromPush();
-        setPushOn(false);
-      } else {
-        const result = await subscribeToPush(region, job);
-        if (result.ok) {
-          setPushOn(true);
-        } else if (result.error === 'unsupported') {
-          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-          alert(
-            isIOS
-              ? '아이폰에서는 사파리 하단의 공유 버튼 → "홈 화면에 추가"로 앱처럼 설치한 뒤 알림 구독이 가능해요.'
-              : '이 브라우저는 푸시 알림을 지원하지 않아요.'
-          );
-        } else if (result.error === 'permission_denied') {
-          alert('알림 권한이 거부됐어요. 브라우저 설정에서 허용해주세요.');
-        } else {
-          alert('구독 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
-        }
-      }
-    } finally {
-      setPushBusy(false);
+  // 외부 클릭 시 셔틀시간표 메뉴 닫기
+  useEffect(() => {
+    if (!shuttleOpen) return;
+    function onClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-shuttle-menu]')) setShuttleOpen(false);
     }
-  }
+    window.addEventListener('click', onClick);
+    return () => window.removeEventListener('click', onClick);
+  }, [shuttleOpen]);
 
   return (
     <section className="mb-2.5 bg-white rounded-[10px] border-[1.5px] border-gray-200 px-3 py-2.5">
@@ -147,16 +133,32 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             🏗️ 현장 소식
           </a>
-          <button
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${
-              pushOn
-                ? 'bg-[#f97316] border-[#f97316] text-white'
-                : 'bg-white border-gray-200 text-gray-600 hover:border-[#f97316] hover:text-[#f97316]'
-            } ${pushBusy ? 'opacity-60 pointer-events-none' : ''}`}
-            onClick={handlePushToggle}
-          >
-            {pushOn ? '🔔 구독 중' : '🔕 브라우저 알림'}
-          </button>
+          <div className="relative" data-shuttle-menu>
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all flex items-center gap-1"
+              onClick={(e) => { e.stopPropagation(); setShuttleOpen((o) => !o); }}
+            >
+              🚌 셔틀시간표<span className="text-[8px] opacity-70">▼</span>
+            </button>
+            {shuttleOpen && (
+              <div
+                className="absolute right-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {SHUTTLE_LINKS.map((s) => (
+                  <a
+                    key={s.href}
+                    href={s.href}
+                    className="block w-full px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-orange-50 no-underline"
+                    onClick={() => setShuttleOpen(false)}
+                  >
+                    🚌 {s.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>
