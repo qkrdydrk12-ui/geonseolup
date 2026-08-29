@@ -22,18 +22,43 @@ function loadCache(): ShuttleGroup[] {
 function StopCard({ stop }: { stop: ShuttleStop }) {
   const [open, setOpen] = useState(false);
   const [dir, setDir] = useState<'in' | 'out'>('in');
+  const [copied, setCopied] = useState(false);
   const times = dir === 'in' ? stop.commuteIn : stop.commuteOut;
+
+  function handleCopyAddress(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!stop.address) return;
+    navigator.clipboard?.writeText(stop.address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }
 
   return (
     <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white transition-shadow" style={open ? { boxShadow: '0 4px 20px rgba(238,28,37,0.08)' } : undefined}>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left bg-transparent border-none cursor-pointer"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((o) => !o); } }}
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left cursor-pointer"
       >
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-extrabold text-[15px] text-gray-900 truncate">{stop.name}</p>
-          {stop.address && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{stop.address}</p>}
+          {stop.address && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <p className="text-[11px] text-gray-400 truncate">{stop.address}</p>
+              <button
+                type="button"
+                onClick={handleCopyAddress}
+                title="주소 복사"
+                className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition-colors cursor-pointer"
+                style={copied ? { background: '#fff1f1', borderColor: RED, color: RED_DARK } : { background: '#fff', borderColor: '#e5e7eb', color: '#9ca3af' }}
+              >
+                {copied ? '복사됨' : '복사'}
+              </button>
+            </div>
+          )}
         </div>
         <span
           className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs transition-transform duration-200"
@@ -41,7 +66,7 @@ function StopCard({ stop }: { stop: ShuttleStop }) {
         >
           ▼
         </span>
-      </button>
+      </div>
 
       {open && (
         <div className="px-4 sm:px-5 pb-5 pt-1 border-t border-gray-100 animate-in fade-in slide-in-from-top-1 duration-200">
