@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbLoadPublicJobs } from '@/lib/firebase';
+import { fbLoadPublicJobs, fbGetSetting } from '@/lib/firebase';
 import { SAMPLE_JOBS as RAW_SAMPLE_JOBS } from '@/data/sampleJobs';
 import { sanitizeClientJob } from '@/lib/phone';
 
@@ -91,17 +91,40 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
   );
 }
 
-// 셔틀시간표 드롭다운 항목 — 나중에 현장이 늘어나면 이 배열에만 추가하면 된다.
-const SHUTTLE_LINKS: { label: string; href: string }[] = [
+// 셔틀시간표 드롭다운 기본값 — 관리자 화면에서 안 바꿨을 때(또는 서버 응답 전 잠깐) 쓰는 기본 목록.
+// 실제 목록은 Firestore settings/shuttle_links로 관리자 화면에서 편집 가능(Admin.tsx 참고).
+const DEFAULT_SHUTTLE_LINKS: { label: string; href: string }[] = [
   { label: '용인SK셔틀', href: '/info/yongin-sk-shuttle-schedule' },
   { label: '평택삼성셔틀', href: '/info/pyeongtaek-samsung-shuttle-schedule' },
 ];
+
+function loadShuttleLinksCache(): { label: string; href: string }[] {
+  try {
+    const raw = localStorage.getItem('cj_shuttle_links');
+    if (!raw) return DEFAULT_SHUTTLE_LINKS;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SHUTTLE_LINKS;
+  } catch {
+    return DEFAULT_SHUTTLE_LINKS;
+  }
+}
 
 // 알림 구독(웹 푸시 + 이메일) 바 — 현재 선택된 지역/직종 필터를 그대로 구독 조건으로 쓴다.
 // "브라우저 알림" 버튼은 2026-08-29부터 상단 헤더로 이동함(Header.tsx 참고) — 여기선 링크 버튼만 남긴다.
 function SubscribeBar({ region, job }: { region: string; job: string }) {
   const [shuttleOpen, setShuttleOpen] = useState(false);
+  const [shuttleLinks, setShuttleLinks] = useState(loadShuttleLinksCache);
   const filterLabel = [region !== '전체' ? region : '', job !== '전체' ? job : ''].filter(Boolean).join(' ') || '전체';
+
+  // 관리자 화면에서 저장한 셔틀시간표 목록을 Firestore에서 동기화(모든 기기 공통 반영)
+  useEffect(() => {
+    fbGetSetting('shuttle_links').then((v) => {
+      if (Array.isArray(v) && v.length > 0) {
+        setShuttleLinks(v as { label: string; href: string }[]);
+        localStorage.setItem('cj_shuttle_links', JSON.stringify(v));
+      }
+    }).catch(() => {});
+  }, []);
 
   // 외부 클릭 시 셔틀시간표 메뉴 닫기
   useEffect(() => {
@@ -146,7 +169,7 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
                 className="absolute right-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
                 onClick={(e) => e.stopPropagation()}
               >
-                {SHUTTLE_LINKS.map((s) => (
+                {shuttleLinks.map((s) => (
                   <a
                     key={s.href}
                     href={s.href}

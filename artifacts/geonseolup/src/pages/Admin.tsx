@@ -350,6 +350,22 @@ export default function Admin() {
   const [newRegionInput, setNewRegionInput] = useState('');
   const [newJobInput, setNewJobInput] = useState('');
 
+  // 셔틀시간표 드롭다운(홈 화면) 링크 목록 — 실제 반영 값은 Firestore settings/shuttle_links.
+  const DEFAULT_SHUTTLE_LINKS_ADMIN = [
+    { label: '용인SK셔틀', href: '/info/yongin-sk-shuttle-schedule' },
+    { label: '평택삼성셔틀', href: '/info/pyeongtaek-samsung-shuttle-schedule' },
+  ];
+  const [shuttleLinks, setShuttleLinks] = useState<{ label: string; href: string }[]>(() => {
+    try {
+      const stored = localStorage.getItem('cj_shuttle_links');
+      if (stored) {
+        const arr = JSON.parse(stored);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      }
+    } catch {}
+    return DEFAULT_SHUTTLE_LINKS_ADMIN;
+  });
+
   const [footerText, setFooterText] = useState({
     title: localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보',
     jobs: localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC/자동) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장',
@@ -534,6 +550,18 @@ export default function Admin() {
           }
         } catch (e) {
           console.warn('[Admin] dup_settings 원격 동기화 실패', e);
+        }
+      })();
+      // 셔틀시간표 링크 목록도 서버에서 최신으로 동기화 (다른 기기에서 수정했을 수 있음)
+      (async () => {
+        try {
+          const remote = await fbGetSetting('shuttle_links');
+          if (Array.isArray(remote) && remote.length > 0) {
+            setShuttleLinks(remote as { label: string; href: string }[]);
+            localStorage.setItem('cj_shuttle_links', JSON.stringify(remote));
+          }
+        } catch (e) {
+          console.warn('[Admin] shuttle_links 원격 동기화 실패', e);
         }
       })();
     }
@@ -3098,6 +3126,73 @@ export default function Admin() {
                 </div>
                 <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 break-all">
                   현재 오픈채팅: <strong className="text-gray-800">{settings.openChatUrl || '설정 없음 (오픈채팅 버튼 클릭 시 안내 알림)'}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* 셔틀시간표 드롭다운 링크 관리 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-2 flex items-center gap-2">
+                🚌 셔틀시간표 링크 관리
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                홈 화면 "새 공고 알림받기" 줄의 <strong>🚌 셔틀시간표▼</strong> 드롭다운에 뜰 항목입니다.
+                현장이 늘어나면 아래에서 항목을 추가하면 됩니다. 링크는 보통 건설꿀팁 글 주소(<code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">/info/글슬러그</code>) 형식입니다.
+              </p>
+              <div className="max-w-[680px] flex flex-col gap-2.5">
+                {shuttleLinks.map((s, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={s.label}
+                      onChange={(e) => setShuttleLinks((prev) => prev.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))}
+                      placeholder="표시 이름 (예: 용인SK셔틀)"
+                      className="w-[160px] shrink-0 py-2 px-3 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                    />
+                    <input
+                      type="text"
+                      value={s.href}
+                      onChange={(e) => setShuttleLinks((prev) => prev.map((x, idx) => (idx === i ? { ...x, href: e.target.value } : x)))}
+                      placeholder="/info/글-슬러그"
+                      className="flex-1 py-2 px-3 border-[1.5px] border-gray-200 rounded-lg text-[13px] outline-none font-[inherit] focus:border-[#f97316]"
+                    />
+                    <button
+                      onClick={() => setShuttleLinks((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-lg leading-none cursor-pointer bg-transparent border-none px-1"
+                      title="삭제"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {shuttleLinks.length === 0 && (
+                  <div className="text-xs text-gray-400 py-2">항목이 없습니다. 아래 버튼으로 추가하세요.</div>
+                )}
+                <div className="flex gap-2 mt-1">
+                  <button
+                    className="flex items-center gap-1.5 bg-white border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] py-2 px-4 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#1e3a5f] hover:text-white transition-all font-[inherit]"
+                    onClick={() => setShuttleLinks((prev) => [...prev, { label: '', href: '' }])}
+                  >
+                    + 항목 추가
+                  </button>
+                  <button
+                    className="bg-[#f97316] text-white border-none py-2 px-5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors font-[inherit]"
+                    onClick={async () => {
+                      const cleaned = shuttleLinks
+                        .map((s) => ({ label: s.label.trim(), href: s.href.trim() }))
+                        .filter((s) => s.label && s.href);
+                      setShuttleLinks(cleaned);
+                      localStorage.setItem('cj_shuttle_links', JSON.stringify(cleaned));
+                      try {
+                        await fbSetSetting('shuttle_links', cleaned);
+                        showToast('✅ 셔틀시간표 목록이 저장됐습니다 (모든 기기 동기화)');
+                      } catch {
+                        showToast('✅ 저장됐지만 서버 동기화 실패 — 이 기기에서만 적용');
+                      }
+                    }}
+                  >
+                    💾 저장
+                  </button>
                 </div>
               </div>
             </div>
