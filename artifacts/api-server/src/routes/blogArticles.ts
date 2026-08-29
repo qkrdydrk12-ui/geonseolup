@@ -45,8 +45,15 @@ async function initTables() {
 }
 
 // 누가 올렸는지 추적용: X-Uploader 헤더(도구 이름) + 접속 IP + 브라우저 정보를 기록
+// HTTP 헤더 값은 ISO-8859-1만 허용돼서 클라이언트가 한글 값을 encodeURIComponent로 인코딩해 보낸다 — 여기서 디코딩.
 function creatorInfo(req: Request): string {
-  const uploader = (req.get("x-uploader") ?? "").trim().slice(0, 50) || "미상";
+  const rawUploader = req.get("x-uploader") ?? "";
+  let uploader = "미상";
+  try {
+    uploader = decodeURIComponent(rawUploader).trim().slice(0, 50) || "미상";
+  } catch {
+    uploader = rawUploader.trim().slice(0, 50) || "미상";
+  }
   const ip = (req.get("x-forwarded-for") ?? req.ip ?? "").split(",")[0]!.trim();
   const ua = (req.get("user-agent") ?? "").slice(0, 180);
   return `${uploader} | ip:${ip} | ${ua}`.slice(0, 300);

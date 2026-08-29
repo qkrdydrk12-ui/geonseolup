@@ -49,7 +49,9 @@ async function apiFetch(url: string, init?: RequestInit) {
     headers: {
       ...(init?.headers ?? {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      'X-Uploader': '관리자화면', // 누가 올렸는지 기록용
+      // HTTP 헤더 값은 ISO-8859-1(Latin1)만 허용돼서 한글을 그대로 넣으면 fetch가 즉시 에러를 던진다
+      // (건설 꿀팁 목록이 통째로 "불러오지 못했습니다"로 실패한 원인) — encodeURIComponent로 인코딩해서 보낸다.
+      'X-Uploader': encodeURIComponent('관리자화면'), // 누가 올렸는지 기록용
     },
   });
   if (!res.ok) {
