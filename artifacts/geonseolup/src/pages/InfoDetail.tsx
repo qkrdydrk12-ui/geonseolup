@@ -5,12 +5,29 @@ import Footer from '@/components/Footer';
 import RelatedLinks from '@/components/RelatedLinks';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 import { renderRichText } from '@/lib/richText';
+import ShuttleScheduleYonginSK from '@/components/ShuttleScheduleYonginSK';
 
 interface Props {
   slug: string;
 }
 
+// 일반 blog-articles 렌더링으로 표현이 어려운 인터랙티브 페이지는
+// 여기서 slug로 특수 처리해 전용 컴포넌트를 띄운다(2026-08-29 신설).
+const CUSTOM_INFO_PAGES: Record<string, React.ComponentType> = {
+  'yongin-sk-shuttle-schedule': ShuttleScheduleYonginSK,
+};
+
 export default function InfoDetail({ slug }: Props) {
+  const CustomPage = CUSTOM_INFO_PAGES[slug];
+  if (CustomPage) {
+    // 커스텀 페이지는 완전히 별개의 컴포넌트 트리 — 아래 blog-articles 기반 훅들을
+    // 아예 마운트하지 않는다(각자 자기 title/meta를 스스로 설정함).
+    return <CustomPage />;
+  }
+  return <InfoArticleDetail slug={slug} />;
+}
+
+function InfoArticleDetail({ slug }: Props) {
   const { articles, loading } = useMergedArticles();
   const article = articles.find((a) => a.slug === slug);
 

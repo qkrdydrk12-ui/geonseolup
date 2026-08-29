@@ -35,6 +35,7 @@ import AdminProducts from '@/components/AdminProducts';
 import AdminWageRates from '@/components/AdminWageRates';
 import AdminSiteNews from '@/components/AdminSiteNews';
 import AdminBlogArticles from '@/components/AdminBlogArticles';
+import { DEFAULT_STOPS as DEFAULT_SHUTTLE_SCHEDULE_YONGIN_SK, type ShuttleGroup as ShuttleScheduleGroup } from '@/lib/shuttleScheduleYonginSK';
 import {
   getToken,
   setToken,
@@ -365,6 +366,20 @@ export default function Admin() {
     return DEFAULT_SHUTTLE_LINKS_ADMIN;
   });
 
+  // 용인SK 셔틀시간표 본문 데이터(정류장별 출근/퇴근 시간표) — 실제 반영 값은
+  // Firestore settings/shuttle_schedule_yongin_sk. ShuttleScheduleYonginSK.tsx가 읽어감.
+  const [shuttleSchedule, setShuttleSchedule] = useState<ShuttleScheduleGroup[]>(() => {
+    try {
+      const stored = localStorage.getItem('cj_shuttle_schedule_yongin_sk');
+      if (stored) {
+        const arr = JSON.parse(stored);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      }
+    } catch {}
+    return DEFAULT_SHUTTLE_SCHEDULE_YONGIN_SK;
+  });
+  const [shuttleScheduleOpenStop, setShuttleScheduleOpenStop] = useState<string | null>(null);
+
   const [footerText, setFooterText] = useState({
     title: localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보',
     jobs: localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC/자동) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장',
@@ -561,6 +576,18 @@ export default function Admin() {
           }
         } catch (e) {
           console.warn('[Admin] shuttle_links 원격 동기화 실패', e);
+        }
+      })();
+      // 용인SK 셔틀시간표 데이터도 서버에서 최신으로 동기화
+      (async () => {
+        try {
+          const remote = await fbGetSetting('shuttle_schedule_yongin_sk');
+          if (Array.isArray(remote) && remote.length > 0) {
+            setShuttleSchedule(remote as ShuttleScheduleGroup[]);
+            localStorage.setItem('cj_shuttle_schedule_yongin_sk', JSON.stringify(remote));
+          }
+        } catch (e) {
+          console.warn('[Admin] shuttle_schedule_yongin_sk 원격 동기화 실패', e);
         }
       })();
     }
@@ -3206,6 +3233,133 @@ export default function Admin() {
                     💾 저장
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* 용인SK 셔틀시간표 본문 데이터 관리 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-2 flex items-center gap-2">
+                🚍 용인SK 셔틀시간표 데이터 관리
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                <a href="/info/yongin-sk-shuttle-schedule" target="_blank" rel="noreferrer" className="text-[#f97316] underline">/info/yongin-sk-shuttle-schedule</a> 페이지에 표시되는
+                정류장별 출근·퇴근 시간표입니다. 시간은 <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">HH:MM</code> 형식으로 쉼표(,)로 구분해서 입력하세요.
+              </p>
+              <div className="flex flex-col gap-6">
+                {shuttleSchedule.map((group, gi) => (
+                  <div key={group.key} className="border border-gray-200 rounded-xl p-4">
+                    <div className="flex gap-2 items-center mb-3 flex-wrap">
+                      <input
+                        type="text"
+                        value={group.title}
+                        onChange={(e) => setShuttleSchedule((prev) => prev.map((g, idx) => (idx === gi ? { ...g, title: e.target.value } : g)))}
+                        placeholder="그룹 이름 (예: 현장 인근)"
+                        className="w-[150px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] font-bold outline-none font-[inherit] focus:border-[#EE1C25]"
+                      />
+                      <input
+                        type="text"
+                        value={group.desc}
+                        onChange={(e) => setShuttleSchedule((prev) => prev.map((g, idx) => (idx === gi ? { ...g, desc: e.target.value } : g)))}
+                        placeholder="그룹 설명"
+                        className="flex-1 min-w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#EE1C25]"
+                      />
+                      <span className="text-xs text-gray-400 shrink-0">{group.stops.length}곳</span>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {group.stops.map((stop, si) => {
+                        const stopId = `${gi}-${si}`;
+                        const isOpen = shuttleScheduleOpenStop === stopId;
+                        return (
+                          <div key={stopId} className="border border-gray-100 rounded-lg bg-gray-50/60">
+                            <button
+                              type="button"
+                              onClick={() => setShuttleScheduleOpenStop(isOpen ? null : stopId)}
+                              className="w-full flex items-center justify-between px-3 py-2.5 text-left bg-transparent border-none cursor-pointer"
+                            >
+                              <span className="text-[13px] font-bold text-gray-800">{stop.name || '(이름 없음)'}</span>
+                              <span className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-400">출근 {stop.commuteIn.length} · 퇴근 {stop.commuteOut.length}</span>
+                                <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                              </span>
+                            </button>
+                            {isOpen && (
+                              <div className="px-3 pb-3 flex flex-col gap-2">
+                                <div className="flex gap-2 flex-wrap">
+                                  <input
+                                    type="text"
+                                    value={stop.name}
+                                    onChange={(e) => setShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, stops: g.stops.map((s, sidx) => sidx === si ? { ...s, name: e.target.value } : s) }))}
+                                    placeholder="정류장 이름"
+                                    className="w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] font-bold outline-none font-[inherit] focus:border-[#EE1C25]"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={stop.address ?? ''}
+                                    onChange={(e) => setShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, stops: g.stops.map((s, sidx) => sidx === si ? { ...s, address: e.target.value } : s) }))}
+                                    placeholder="주소"
+                                    className="flex-1 min-w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#EE1C25]"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={stop.note ?? ''}
+                                    onChange={(e) => setShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, stops: g.stops.map((s, sidx) => sidx === si ? { ...s, note: e.target.value } : s) }))}
+                                    placeholder="특이사항 (예: 승차권 필요, 없으면 비움)"
+                                    className="w-[220px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#EE1C25]"
+                                  />
+                                  <button
+                                    onClick={() => setShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, stops: g.stops.filter((_, sidx) => sidx !== si) }))}
+                                    className="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-base leading-none cursor-pointer bg-transparent border-none px-1"
+                                    title="이 정류장 삭제"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <label className="text-[11px] font-bold text-gray-500">출근 시간표 (쉼표로 구분)</label>
+                                <textarea
+                                  value={stop.commuteIn.join(', ')}
+                                  onChange={(e) => setShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, stops: g.stops.map((s, sidx) => sidx === si ? { ...s, commuteIn: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } : s) }))}
+                                  rows={2}
+                                  className="w-full py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#EE1C25] resize-y"
+                                  placeholder="03:30, 03:50, 04:00, ..."
+                                />
+                                <label className="text-[11px] font-bold text-gray-500">퇴근 시간표 (쉼표로 구분)</label>
+                                <textarea
+                                  value={stop.commuteOut.join(', ')}
+                                  onChange={(e) => setShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, stops: g.stops.map((s, sidx) => sidx === si ? { ...s, commuteOut: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } : s) }))}
+                                  rows={2}
+                                  className="w-full py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#EE1C25] resize-y"
+                                  placeholder="07:10, 07:20, 07:40, ..."
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button
+                        className="self-start flex items-center gap-1.5 bg-white border-[1.5px] border-gray-300 text-gray-500 py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer hover:border-[#EE1C25] hover:text-[#EE1C25] transition-all font-[inherit]"
+                        onClick={() => setShuttleSchedule((prev) => prev.map((g, idx) => idx === gi ? { ...g, stops: [...g.stops, { name: '', address: '', destination: 'SK 용인 현장', commuteIn: [], commuteOut: [] }] } : g))}
+                      >
+                        + 정류장 추가
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  className="self-start bg-[#EE1C25] text-white border-none py-2.5 px-6 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#c8151c] transition-colors font-[inherit]"
+                  onClick={async () => {
+                    localStorage.setItem('cj_shuttle_schedule_yongin_sk', JSON.stringify(shuttleSchedule));
+                    try {
+                      await fbSetSetting('shuttle_schedule_yongin_sk', shuttleSchedule);
+                      showToast('✅ 셔틀시간표 데이터가 저장됐습니다 (모든 기기 동기화)');
+                    } catch {
+                      showToast('✅ 저장됐지만 서버 동기화 실패 — 이 기기에서만 적용');
+                    }
+                  }}
+                >
+                  💾 전체 저장
+                </button>
               </div>
             </div>
 
