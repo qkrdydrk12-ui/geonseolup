@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
-import ThreadsDraftsPanel from '@/components/ThreadsDraftsPanel';
-import ThreadsCommentsPanel from '@/components/ThreadsCommentsPanel';
 import type { Job, PendingJob, JobReport } from '@/lib/firebase';
 import {
   fbLoadJobs,
@@ -115,7 +113,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news' | 'blog' | 'settings' | 'stats' | 'threads';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news' | 'blog' | 'settings' | 'stats';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1503,7 +1501,6 @@ export default function Admin() {
               { key: 'news', label: '📰 현장 소식' },
               { key: 'blog', label: '📚 건설 꿀팁' },
               { key: 'stats', label: '📊 방문 통계' },
-              { key: 'threads', label: '🧵 홍보 초안' },
               { key: 'settings', label: '⚙️ 설정' },
             ] as { key: Tab; label: string }[]
           ).map((t) => (
@@ -2665,13 +2662,6 @@ export default function Admin() {
             </div>
           );
         })()}
-
-        {tab === 'threads' && (
-          <>
-            <ThreadsDraftsPanel />
-            <ThreadsCommentsPanel />
-          </>
-        )}
 
         {tab === 'settings' && (
           <div className="flex flex-col gap-5">
