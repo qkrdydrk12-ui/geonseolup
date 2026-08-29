@@ -33,6 +33,9 @@ async function initTables() {
     );
     CREATE INDEX IF NOT EXISTS idx_blog_articles_created ON blog_articles(created_at DESC);
     ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS created_by TEXT;
+    -- 2026-08-29: 예약 발행 지원 — scheduled_at이 미래면 그 시각까지 공개 목록/상세에서 숨김.
+    -- (site_news의 published_at <= now() 필터 패턴을 그대로 재사용)
+    ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
   `);
   // 잘못 저장된 깨진 이미지(수십 바이트짜리 쓰레기 데이터) 자동 정리 — 목록에서 엑박 방지
   await pgPool.query(
@@ -61,6 +64,7 @@ interface BlogArticleRow {
   body: BodyBlock[];
   has_image: boolean;
   published: boolean;
+  scheduled_at: string | null;
   created_at: string;
   updated_at: string;
   created_by?: string | null;
@@ -83,6 +87,7 @@ function toApiBase(row: BlogArticleRow) {
       ? `/api/blog-articles-image/${row.slug}?v=${new Date(row.updated_at).getTime()}`
       : null,
     published: row.published,
+    scheduledAt: row.scheduled_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -108,13 +113,16 @@ function decodeImage(imageBase64?: string): { data: Buffer; mime: string } | nul
 }
 
 const SELECT_COLS = `id, slug, title, description, emoji, body,
-  (image_data IS NOT NULL AND length(image_data) > 100) AS has_image, published, created_at, updated_at, created_by`;
+  (image_data IS NOT NULL AND length(image_data) > 100) AS has_image, published, scheduled_at, created_at, updated_at, created_by`;
 
 // GET /api/blog-articles — 공개, 발행된 글 최신순
+// scheduled_at이 미래인 글은 그 시각이 지나기 전까지 목록에서 숨긴다(예약 발행).
 router.get("/blog-articles", async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query<BlogArticleRow>(
-      `SELECT ${SELECT_COLS} FROM blog_articles WHERE published = true ORDER BY created_at DESC LIMIT 100`
+      `SELECT ${SELECT_COLS} FROM blog_articles
+       WHERE published = true AND (scheduled_at IS NULL OR scheduled_at <= now())
+       ORDER BY created_at DESC LIMIT 100`
     );
     res.json({ rows: result.rows.map((r) => toApi(r)) });
   } catch (err) {
@@ -158,7 +166,7 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
   try {
     const body = req.body as {
       slug?: string; title?: string; description?: string; emoji?: string;
-      body?: BodyBlock[]; imageBase64?: string; published?: boolean;
+      body?: BodyBlock[]; imageBase64?: string; published?: boolean; scheduledAt?: string;
     };
     const slug = (body.slug ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
     const title = (body.title ?? "").trim();
@@ -171,16 +179,20 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
       return;
     }
     const image = decodeImage(body.imageBase64);
+    // scheduledAt이 미래 시각이면 예약 발행(그 시각까지 공개 목록에서 숨김), 과거/미지정이면 즉시 공개.
+    const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+    const scheduledAtIso = scheduledAt && scheduledAt.getTime() > Date.now() ? scheduledAt.toISOString() : null;
 
     const result = await pgPool.query<BlogArticleRow>(
-      `INSERT INTO blog_articles (slug, title, description, emoji, body, image_data, image_mime, published, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO blog_articles (slug, title, description, emoji, body, image_data, image_mime, published, scheduled_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING ${SELECT_COLS}`,
       [slug, title, description, emoji, JSON.stringify(bodyBlocks),
-        image?.data ?? null, image?.mime ?? null, body.published !== false, creatorInfo(req)]
+        image?.data ?? null, image?.mime ?? null, body.published !== false, scheduledAtIso, creatorInfo(req)]
     );
     const saved = result.rows[0]!;
-    if (saved.published) {
+    const isLiveNow = saved.published && (!saved.scheduled_at || new Date(saved.scheduled_at).getTime() <= Date.now());
+    if (isLiveNow) {
       notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
       notifyGoogleIndexing(`https://geonseolup.com/info/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
@@ -206,7 +218,7 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
     }
     const body = req.body as {
       title?: string; description?: string; emoji?: string;
-      body?: BodyBlock[]; imageBase64?: string; published?: boolean;
+      body?: BodyBlock[]; imageBase64?: string; published?: boolean; scheduledAt?: string | null;
     };
     const title = (body.title ?? "").trim();
     const description = (body.description ?? "").trim();
@@ -218,19 +230,35 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
     }
     const image = decodeImage(body.imageBase64);
     const published = body.published !== false;
+    // scheduledAt: undefined면 기존 값 유지, null/빈문자열이면 예약 해제(즉시 공개), 미래 시각이면 예약 갱신.
+    const hasScheduledAtField = Object.prototype.hasOwnProperty.call(body, "scheduledAt");
+    const scheduledDate = body.scheduledAt ? new Date(body.scheduledAt) : null;
+    const scheduledAtIso = scheduledDate && scheduledDate.getTime() > Date.now() ? scheduledDate.toISOString() : null;
 
     const result = image
       ? await pgPool.query<BlogArticleRow>(
-          `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
-             image_data=$5, image_mime=$6, published=$7, updated_at=now()
-           WHERE id=$8 RETURNING ${SELECT_COLS}`,
-          [title, description, emoji, JSON.stringify(bodyBlocks), image.data, image.mime, published, id]
+          hasScheduledAtField
+            ? `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
+                 image_data=$5, image_mime=$6, published=$7, scheduled_at=$8, updated_at=now()
+               WHERE id=$9 RETURNING ${SELECT_COLS}`
+            : `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
+                 image_data=$5, image_mime=$6, published=$7, updated_at=now()
+               WHERE id=$8 RETURNING ${SELECT_COLS}`,
+          hasScheduledAtField
+            ? [title, description, emoji, JSON.stringify(bodyBlocks), image.data, image.mime, published, scheduledAtIso, id]
+            : [title, description, emoji, JSON.stringify(bodyBlocks), image.data, image.mime, published, id]
         )
       : await pgPool.query<BlogArticleRow>(
-          `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
-             published=$5, updated_at=now()
-           WHERE id=$6 RETURNING ${SELECT_COLS}`,
-          [title, description, emoji, JSON.stringify(bodyBlocks), published, id]
+          hasScheduledAtField
+            ? `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
+                 published=$5, scheduled_at=$6, updated_at=now()
+               WHERE id=$7 RETURNING ${SELECT_COLS}`
+            : `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
+                 published=$5, updated_at=now()
+               WHERE id=$6 RETURNING ${SELECT_COLS}`,
+          hasScheduledAtField
+            ? [title, description, emoji, JSON.stringify(bodyBlocks), published, scheduledAtIso, id]
+            : [title, description, emoji, JSON.stringify(bodyBlocks), published, id]
         );
 
     if (result.rows.length === 0) {
@@ -238,7 +266,8 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
       return;
     }
     const saved = result.rows[0]!;
-    if (saved.published) {
+    const isLiveNow = saved.published && (!saved.scheduled_at || new Date(saved.scheduled_at).getTime() <= Date.now());
+    if (isLiveNow) {
       notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
       notifyGoogleIndexing(`https://geonseolup.com/info/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
