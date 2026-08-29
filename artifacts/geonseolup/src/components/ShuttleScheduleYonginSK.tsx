@@ -118,9 +118,9 @@ export default function ShuttleScheduleYonginSK() {
   const [groups, setGroups] = useState<ShuttleGroup[]>(loadCache);
 
   useEffect(() => {
-    document.title = '용인 SK 반도체 현장 통근버스 시간표 — 건설UP';
+    document.title = '용인 셔틀버스 시간표 — SK 반도체 현장 통근버스 정류장 19곳 | 건설UP';
     let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (meta) meta.content = '용인 SK 반도체 현장 통근버스 19개 정류장 출근·퇴근 시간표를 한눈에. 픽업 장소별로 눌러서 바로 확인하세요.';
+    if (meta) meta.content = '용인 셔틀버스(SK 반도체 현장 통근버스) 정류장 19곳 출근·퇴근 시간표를 한눈에. 용인 셔틀버스 시간표, 픽업 장소별로 눌러서 바로 확인하세요.';
 
     fbGetSetting('shuttle_schedule_yongin_sk').then((v) => {
       if (Array.isArray(v) && v.length > 0) {
@@ -147,16 +147,16 @@ export default function ShuttleScheduleYonginSK() {
         <div className="relative rounded-2xl overflow-hidden mb-6" style={{ aspectRatio: '16/7' }}>
           <img
             src="/images/shuttle-yongin-sk-hero.jpg"
-            alt="용인 SK 반도체 현장 통근버스"
+            alt="용인 셔틀버스 - SK 반도체 현장 통근버스"
             className="absolute inset-0 w-full h-full object-cover"
           />
           <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,10,15,0.15) 0%, rgba(10,10,15,0.75) 100%)' }} />
           <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-7">
             <span className="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold mb-2.5" style={{ background: RED, color: '#fff' }}>
-              🚍 용인SK 셔틀
+              🚍 용인 셔틀버스
             </span>
             <h1 className="text-white font-extrabold text-xl sm:text-[28px] leading-tight mb-1.5">
-              용인 SK 반도체 현장<br />통근버스 시간표
+              용인 셔틀버스 시간표<br />SK 반도체 현장 통근버스
             </h1>
             <p className="text-white/70 text-xs sm:text-sm">정류장 {totalStops}곳 · 출근·퇴근 전체 시간 정리</p>
           </div>
@@ -173,7 +173,7 @@ export default function ShuttleScheduleYonginSK() {
         </div>
 
         <p className="text-sm text-gray-500 leading-relaxed mb-6">
-          정류장을 눌러서 그 자리에서 출근·퇴근 시간표를 바로 확인하세요. 현장 바로 앞은 5~10분 간격으로 자주 오지만,
+          용인 셔틀버스 정류장을 눌러서 그 자리에서 출근·퇴근 시간표를 바로 확인하세요. 현장 바로 앞은 5~10분 간격으로 자주 오지만,
           멀어질수록 하루 몇 대뿐이니 놓치지 않게 미리 확인하는 게 좋습니다.
         </p>
 
