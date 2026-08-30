@@ -21,12 +21,20 @@ function loadCache(): ShuttleCompanyGroup[] {
 
 // 정류장 주소를 복사하는 대신, 실제로 많이 쓰는 네이버지도·카카오맵으로 바로 길찾기 연결
 // (2026-08-30 사용자 지시 — "복사하는 이유는 결국 길 찾으려는 거니 지도 링크가 더 낫다").
-function MapLinks({ address }: { address: string }) {
-  const q = encodeURIComponent(address);
+// lat/lng이 있으면(삼성 셔틀버스 운영사 공식 좌표) 좌표로 정확히 핀을 찍고, 없으면 주소로 검색한다
+// (2026-08-30: 지번 주소만으로는 실제 정류장 위치와 살짝 어긋나는 경우가 있어 좌표 우선으로 정밀도 개선).
+function MapLinks({ name, address, lat, lng }: { name: string; address: string; lat?: number; lng?: number }) {
+  const hasCoord = typeof lat === 'number' && typeof lng === 'number';
+  const naverHref = hasCoord
+    ? `https://map.naver.com/p/search/${lat},${lng}`
+    : `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
+  const kakaoHref = hasCoord
+    ? `https://map.kakao.com/link/map/${encodeURIComponent(name)},${lat},${lng}`
+    : `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
   return (
     <span className="shrink-0 inline-flex items-center gap-1">
       <a
-        href={`https://map.naver.com/v5/search/${q}`}
+        href={naverHref}
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
@@ -35,7 +43,7 @@ function MapLinks({ address }: { address: string }) {
         네이버지도
       </a>
       <a
-        href={`https://map.kakao.com/link/search/${q}`}
+        href={kakaoHref}
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
@@ -96,7 +104,7 @@ function RouteCard({ route }: { route: ShuttleRoute }) {
               <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white" style={{ background: BLUE }}>출</span>
               <div className="min-w-0 flex-1 flex items-center gap-1.5">
                 <p className="text-[12px] text-gray-700 truncate">{route.origin.name}</p>
-                {route.origin.address && <MapLinks address={route.origin.address} />}
+                {route.origin.address && <MapLinks name={route.origin.name} address={route.origin.address} lat={route.origin.lat} lng={route.origin.lng} />}
               </div>
             </div>
             {route.stops.map((s, i) => (
@@ -104,7 +112,7 @@ function RouteCard({ route }: { route: ShuttleRoute }) {
                 <span className="shrink-0 mt-0.5 w-4 h-4 flex items-center justify-center text-[9px] text-gray-300">·</span>
                 <div className="min-w-0 flex-1 flex items-center gap-1.5">
                   <p className="text-[12px] text-gray-400 truncate">{s.name}</p>
-                  {s.address && <MapLinks address={s.address} />}
+                  {s.address && <MapLinks name={s.name} address={s.address} lat={s.lat} lng={s.lng} />}
                 </div>
               </div>
             ))}
