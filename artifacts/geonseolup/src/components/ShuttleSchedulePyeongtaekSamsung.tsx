@@ -19,25 +19,43 @@ function loadCache(): ShuttleCompanyGroup[] {
   }
 }
 
+// 정류장 주소를 복사하는 대신, 실제로 많이 쓰는 네이버지도·카카오맵으로 바로 길찾기 연결
+// (2026-08-30 사용자 지시 — "복사하는 이유는 결국 길 찾으려는 거니 지도 링크가 더 낫다").
+function MapLinks({ address }: { address: string }) {
+  const q = encodeURIComponent(address);
+  return (
+    <span className="shrink-0 inline-flex items-center gap-1">
+      <a
+        href={`https://map.naver.com/v5/search/${q}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border text-gray-400 border-gray-200 hover:text-gray-600"
+      >
+        네이버지도
+      </a>
+      <a
+        href={`https://map.kakao.com/link/search/${q}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border text-gray-400 border-gray-200 hover:text-gray-600"
+      >
+        카카오맵
+      </a>
+    </span>
+  );
+}
+
 function RouteCard({ route }: { route: ShuttleRoute }) {
   const [open, setOpen] = useState(false);
   const [dir, setDir] = useState<'in' | 'out'>('in');
   const [day, setDay] = useState<'weekday' | 'weekend'>('weekday');
-  const [copied, setCopied] = useState(false);
 
   const hasWeekend = route.weekendCommuteIn.length > 0 || route.weekendCommuteOut.length > 0;
   const times = day === 'weekday'
     ? (dir === 'in' ? route.commuteIn : route.commuteOut)
     : (dir === 'in' ? route.weekendCommuteIn : route.weekendCommuteOut);
-
-  function handleCopyAddress(e: React.MouseEvent, address: string | null) {
-    e.stopPropagation();
-    if (!address) return;
-    navigator.clipboard?.writeText(address).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  }
 
   return (
     <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white transition-shadow" style={open ? { boxShadow: '0 4px 20px rgba(20,40,160,0.08)' } : undefined}>
@@ -78,15 +96,16 @@ function RouteCard({ route }: { route: ShuttleRoute }) {
               <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white" style={{ background: BLUE }}>출</span>
               <div className="min-w-0 flex-1 flex items-center gap-1.5">
                 <p className="text-[12px] text-gray-700 truncate">{route.origin.name}</p>
-                {route.origin.address && (
-                  <button type="button" onClick={(e) => handleCopyAddress(e, route.origin.address)} className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md border text-gray-400 border-gray-200 hover:text-gray-600 cursor-pointer">복사</button>
-                )}
+                {route.origin.address && <MapLinks address={route.origin.address} />}
               </div>
             </div>
             {route.stops.map((s, i) => (
               <div key={`${s.name}-${i}`} className="flex items-start gap-2">
                 <span className="shrink-0 mt-0.5 w-4 h-4 flex items-center justify-center text-[9px] text-gray-300">·</span>
-                <p className="text-[12px] text-gray-400 truncate">{s.name}</p>
+                <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                  <p className="text-[12px] text-gray-400 truncate">{s.name}</p>
+                  {s.address && <MapLinks address={s.address} />}
+                </div>
               </div>
             ))}
             <div className="flex items-start gap-2">

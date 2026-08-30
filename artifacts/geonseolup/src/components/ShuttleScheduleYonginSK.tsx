@@ -19,20 +19,38 @@ function loadCache(): ShuttleGroup[] {
   }
 }
 
+// 정류장 주소를 복사하는 대신, 실제로 많이 쓰는 네이버지도·카카오맵으로 바로 길찾기 연결
+// (2026-08-30 사용자 지시 — "복사하는 이유는 결국 길 찾으려는 거니 지도 링크가 더 낫다", 평택 페이지와 동일하게 반영).
+function MapLinks({ address }: { address: string }) {
+  const q = encodeURIComponent(address);
+  return (
+    <span className="shrink-0 inline-flex items-center gap-1">
+      <a
+        href={`https://map.naver.com/v5/search/${q}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border text-gray-400 border-gray-200 hover:text-gray-600"
+      >
+        네이버지도
+      </a>
+      <a
+        href={`https://map.kakao.com/link/search/${q}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border text-gray-400 border-gray-200 hover:text-gray-600"
+      >
+        카카오맵
+      </a>
+    </span>
+  );
+}
+
 function StopCard({ stop }: { stop: ShuttleStop }) {
   const [open, setOpen] = useState(false);
   const [dir, setDir] = useState<'in' | 'out'>('in');
-  const [copied, setCopied] = useState(false);
   const times = dir === 'in' ? stop.commuteIn : stop.commuteOut;
-
-  function handleCopyAddress(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!stop.address) return;
-    navigator.clipboard?.writeText(stop.address).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  }
 
   return (
     <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white transition-shadow" style={open ? { boxShadow: '0 4px 20px rgba(238,28,37,0.08)' } : undefined}>
@@ -48,15 +66,7 @@ function StopCard({ stop }: { stop: ShuttleStop }) {
           {stop.address && (
             <div className="flex items-center gap-1.5 mt-0.5">
               <p className="text-[11px] text-gray-400 truncate">{stop.address}</p>
-              <button
-                type="button"
-                onClick={handleCopyAddress}
-                title="주소 복사"
-                className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition-colors cursor-pointer"
-                style={copied ? { background: '#fff1f1', borderColor: RED, color: RED_DARK } : { background: '#fff', borderColor: '#e5e7eb', color: '#9ca3af' }}
-              >
-                {copied ? '복사됨' : '복사'}
-              </button>
+              <MapLinks address={stop.address} />
             </div>
           )}
         </div>
