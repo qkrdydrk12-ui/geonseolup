@@ -168,6 +168,12 @@ const SOURCE_STYLE: Record<string, { label: string; color: string; icon: string 
   unknown:   { label: '출처 미확인',   color: '#898781', icon: '❔' },
   direct:    { label: '직접 방문',   color: '#898781', icon: '🔗' },
   other:     { label: '기타',        color: '#c3c2b7', icon: '❔' },
+  // User-Agent 기반 인앱브라우저 추정치(2026-08-30) — 원 채널 색을 옅게(연한 톤) 써서
+  // referrer/UTM으로 확정된 값과 시각적으로 구분한다.
+  kakao_inapp:     { label: '카카오톡(추정)', color: '#f0c064', icon: '💬' },
+  instagram_inapp: { label: 'Instagram(추정)', color: '#f0b0cc', icon: '📸' },
+  naver_inapp:     { label: '네이버(추정)', color: '#8fd6a8', icon: 'N' },
+  facebook_inapp:  { label: 'Facebook(추정)', color: '#a89adf', icon: 'f' },
 };
 
 function readableLandingPath(path: string): string {

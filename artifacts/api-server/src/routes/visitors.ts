@@ -71,7 +71,27 @@ const SOURCE_LABELS: Record<string, string> = {
   unknown: "출처 미확인",
   direct: "직접 방문",
   other: "기타",
+  // 인앱브라우저 UA 추정치(referrer·UTM이 둘 다 없을 때만 폴백으로 사용) — 2026-08-30 추가.
+  // 카카오톡/인스타그램/네이버/페이스북 인앱브라우저는 document.referrer를 구조적으로 안 보내
+  // "출처 미확인"으로 뭉뚱그려지던 걸, User-Agent 서명으로 추정해 분리한다. 확정 값이 아니므로
+  // "(추정)" 라벨을 붙여 UTM/referrer로 확인된 값과 구분한다.
+  kakao_inapp: "카카오톡(추정)",
+  instagram_inapp: "Instagram(추정)",
+  naver_inapp: "네이버(추정)",
+  facebook_inapp: "Facebook(추정)",
 };
+
+// 인앱브라우저 User-Agent 서명. referrer도 utm_source도 없는 "출처 미확인" 방문에만
+// 폴백으로 적용한다 — 이미 확정된 출처(referrer/UTM)를 이걸로 덮어쓰지 않는다.
+function detectInAppBrowser(userAgent: string | undefined): string | null {
+  if (!userAgent) return null;
+  const ua = userAgent;
+  if (/KAKAOTALK/i.test(ua)) return "kakao_inapp";
+  if (/Instagram/i.test(ua)) return "instagram_inapp";
+  if (/NAVER\(inapp/i.test(ua) || /NAVER Whale/i.test(ua) || /; NAVER\)/i.test(ua)) return "naver_inapp";
+  if (/FBAN|FBAV|FBIOS/i.test(ua)) return "facebook_inapp";
+  return null;
+}
 
 const INTERNAL_HOST_SUFFIXES = [
   "geonseolup.com",
@@ -324,7 +344,13 @@ router.post("/visit", async (req: Request, res: Response) => {
         ? body.referrer
         : undefined;
     const utmSource = safeTrackingValue(body.utmSource, 50);
-    const source = categorizeSource(referrer, utmSource || undefined);
+    let source = categorizeSource(referrer, utmSource || undefined);
+    // referrer도 utm도 없어 "출처 미확인"으로 떨어진 경우에만, User-Agent로 인앱브라우저
+    // 추정을 시도한다(확정된 값은 절대 덮어쓰지 않음). 2026-08-30 추가.
+    if (source === "unknown") {
+      const inapp = detectInAppBrowser(req.headers["user-agent"] as string | undefined);
+      if (inapp) source = inapp;
+    }
 
     // 같은 사이트 안에서 발생한 새로고침/이동은 전체·시간대·유입 통계 어디에도 넣지 않는다.
     if (source === "internal") {
