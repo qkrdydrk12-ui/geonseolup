@@ -838,6 +838,11 @@ const CUSTOM_INFO_PAGES: Record<string, { title: string; description: string; im
     description: "용인 셔틀버스(SK 반도체 현장 통근버스) 정류장 19곳 출근·퇴근 시간표를 한눈에. 용인 셔틀버스 시간표, 픽업 장소별로 눌러서 바로 확인하세요.",
     imageUrl: "/images/shuttle-yongin-sk-hero.jpg",
   },
+  // 2026-08-30 신설 — ShuttleSchedulePyeongtaekSamsung.tsx의 CUSTOM_INFO_PAGES와 대응.
+  "pyeongtaek-samsung-shuttle-schedule": {
+    title: "평택 셔틀버스 시간표 — 삼성 기술인 통근버스 노선 20곳",
+    description: "평택 셔틀버스(삼성 기술인 통근버스) 노선 20곳 출근·퇴근·주말 시간표를 한눈에. 노선을 눌러서 바로 확인하세요.",
+  },
 };
 
 router.get("/info/:slug", async (req: Request, res: Response) => {

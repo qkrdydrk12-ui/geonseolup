@@ -6,6 +6,7 @@ import RelatedLinks from '@/components/RelatedLinks';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 import { renderRichText } from '@/lib/richText';
 import ShuttleScheduleYonginSK from '@/components/ShuttleScheduleYonginSK';
+import ShuttleSchedulePyeongtaekSamsung from '@/components/ShuttleSchedulePyeongtaekSamsung';
 
 interface Props {
   slug: string;
@@ -15,6 +16,7 @@ interface Props {
 // 여기서 slug로 특수 처리해 전용 컴포넌트를 띄운다(2026-08-29 신설).
 const CUSTOM_INFO_PAGES: Record<string, React.ComponentType> = {
   'yongin-sk-shuttle-schedule': ShuttleScheduleYonginSK,
+  'pyeongtaek-samsung-shuttle-schedule': ShuttleSchedulePyeongtaekSamsung,
 };
 
 export default function InfoDetail({ slug }: Props) {

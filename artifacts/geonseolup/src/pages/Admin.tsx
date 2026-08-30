@@ -36,6 +36,7 @@ import AdminWageRates from '@/components/AdminWageRates';
 import AdminSiteNews from '@/components/AdminSiteNews';
 import AdminBlogArticles from '@/components/AdminBlogArticles';
 import { DEFAULT_STOPS as DEFAULT_SHUTTLE_SCHEDULE_YONGIN_SK, type ShuttleGroup as ShuttleScheduleGroup } from '@/lib/shuttleScheduleYonginSK';
+import { DEFAULT_ROUTES as DEFAULT_SHUTTLE_SCHEDULE_PYEONGTAEK_SAMSUNG, type ShuttleCompanyGroup } from '@/lib/shuttleSchedulePyeongtaekSamsung';
 import {
   getToken,
   setToken,
@@ -380,6 +381,20 @@ export default function Admin() {
   });
   const [shuttleScheduleOpenStop, setShuttleScheduleOpenStop] = useState<string | null>(null);
 
+  // 평택삼성 셔틀시간표 본문 데이터(노선별 출근/퇴근/주말 시간표) — 실제 반영 값은
+  // Firestore settings/shuttle_schedule_pyeongtaek_samsung. ShuttleSchedulePyeongtaekSamsung.tsx가 읽어감.
+  const [samsungShuttleSchedule, setSamsungShuttleSchedule] = useState<ShuttleCompanyGroup[]>(() => {
+    try {
+      const stored = localStorage.getItem('cj_shuttle_schedule_pyeongtaek_samsung');
+      if (stored) {
+        const arr = JSON.parse(stored);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      }
+    } catch {}
+    return DEFAULT_SHUTTLE_SCHEDULE_PYEONGTAEK_SAMSUNG;
+  });
+  const [samsungShuttleOpenRoute, setSamsungShuttleOpenRoute] = useState<string | null>(null);
+
   const [footerText, setFooterText] = useState({
     title: localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보',
     jobs: localStorage.getItem('cj_footer_jobs') || '배관 · 용접(TIG/아크/CO2/PVC/자동) · 조공 · 화기감시자 · 형틀 · 철근 · 미장 · 도장',
@@ -588,6 +603,18 @@ export default function Admin() {
           }
         } catch (e) {
           console.warn('[Admin] shuttle_schedule_yongin_sk 원격 동기화 실패', e);
+        }
+      })();
+      // 평택삼성 셔틀시간표 데이터도 서버에서 최신으로 동기화
+      (async () => {
+        try {
+          const remote = await fbGetSetting('shuttle_schedule_pyeongtaek_samsung');
+          if (Array.isArray(remote) && remote.length > 0) {
+            setSamsungShuttleSchedule(remote as ShuttleCompanyGroup[]);
+            localStorage.setItem('cj_shuttle_schedule_pyeongtaek_samsung', JSON.stringify(remote));
+          }
+        } catch (e) {
+          console.warn('[Admin] shuttle_schedule_pyeongtaek_samsung 원격 동기화 실패', e);
         }
       })();
     }
@@ -3352,6 +3379,190 @@ export default function Admin() {
                     localStorage.setItem('cj_shuttle_schedule_yongin_sk', JSON.stringify(shuttleSchedule));
                     try {
                       await fbSetSetting('shuttle_schedule_yongin_sk', shuttleSchedule);
+                      showToast('✅ 셔틀시간표 데이터가 저장됐습니다 (모든 기기 동기화)');
+                    } catch {
+                      showToast('✅ 저장됐지만 서버 동기화 실패 — 이 기기에서만 적용');
+                    }
+                  }}
+                >
+                  💾 전체 저장
+                </button>
+              </div>
+            </div>
+
+            {/* 평택삼성 셔틀시간표 본문 데이터 관리 */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <h2 className="text-lg font-bold text-[#1e3a5f] mb-2 flex items-center gap-2">
+                🚌 평택삼성 셔틀시간표 데이터 관리
+              </h2>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                <a href="/info/pyeongtaek-samsung-shuttle-schedule" target="_blank" rel="noreferrer" className="text-[#f97316] underline">/info/pyeongtaek-samsung-shuttle-schedule</a> 페이지에 표시되는
+                노선별 출근·퇴근·주말 시간표입니다. 시간은 <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">HH:MM</code> 형식으로 쉼표(,)로 구분해서 입력하세요.
+              </p>
+              <div className="flex flex-col gap-6">
+                {samsungShuttleSchedule.map((group, gi) => (
+                  <div key={group.key} className="border border-gray-200 rounded-xl p-4">
+                    <div className="flex gap-2 items-center mb-3 flex-wrap">
+                      <input
+                        type="text"
+                        value={group.title}
+                        onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, idx) => (idx === gi ? { ...g, title: e.target.value } : g)))}
+                        placeholder="회사 이름 (예: 삼성물산)"
+                        className="w-[150px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[13px] font-bold outline-none font-[inherit] focus:border-[#1428A0]"
+                      />
+                      <span className="text-xs text-gray-400 shrink-0">노선 {group.routes.length}개</span>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {group.routes.map((route, ri) => {
+                        const routeId = `${gi}-${ri}`;
+                        const isOpen = samsungShuttleOpenRoute === routeId;
+                        return (
+                          <div key={routeId} className="border border-gray-100 rounded-lg bg-gray-50/60">
+                            <button
+                              type="button"
+                              onClick={() => setSamsungShuttleOpenRoute(isOpen ? null : routeId)}
+                              className="w-full flex items-center justify-between px-3 py-2.5 text-left bg-transparent border-none cursor-pointer"
+                            >
+                              <span className="text-[13px] font-bold text-gray-800">{route.routeNumber}번 {route.name || '(이름 없음)'}</span>
+                              <span className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-400">출근 {route.commuteIn.length} · 퇴근 {route.commuteOut.length} · 주말출근 {route.weekendCommuteIn.length}</span>
+                                <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                              </span>
+                            </button>
+                            {isOpen && (
+                              <div className="px-3 pb-3 flex flex-col gap-2">
+                                <div className="flex gap-2 flex-wrap">
+                                  <input
+                                    type="text"
+                                    value={route.routeNumber}
+                                    onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, routeNumber: e.target.value } : r) }))}
+                                    placeholder="노선 번호"
+                                    className="w-[70px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] font-bold outline-none font-[inherit] focus:border-[#1428A0]"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={route.name}
+                                    onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, name: e.target.value } : r) }))}
+                                    placeholder="노선 이름"
+                                    className="w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] font-bold outline-none font-[inherit] focus:border-[#1428A0]"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={route.contractor}
+                                    onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, contractor: e.target.value } : r) }))}
+                                    placeholder="운영사 (예: 삼성물산/더조은)"
+                                    className="flex-1 min-w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0]"
+                                  />
+                                  <label className="flex items-center gap-1.5 text-[11px] text-gray-500 shrink-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={route.isExpress}
+                                      onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, isExpress: e.target.checked } : r) }))}
+                                    />
+                                    직행
+                                  </label>
+                                  <button
+                                    onClick={() => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.filter((_, ridx) => ridx !== ri) }))}
+                                    className="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-base leading-none cursor-pointer bg-transparent border-none px-1"
+                                    title="이 노선 삭제"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <div className="flex gap-2 flex-wrap">
+                                  <input
+                                    type="text"
+                                    value={route.origin.name}
+                                    onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, origin: { ...r.origin, name: e.target.value } } : r) }))}
+                                    placeholder="출발 정류장 이름"
+                                    className="w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0]"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={route.origin.address ?? ''}
+                                    onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, origin: { ...r.origin, address: e.target.value } } : r) }))}
+                                    placeholder="출발지 주소"
+                                    className="flex-1 min-w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0]"
+                                  />
+                                </div>
+                                <div className="flex gap-2 flex-wrap">
+                                  <input
+                                    type="text"
+                                    value={route.destination.name}
+                                    onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, destination: { ...r.destination, name: e.target.value } } : r) }))}
+                                    placeholder="도착 정류장 이름"
+                                    className="w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0]"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={route.destination.address ?? ''}
+                                    onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, destination: { ...r.destination, address: e.target.value } } : r) }))}
+                                    placeholder="도착지 주소"
+                                    className="flex-1 min-w-[160px] py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0]"
+                                  />
+                                </div>
+                                <label className="text-[11px] font-bold text-gray-500">경유 정류장 (한 줄에 하나, "이름|주소" 형식)</label>
+                                <textarea
+                                  value={route.stops.map((s) => `${s.name}|${s.address ?? ''}`).join('\n')}
+                                  onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, stops: e.target.value.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => { const [name, address] = line.split('|'); return { name: (name ?? '').trim(), address: (address ?? '').trim() || null }; }) } : r) }))}
+                                  rows={3}
+                                  className="w-full py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0] resize-y"
+                                  placeholder="한국유통수퍼센타 앞|경기도 평택시 신장동 211-59"
+                                />
+                                <label className="text-[11px] font-bold text-gray-500">평일 출근 시간표 (쉼표로 구분)</label>
+                                <textarea
+                                  value={route.commuteIn.join(', ')}
+                                  onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, commuteIn: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } : r) }))}
+                                  rows={2}
+                                  className="w-full py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0] resize-y"
+                                  placeholder="04:00, 04:30, 04:40, ..."
+                                />
+                                <label className="text-[11px] font-bold text-gray-500">평일 퇴근 시간표 (쉼표로 구분)</label>
+                                <textarea
+                                  value={route.commuteOut.join(', ')}
+                                  onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, commuteOut: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } : r) }))}
+                                  rows={2}
+                                  className="w-full py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0] resize-y"
+                                  placeholder="16:20, 16:40, 17:00, ..."
+                                />
+                                <label className="text-[11px] font-bold text-gray-500">주말 출근 시간표 (쉼표로 구분, 없으면 비움)</label>
+                                <textarea
+                                  value={route.weekendCommuteIn.join(', ')}
+                                  onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, weekendCommuteIn: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } : r) }))}
+                                  rows={2}
+                                  className="w-full py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0] resize-y"
+                                  placeholder="04:20, 04:30, ..."
+                                />
+                                <label className="text-[11px] font-bold text-gray-500">주말 퇴근 시간표 (쉼표로 구분, 없으면 비움)</label>
+                                <textarea
+                                  value={route.weekendCommuteOut.join(', ')}
+                                  onChange={(e) => setSamsungShuttleSchedule((prev) => prev.map((g, gidx) => gidx !== gi ? g : { ...g, routes: g.routes.map((r, ridx) => ridx === ri ? { ...r, weekendCommuteOut: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } : r) }))}
+                                  rows={2}
+                                  className="w-full py-1.5 px-2.5 border-[1.5px] border-gray-200 rounded-lg text-[12px] outline-none font-[inherit] focus:border-[#1428A0] resize-y"
+                                  placeholder="15:20, 15:30, ..."
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button
+                        className="self-start flex items-center gap-1.5 bg-white border-[1.5px] border-gray-300 text-gray-500 py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer hover:border-[#1428A0] hover:text-[#1428A0] transition-all font-[inherit]"
+                        onClick={() => setSamsungShuttleSchedule((prev) => prev.map((g, idx) => idx === gi ? { ...g, routes: [...g.routes, { id: `route-new-${Date.now()}`, routeNumber: '', name: '', contractor: '', isExpress: false, origin: { name: '', address: '' }, destination: { name: '', address: '' }, stops: [], commuteIn: [], commuteOut: [], weekendCommuteIn: [], weekendCommuteOut: [] } as any] } : g))}
+                      >
+                        + 노선 추가
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  className="self-start bg-[#1428A0] text-white border-none py-2.5 px-6 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#0E1D70] transition-colors font-[inherit]"
+                  onClick={async () => {
+                    localStorage.setItem('cj_shuttle_schedule_pyeongtaek_samsung', JSON.stringify(samsungShuttleSchedule));
+                    try {
+                      await fbSetSetting('shuttle_schedule_pyeongtaek_samsung', samsungShuttleSchedule);
                       showToast('✅ 셔틀시간표 데이터가 저장됐습니다 (모든 기기 동기화)');
                     } catch {
                       showToast('✅ 저장됐지만 서버 동기화 실패 — 이 기기에서만 적용');
