@@ -76,7 +76,10 @@ export default function Header() {
 
   async function handleShare() {
     setMenuOpen(false);
-    const url = localStorage.getItem('cj_share_url') || location.href;
+    const rawUrl = localStorage.getItem('cj_share_url') || location.href;
+    const url = rawUrl.includes('utm_source=')
+      ? rawUrl
+      : `${rawUrl}${rawUrl.includes('?') ? '&' : '?'}utm_source=kakao`;
     const title = `${siteName} - ${siteSubtitle}`;
     const desc = localStorage.getItem('cj_footer_text') || '배관·용접·조공·화기감시자 등 전국 건설 현장 구인 공고';
 
