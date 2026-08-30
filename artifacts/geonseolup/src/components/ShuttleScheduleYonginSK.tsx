@@ -152,9 +152,6 @@ export default function ShuttleScheduleYonginSK() {
           />
           <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(10,10,15,0.15) 0%, rgba(10,10,15,0.75) 100%)' }} />
           <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-7">
-            <span className="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold mb-2.5" style={{ background: RED, color: '#fff' }}>
-              🚍 용인 셔틀버스
-            </span>
             <h1 className="text-white font-extrabold text-xl sm:text-[28px] leading-tight mb-1.5">
               용인 셔틀버스 시간표<br />SK 반도체 현장 통근버스
             </h1>
@@ -181,9 +178,9 @@ export default function ShuttleScheduleYonginSK() {
         <div className="space-y-7">
           {groups.map((group) => (
             <section key={group.key}>
-              <div className="flex items-baseline gap-2 mb-3">
-                <h2 className="text-[15px] font-extrabold text-gray-900">{group.title}</h2>
-                <span className="text-xs text-gray-400">{group.desc}</span>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-3">
+                <h2 className="text-[15px] font-extrabold text-gray-900 shrink-0 whitespace-nowrap">{group.title}</h2>
+                <span className="text-xs text-gray-400 basis-full sm:basis-auto">{group.desc}</span>
               </div>
               <div className="space-y-2.5">
                 {group.stops.map((stop) => (
