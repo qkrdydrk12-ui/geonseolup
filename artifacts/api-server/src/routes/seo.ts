@@ -842,6 +842,7 @@ const CUSTOM_INFO_PAGES: Record<string, { title: string; description: string; im
   "pyeongtaek-samsung-shuttle-schedule": {
     title: "평택 셔틀버스 시간표 — 삼성 기술인 통근버스 노선 20곳",
     description: "평택 셔틀버스(삼성 기술인 통근버스) 노선 20곳 출근·퇴근·주말 시간표를 한눈에. 노선을 눌러서 바로 확인하세요.",
+    imageUrl: "/images/shuttle-pyeongtaek-samsung-hero.jpg",
   },
 };
 

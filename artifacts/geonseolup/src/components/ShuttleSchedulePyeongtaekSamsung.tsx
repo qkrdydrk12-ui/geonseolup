@@ -186,14 +186,22 @@ export default function ShuttleSchedulePyeongtaekSamsung() {
         </div>
 
         {/* 히어로 배너 */}
-        <div className="relative rounded-2xl overflow-hidden mb-6 flex flex-col justify-end p-5 sm:p-7" style={{ aspectRatio: '16/7', background: `linear-gradient(135deg, ${BLUE_DARK}, ${BLUE})` }}>
-          <span className="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold mb-2.5" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-            🚌 평택 셔틀버스
-          </span>
-          <h1 className="text-white font-extrabold text-xl sm:text-[28px] leading-tight mb-1.5">
-            평택 셔틀버스 시간표<br />삼성 기술인 통근버스
-          </h1>
-          <p className="text-white/70 text-xs sm:text-sm">노선 {totalRoutes}개 · 출근·퇴근·주말 전체 시간 정리</p>
+        <div className="relative rounded-2xl overflow-hidden mb-6" style={{ aspectRatio: '16/7' }}>
+          <img
+            src="/images/shuttle-pyeongtaek-samsung-hero.jpg"
+            alt="평택 셔틀버스 - 삼성 반도체 현장 통근버스"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(14,29,112,0.25) 0%, ${BLUE_DARK}cc 100%)` }} />
+          <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-7">
+            <span className="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold mb-2.5" style={{ background: BLUE, color: '#fff' }}>
+              🚌 평택 셔틀버스
+            </span>
+            <h1 className="text-white font-extrabold text-xl sm:text-[28px] leading-tight mb-1.5">
+              평택 셔틀버스 시간표<br />삼성 기술인 통근버스
+            </h1>
+            <p className="text-white/70 text-xs sm:text-sm">노선 {totalRoutes}개 · 출근·퇴근·주말 전체 시간 정리</p>
+          </div>
         </div>
 
         {/* 안내 배지 */}
