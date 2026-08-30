@@ -21,13 +21,15 @@ function loadCache(): ShuttleCompanyGroup[] {
 
 // 정류장 주소를 복사하는 대신, 실제로 많이 쓰는 네이버지도·카카오맵으로 바로 길찾기 연결
 // (2026-08-30 사용자 지시 — "복사하는 이유는 결국 길 찾으려는 거니 지도 링크가 더 낫다").
-// lat/lng이 있으면(삼성 셔틀버스 운영사 공식 좌표) 좌표로 정확히 핀을 찍고, 없으면 주소로 검색한다
-// (2026-08-30: 지번 주소만으로는 실제 정류장 위치와 살짝 어긋나는 경우가 있어 좌표 우선으로 정밀도 개선).
+// lat/lng이 있으면(삼성 셔틀버스 운영사 공식 좌표) 카카오는 좌표로 정확히 핀을 찍는다
+// (2026-08-30: 지번 주소만으로는 실제 정류장 위치와 살짝 어긋나는 경우가 있어 좌표로 정밀도 개선).
+// ⚠️ 네이버는 좌표 검색 URL(map.naver.com/p/search/{lat},{lng})이 모바일 웹에서 "검색결과가 없습니다"로
+// 뜨는 걸 확인함(2026-08-31, 데스크톱에서만 정상 동작) — 그래서 네이버는 좌표 대신, 그 좌표를 역지오코딩해서
+// 얻은 정확한 도로명주소(address 필드, 59곳 전부 이 방식으로 갱신됨)로 텍스트 검색한다. 도로명주소 검색은
+// 모바일·데스크톱 둘 다 정상 동작하고 좌표만큼 정확한 것까지 실측 확인됨.
 function MapLinks({ name, address, lat, lng }: { name: string; address: string; lat?: number; lng?: number }) {
   const hasCoord = typeof lat === 'number' && typeof lng === 'number';
-  const naverHref = hasCoord
-    ? `https://map.naver.com/p/search/${lat},${lng}`
-    : `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
+  const naverHref = `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
   const kakaoHref = hasCoord
     ? `https://map.kakao.com/link/map/${encodeURIComponent(name)},${lat},${lng}`
     : `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
