@@ -262,6 +262,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/post", changefreq: "monthly", priority: "0.7" },
       { loc: "/shop", changefreq: "weekly", priority: "0.5" },
       { loc: "/wages", changefreq: "daily", priority: "0.8" },
+      { loc: "/retirement-fund-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
       // 2026-08-26 추가 — 신뢰도 페이지(약관/개인정보/문의)가 사이트맵에서 빠져있었음.
@@ -747,6 +748,26 @@ router.get("/shop", async (_req: Request, res: Response) => {
     res.send(html);
   } catch (err) {
     logger.error({ err }, "[shop-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// 퇴직공제금 계산기 (2026-08-31 신설) — 완전 정적 페이지, DB 없이 고정 title/description만 필요.
+// RetirementFundCalculator.tsx가 useEffect로 갱신하는 값과 동일하게 맞춰(SNS 공유 미리보기·크롤러 일치).
+router.get("/retirement-fund-calculator", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설근로자 퇴직공제금 계산기 — 적립일수로 예상 수령액 확인 | 건설UP",
+      desc: "건설 일용직 퇴직공제금, 연도별 적립 단가를 반영해서 예상 적립액을 바로 계산해보세요. 근무 시기별 일수만 입력하면 자동으로 계산됩니다.",
+      url: `${SITE_URL}/retirement-fund-calculator`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[retirement-fund-calculator-seo] 렌더링 실패");
     res.status(500).send("Internal Server Error");
   }
 });
