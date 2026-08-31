@@ -7,7 +7,7 @@ id = "3B4_FFSkEVBkAeYMFRJ2e"
 [[services]]
 localPort = 8080
 name = "API Server"
-paths = ["/api", "/rss", "/sitemap.xml", "/detail", "/jobs", "/info", "/news", "/terms", "/privacy", "/contact", "/wages", "/post", "/shop", "/retirement-fund-calculator", "/net-pay-calculator", "/severance-pay-calculator", "/db6168f1330c2d40c718784e2330e55f.txt"]
+paths = ["/api", "/rss", "/sitemap.xml", "/detail", "/jobs", "/info", "/news", "/terms", "/privacy", "/contact", "/wages", "/post", "/shop", "/retirement-fund-calculator", "/net-pay-calculator", "/severance-pay-calculator", "/labor-contract-template", "/db6168f1330c2d40c718784e2330e55f.txt"]
 
 [services.development]
 run = "pnpm --filter @workspace/api-server run dev"
