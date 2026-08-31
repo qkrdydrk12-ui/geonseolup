@@ -265,6 +265,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/retirement-fund-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/net-pay-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/severance-pay-calculator", changefreq: "monthly", priority: "0.7" },
+      { loc: "/labor-contract-template", changefreq: "monthly", priority: "0.7" },
       { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
       // 2026-08-26 추가 — 신뢰도 페이지(약관/개인정보/문의)가 사이트맵에서 빠져있었음.
@@ -810,6 +811,26 @@ router.get("/severance-pay-calculator", async (_req: Request, res: Response) => 
     res.send(html);
   } catch (err) {
     logger.error({ err }, "[severance-pay-calculator-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// 근로계약서 양식 (2026-08-31 신설) — 완전 정적 페이지, DB 없이 고정 title/description만 필요.
+// LaborContractGenerator.tsx가 useEffect로 갱신하는 값과 동일하게 맞춰(SNS 공유 미리보기·크롤러 일치).
+router.get("/labor-contract-template", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설 일용직 근로계약서 양식 — 바로 채워서 완성하기 | 건설UP",
+      desc: "건설 일용직 근로계약서, 서면으로 안 쓰면 나중에 임금체불·퇴직금 분쟁에서 불리해질 수 있어요. 현장명·계약기간·1공수 단가만 채우면 계약서가 완성됩니다. 실수령액·퇴직금 계산기와도 바로 연결돼요.",
+      url: `${SITE_URL}/labor-contract-template`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[labor-contract-template-seo] 렌더링 실패");
     res.status(500).send("Internal Server Error");
   }
 });

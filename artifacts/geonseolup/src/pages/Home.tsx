@@ -99,6 +99,7 @@ const CALCULATOR_LINKS: ShuttleLink[] = [
   { label: '실수령액 계산기', href: '/net-pay-calculator' },
   { label: '퇴직금 계산기', href: '/severance-pay-calculator' },
   { label: '퇴직공제금 계산기', href: '/retirement-fund-calculator' },
+  { label: '근로계약서 양식', href: '/labor-contract-template' },
 ];
 
 // 셔틀시간표 드롭다운 기본값 — 관리자 화면에서 안 바꿨을 때(또는 서버 응답 전 잠깐) 쓰는 기본 목록.

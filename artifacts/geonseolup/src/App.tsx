@@ -17,6 +17,7 @@ import Wages from '@/pages/Wages';
 import RetirementFundCalculator from '@/pages/RetirementFundCalculator';
 import NetPayCalculator from '@/pages/NetPayCalculator';
 import SeverancePayCalculator from '@/pages/SeverancePayCalculator';
+import LaborContractGenerator from '@/pages/LaborContractGenerator';
 import VisitorWidget from '@/components/VisitorWidget';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 
@@ -214,6 +215,9 @@ function Router() {
       </Route>
       <Route path="/severance-pay-calculator">
         <SeverancePayCalculator />
+      </Route>
+      <Route path="/labor-contract-template">
+        <LaborContractGenerator />
       </Route>
       <Route path="/terms">
         <Terms />
