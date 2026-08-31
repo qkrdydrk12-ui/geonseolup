@@ -93,6 +93,13 @@ function AdSlot({ storageKey, minHeight, maxWidth }: { storageKey: string; minHe
 
 interface ShuttleLink { label: string; href: string; icon?: string; color?: string }
 
+// 계산기 드롭다운 목록 — 셔틀시간표처럼 여러 개가 생겨서 2026-08-31부터 단일 링크 대신 드롭다운으로 전환.
+// 관리자 화면에서 바꿀 일이 거의 없는 고정 페이지들이라 셔틀시간표와 달리 Firestore 설정 없이 하드코딩.
+const CALCULATOR_LINKS: ShuttleLink[] = [
+  { label: '실수령액 계산기', href: '/net-pay-calculator' },
+  { label: '퇴직공제금 계산기', href: '/retirement-fund-calculator' },
+];
+
 // 셔틀시간표 드롭다운 기본값 — 관리자 화면에서 안 바꿨을 때(또는 서버 응답 전 잠깐) 쓰는 기본 목록.
 // 실제 목록은 Firestore settings/shuttle_links로 관리자 화면에서 편집 가능(Admin.tsx 참고).
 // SK/삼성 각 회사 브랜드 색으로 구분(용인SK셔틀=SK 레드, 평택삼성셔틀=삼성 블루).
@@ -116,6 +123,7 @@ function loadShuttleLinksCache(): ShuttleLink[] {
 // "브라우저 알림" 버튼은 2026-08-29부터 상단 헤더로 이동함(Header.tsx 참고) — 여기선 링크 버튼만 남긴다.
 function SubscribeBar({ region, job }: { region: string; job: string }) {
   const [shuttleOpen, setShuttleOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [shuttleLinks, setShuttleLinks] = useState(loadShuttleLinksCache);
   const filterLabel = [region !== '전체' ? region : '', job !== '전체' ? job : ''].filter(Boolean).join(' ') || '전체';
 
@@ -140,6 +148,17 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
     return () => window.removeEventListener('click', onClick);
   }, [shuttleOpen]);
 
+  // 외부 클릭 시 계산기 메뉴 닫기
+  useEffect(() => {
+    if (!calcOpen) return;
+    function onClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-calc-menu]')) setCalcOpen(false);
+    }
+    window.addEventListener('click', onClick);
+    return () => window.removeEventListener('click', onClick);
+  }, [calcOpen]);
+
   return (
     <section className="mb-2.5 bg-white rounded-[10px] border-[1.5px] border-gray-200 px-3 py-2.5">
       <div className="flex items-center gap-2 flex-wrap">
@@ -159,12 +178,32 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             🏗️ 현장 소식
           </a>
-          <a
-            href="/retirement-fund-calculator"
-            className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all no-underline"
-          >
-            계산기
-          </a>
+          <div className="relative" data-calc-menu>
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all flex items-center gap-1"
+              onClick={(e) => { e.stopPropagation(); setCalcOpen((o) => !o); }}
+            >
+              계산기<span className="text-[8px] opacity-70">▼</span>
+            </button>
+            {calcOpen && (
+              <div
+                className="absolute right-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {CALCULATOR_LINKS.map((c) => (
+                  <a
+                    key={c.href}
+                    href={c.href}
+                    className="block w-full px-3 py-2.5 text-xs font-bold hover:bg-orange-50 no-underline text-gray-700"
+                    onClick={() => setCalcOpen(false)}
+                  >
+                    {c.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="relative" data-shuttle-menu>
             <button
               type="button"

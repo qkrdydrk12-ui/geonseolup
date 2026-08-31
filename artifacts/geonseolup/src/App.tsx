@@ -15,6 +15,7 @@ import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
 import Wages from '@/pages/Wages';
 import RetirementFundCalculator from '@/pages/RetirementFundCalculator';
+import NetPayCalculator from '@/pages/NetPayCalculator';
 import VisitorWidget from '@/components/VisitorWidget';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 
@@ -206,6 +207,9 @@ function Router() {
       </Route>
       <Route path="/retirement-fund-calculator">
         <RetirementFundCalculator />
+      </Route>
+      <Route path="/net-pay-calculator">
+        <NetPayCalculator />
       </Route>
       <Route path="/terms">
         <Terms />

@@ -263,6 +263,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/shop", changefreq: "weekly", priority: "0.5" },
       { loc: "/wages", changefreq: "daily", priority: "0.8" },
       { loc: "/retirement-fund-calculator", changefreq: "monthly", priority: "0.7" },
+      { loc: "/net-pay-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
       // 2026-08-26 추가 — 신뢰도 페이지(약관/개인정보/문의)가 사이트맵에서 빠져있었음.
@@ -768,6 +769,26 @@ router.get("/retirement-fund-calculator", async (_req: Request, res: Response) =
     res.send(html);
   } catch (err) {
     logger.error({ err }, "[retirement-fund-calculator-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// 실수령액 계산기 (2026-08-31 신설) — 완전 정적 페이지, DB 없이 고정 title/description만 필요.
+// NetPayCalculator.tsx가 useEffect로 갱신하는 값과 동일하게 맞춰(SNS 공유 미리보기·크롤러 일치).
+router.get("/net-pay-calculator", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설 일용직 실수령액 계산기 — 일당 세금·4대보험 공제 후 금액 확인 | 건설UP",
+      desc: "형틀·철근·용접·조공 등 건설 일용직 일당 실수령액을 바로 계산하세요. 일용근로소득세, 지방소득세, 고용보험까지 반영하고 여러 현장 합산·직종별 평균 일당 비교까지 됩니다.",
+      url: `${SITE_URL}/net-pay-calculator`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[net-pay-calculator-seo] 렌더링 실패");
     res.status(500).send("Internal Server Error");
   }
 });
