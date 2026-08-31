@@ -65,18 +65,18 @@ function HeroIllustration() {
   );
 }
 
-function loadCoreCache(): { dailyWage: number; gongsu: number; includePensionHealth: boolean } {
+function loadCoreCache(): { dailyWage: number; gongsu: string; includePensionHealth: boolean } {
   try {
     const raw = localStorage.getItem('cj_net_pay_calc');
-    if (!raw) return { dailyWage: 0, gongsu: 1, includePensionHealth: false };
+    if (!raw) return { dailyWage: 0, gongsu: '1', includePensionHealth: false };
     const parsed = JSON.parse(raw);
     return {
       dailyWage: sanitizeWage(parsed?.dailyWage),
-      gongsu: parsed?.gongsu ? sanitizeGongsu(parsed.gongsu) : 1,
+      gongsu: parsed?.gongsu ? String(parsed.gongsu) : '1',
       includePensionHealth: !!parsed?.includePensionHealth,
     };
   } catch {
-    return { dailyWage: 0, gongsu: 1, includePensionHealth: false };
+    return { dailyWage: 0, gongsu: '1', includePensionHealth: false };
   }
 }
 
@@ -87,7 +87,10 @@ function makeEntryId() {
 export default function NetPayCalculator() {
   const cached = loadCoreCache();
   const [dailyWage, setDailyWage] = useState<number>(cached.dailyWage);
-  const [gongsu, setGongsu] = useState<number>(cached.gongsu);
+  // 공수는 소수 입력 도중(예: "1." 다음에 "2")에 즉시 반올림해버리면 소수점을 못 치므로,
+  // 계산에 쓰는 값과 별개로 "입력 중인 문자열 그대로"를 상태로 들고 있는다.
+  const [gongsuText, setGongsuText] = useState<string>(cached.gongsu);
+  const gongsu = useMemo(() => sanitizeGongsu(gongsuText), [gongsuText]);
   const [includePensionHealth, setIncludePensionHealth] = useState<boolean>(cached.includePensionHealth);
   const [entries, setEntries] = useState<MonthlyWorkEntry[]>([]);
   const [compareJob, setCompareJob] = useState<string>('');
@@ -102,9 +105,9 @@ export default function NetPayCalculator() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('cj_net_pay_calc', JSON.stringify({ dailyWage, gongsu, includePensionHealth }));
+      localStorage.setItem('cj_net_pay_calc', JSON.stringify({ dailyWage, gongsu: gongsuText, includePensionHealth }));
     } catch { /* noop */ }
-  }, [dailyWage, gongsu, includePensionHealth]);
+  }, [dailyWage, gongsuText, includePensionHealth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,7 +141,7 @@ export default function NetPayCalculator() {
   }, [compareJob, jobs]);
 
   function addEntry() {
-    setEntries((prev) => [...prev, { id: makeEntryId(), label: `현장 ${prev.length + 1}`, dailyWage: 0, gongsu: 1, days: 0 }]);
+    setEntries((prev) => [...prev, { id: makeEntryId(), label: `현장 ${prev.length + 1}`, dailyWage: 0, gongsu: '1', days: 0 }]);
   }
   function updateEntry(id: string, patch: Partial<MonthlyWorkEntry>) {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -182,7 +185,7 @@ export default function NetPayCalculator() {
 
         {/* 입력 폼 */}
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 mb-5">
-          <h2 className="font-extrabold text-[15px] mb-1" style={{ color: NAVY }}>1공수 단가 × 오늘 공수</h2>
+          <h2 className="font-extrabold text-[15px] mb-1" style={{ color: NAVY }}>1공수 단가 × 입력 공수</h2>
           <p className="text-[11.5px] text-gray-400 mb-3">특근·연장으로 1.2공수, 1.5공수처럼 받았다면 그대로 입력하세요</p>
           <div className="flex items-center gap-2 mb-2">
             <input
@@ -199,11 +202,11 @@ export default function NetPayCalculator() {
               type="number"
               inputMode="decimal"
               min={0}
-              max={5}
-              step={0.1}
+              step="any"
               placeholder="1"
-              value={gongsu === 1 ? '1' : gongsu || ''}
-              onChange={(e) => setGongsu(sanitizeGongsu(e.target.value))}
+              value={gongsuText}
+              onChange={(e) => setGongsuText(e.target.value)}
+              onBlur={() => setGongsuText(gongsuText === '' ? '1' : String(sanitizeGongsu(gongsuText)))}
               className="w-[64px] shrink-0 rounded-lg border border-gray-200 px-2 py-3 text-[16px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
             />
             <span className="text-[13px] text-gray-400 shrink-0">공수</span>
@@ -337,11 +340,11 @@ export default function NetPayCalculator() {
                     type="number"
                     inputMode="decimal"
                     min={0}
-                    max={5}
-                    step={0.1}
+                    step="any"
                     placeholder="1"
-                    value={entry.gongsu === 1 ? '1' : entry.gongsu || ''}
-                    onChange={(e) => updateEntry(entry.id, { gongsu: sanitizeGongsu(e.target.value) })}
+                    value={entry.gongsu}
+                    onChange={(e) => updateEntry(entry.id, { gongsu: e.target.value })}
+                    onBlur={() => updateEntry(entry.id, { gongsu: entry.gongsu === '' ? '1' : String(sanitizeGongsu(entry.gongsu)) })}
                     className="w-[42px] shrink-0 rounded-lg border border-gray-200 px-1.5 py-2 text-[12.5px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
                   />
                   <span className="text-[10.5px] text-gray-400 shrink-0">공수×</span>

@@ -42,12 +42,13 @@ export interface DailyNetPayInput {
 
 /**
  * 공수(工數) — 건설 현장에서 하루 근무를 "1공수" 단위로 세는 관행. 특근·연장이면
- * 1.5공수, 반나절이면 0.5공수처럼 소수로도 쓰인다. 0.1 단위, 0~5공수로 제한.
+ * 1.2공수, 1.5공수처럼 임의의 소수로도 쓰이므로(0.1 단위로 억지로 반올림하지 않고
+ * 입력한 숫자를 그대로 반영), 음수·비정상값만 걸러내고 터무니없는 값만 상한으로 막는다.
  */
 export function sanitizeGongsu(value: unknown): number {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.min(Math.round(n * 10) / 10, 5);
+  return Math.min(n, 100);
 }
 
 /** 1공수 단가 × 공수 = 그날 실제 받는 총 일당(세전) */
@@ -115,8 +116,9 @@ export interface MonthlyWorkEntry {
   id: string;
   label: string;
   dailyWage: number;
-  /** 그 현장에서 하루 평균 공수(특근 포함 등으로 1보다 클 수 있음). 기본 1공수. */
-  gongsu: number;
+  /** 그 현장에서 하루 평균 공수(특근 포함 등으로 1보다 클 수 있음). 기본 1공수.
+   *  입력 중 소수점을 칠 수 있도록 문자열로 들고 있다가 계산 시점에만 숫자로 환산한다. */
+  gongsu: string;
   days: number;
 }
 
