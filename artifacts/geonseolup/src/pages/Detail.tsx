@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbGetPublicJob, fbLoadPublicJobs, fbGetJobContact, isJobActive } from '@/lib/firebase';
@@ -53,6 +53,8 @@ export default function Detail({ id }: Props) {
   const [job, setJob] = useState<Job | null>(null);
   const [related, setRelated] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  // 같은 직종 공고 전체 풀 — 아래 "평균 단가 대비" 한 줄 비교에만 쓴다(관련 공고 목록과는 별개).
+  const [jobPool, setJobPool] = useState<Job[]>([]);
   // 연락처는 기본 마스킹 — "연락처 보기"를 눌렀을 때만 실번호를 가져온다.
   const [revealedContact, setRevealedContact] = useState<string | null>(null);
   const [revealing, setRevealing] = useState(false);
@@ -99,6 +101,7 @@ export default function Detail({ id }: Props) {
             if (job) setJob(job);
             const rels2 = rankRelated(allJobs, id, job?.region || sampleFound.region, job?.job || sampleFound.job, job?.title || sampleFound.title);
             if (rels2.length > 0) setRelated(rels2);
+            setJobPool(allJobs);
           }
         });
         return;
@@ -114,6 +117,7 @@ export default function Detail({ id }: Props) {
       const pool = allJobs.length > 0 ? allJobs : SAMPLE_JOBS;
       const rels = rankRelated(pool, id, found?.region || '', found?.job || '', found?.title || '');
       setRelated(rels);
+      setJobPool(allJobs);
       setLoading(false);
     }
     load();
@@ -172,6 +176,18 @@ export default function Detail({ id }: Props) {
     const body = `신고 사유를 적어주세요.\n\n---\n공고 제목: ${job.title}\n공고 링크: ${location.href}`;
     window.location.href = `mailto:qkrdydrk@naver.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
+
+  // 이 공고와 같은 직종의 다른 활성 공고 평균 단가 — 자사 실시간 데이터로만 계산(별도 시세표 미사용,
+  // 관리자가 수동 갱신 안 해도 항상 최신). 비교 대상이 너무 적으면(2건 이하) 억지 비교문을 만들지 않는다.
+  const jobAverage = useMemo(() => {
+    if (!job?.job) return null;
+    const matched = jobPool.filter(
+      (j) => j.job === job.job && j.id !== job.id && typeof j.salaryNum === 'number' && j.salaryNum! > 0,
+    );
+    if (matched.length < 3) return null;
+    const sum = matched.reduce((acc, j) => acc + (j.salaryNum || 0), 0);
+    return { avg: Math.round(sum / matched.length), count: matched.length };
+  }, [job, jobPool]);
 
   if (loading) {
     return (
@@ -371,6 +387,24 @@ export default function Detail({ id }: Props) {
                 {job.salary || '협의'}
               </span>
             </div>
+
+            {/* 같은 직종 평균 단가 비교 — 건설UP에 등록된 활성 공고 실시간 집계, 비교 가능한 공고가
+                3건 미만이면 표시하지 않는다(억지 문구 방지). 원문 그대로만 있던 공고 상세페이지에
+                실제 데이터 기반 코멘트를 더해 정보 가치를 높이려는 목적(2026-08-31). */}
+            {jobAverage && typeof job.salaryNum === 'number' && job.salaryNum > 0 && (
+              <div className="mt-2.5 text-[12.5px] sm:text-[13px] text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 leading-relaxed">
+                💡 이 공고 단가는 현재 건설UP에 등록된 <b className="text-gray-800">{job.job}</b> 공고{' '}
+                {jobAverage.count}건 평균({jobAverage.avg.toLocaleString()}원)보다{' '}
+                {job.salaryNum > jobAverage.avg ? (
+                  <b style={{ color: '#f97316' }}>{(job.salaryNum - jobAverage.avg).toLocaleString()}원 높아요</b>
+                ) : job.salaryNum < jobAverage.avg ? (
+                  <b className="text-gray-700">{(jobAverage.avg - job.salaryNum).toLocaleString()}원 낮아요</b>
+                ) : (
+                  <b className="text-gray-700">평균과 같아요</b>
+                )}
+                .
+              </div>
+            )}
           </div>
 
           {/* 정보 그리드 */}
