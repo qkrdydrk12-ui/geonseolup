@@ -1023,6 +1023,10 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
         <p className="text-[11px] text-white/45">
           {localStorage.getItem('cj_footer_notice') || '※ 게재된 일자리 정보는 등록자 제공으로 정확성을 보장하지 않습니다.'}
         </p>
+        {/* 사업자 정보 최소 공개(2026-08-31) — 신뢰 신호용, 주소·연락처는 비공개 */}
+        <p className="text-[11px] text-white/35 mt-2">
+          사업자등록번호 497-06-03464 · 대표 박용준
+        </p>
       </footer>
 
       {/* 스크롤 탑 */}

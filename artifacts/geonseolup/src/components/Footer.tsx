@@ -35,6 +35,10 @@ export default function Footer() {
           </nav>
           <span className="text-xs text-gray-400">© {new Date().getFullYear()} 건설UP</span>
         </div>
+        {/* 사업자 정보 최소 공개(2026-08-31) — 신뢰 신호용, 주소·연락처는 비공개 */}
+        <div className="text-[11px] text-gray-400 pt-1">
+          사업자등록번호 497-06-03464 · 대표 박용준
+        </div>
       </div>
     </footer>
   );

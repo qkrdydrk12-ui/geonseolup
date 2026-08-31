@@ -26,15 +26,25 @@ export default function Contact() {
             숙식 제공 여부·급여 조건까지 한눈에 비교할 수 있도록 만들었습니다.
           </p>
           <p>
+            현장 구인공고는 원래 카카오톡 오픈채팅방·단체방마다 흩어져서 올라와, 여러 방을 일일이
+            돌아다니지 않으면 놓치기 쉬웠습니다. 건설UP은 이렇게 흩어진 공고를 매일 한 곳에 모아
+            지역·직종별로 검색할 수 있게 정리하는 데서 시작했습니다.
+          </p>
+          <p>
             등록되는 공고는 자동 심사 및 신고 접수를 거쳐 관리되며, 등록 2일이 지난 공고는 자동으로 내려가
             항상 최신 정보만 노출되도록 운영하고 있습니다. 처음 건설 현장 일을 시작하는 분들을 위한 실무 가이드({' '}
             <a href="/info" className="text-[#f97316] font-semibold no-underline">정보/꿀팁</a>
-            )도 함께 제공합니다.
+            )와, 실수령액·퇴직금 계산기·근로계약서 양식 같은{' '}
+            <a href="/net-pay-calculator" className="text-[#f97316] font-semibold no-underline">실무 도구</a>
+            도 함께 제공합니다.
           </p>
           <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 leading-relaxed">
             공고 내용은 등록 시점의 정보이므로, 지원 전 근무조건과 연락처를 직접 한 번 더 확인해 주시기 바랍니다.
             건설UP은 정보 게시·연결 서비스이며 채용이나 근무 결과를 보증하지 않습니다.
             허위·과장되었거나 부적절한 공고를 발견하시면 아래 이메일로 신고해 주세요.
+          </p>
+          <p className="text-xs text-gray-400">
+            운영자: 박용준 · 사업자등록번호 497-06-03464
           </p>
         </div>
 
