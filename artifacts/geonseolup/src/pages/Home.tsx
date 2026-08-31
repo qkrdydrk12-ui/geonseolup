@@ -97,6 +97,7 @@ interface ShuttleLink { label: string; href: string; icon?: string; color?: stri
 // 관리자 화면에서 바꿀 일이 거의 없는 고정 페이지들이라 셔틀시간표와 달리 Firestore 설정 없이 하드코딩.
 const CALCULATOR_LINKS: ShuttleLink[] = [
   { label: '실수령액 계산기', href: '/net-pay-calculator' },
+  { label: '퇴직금 계산기', href: '/severance-pay-calculator' },
   { label: '퇴직공제금 계산기', href: '/retirement-fund-calculator' },
 ];
 

@@ -264,6 +264,7 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/wages", changefreq: "daily", priority: "0.8" },
       { loc: "/retirement-fund-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/net-pay-calculator", changefreq: "monthly", priority: "0.7" },
+      { loc: "/severance-pay-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/news", changefreq: "daily", priority: "0.8" },
       { loc: "/info", changefreq: "weekly", priority: "0.7" },
       // 2026-08-26 추가 — 신뢰도 페이지(약관/개인정보/문의)가 사이트맵에서 빠져있었음.
@@ -789,6 +790,26 @@ router.get("/net-pay-calculator", async (_req: Request, res: Response) => {
     res.send(html);
   } catch (err) {
     logger.error({ err }, "[net-pay-calculator-seo] 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// 퇴직금 계산기 (2026-08-31 신설) — 완전 정적 페이지, DB 없이 고정 title/description만 필요.
+// SeverancePayCalculator.tsx가 useEffect로 갱신하는 값과 동일하게 맞춰(SNS 공유 미리보기·크롤러 일치).
+router.get("/severance-pay-calculator", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설 일용직 퇴직금 계산기 — 계속근로 인정 가능성까지 확인 | 건설UP",
+      desc: "건설 일용직은 근무 구간이 끊겨 있어도 계속근로로 인정되면 퇴직금 대상이 될 수 있어요. 여러 근무 구간을 입력하면 공백 기간을 분석해 계속근로 인정 가능성과 예상 퇴직금을 함께 계산해드립니다.",
+      url: `${SITE_URL}/severance-pay-calculator`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[severance-pay-calculator-seo] 렌더링 실패");
     res.status(500).send("Internal Server Error");
   }
 });
