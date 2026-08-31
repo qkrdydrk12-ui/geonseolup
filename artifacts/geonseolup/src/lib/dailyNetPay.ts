@@ -40,6 +40,21 @@ export interface DailyNetPayInput {
   includePensionHealth: boolean;
 }
 
+/**
+ * 공수(工數) — 건설 현장에서 하루 근무를 "1공수" 단위로 세는 관행. 특근·연장이면
+ * 1.5공수, 반나절이면 0.5공수처럼 소수로도 쓰인다. 0.1 단위, 0~5공수로 제한.
+ */
+export function sanitizeGongsu(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(Math.round(n * 10) / 10, 5);
+}
+
+/** 1공수 단가 × 공수 = 그날 실제 받는 총 일당(세전) */
+export function calcGrossFromGongsu(unitWage: number, gongsu: number): number {
+  return Math.round(sanitizeWage(unitWage) * sanitizeGongsu(gongsu));
+}
+
 export interface DailyNetPayResult {
   dailyWage: number;
   incomeTax: number;
@@ -100,6 +115,8 @@ export interface MonthlyWorkEntry {
   id: string;
   label: string;
   dailyWage: number;
+  /** 그 현장에서 하루 평균 공수(특근 포함 등으로 1보다 클 수 있음). 기본 1공수. */
+  gongsu: number;
   days: number;
 }
 
@@ -126,12 +143,14 @@ export function calcMonthlySummary(
   let totalDeduction = 0;
 
   for (const entry of entries) {
-    const wage = sanitizeWage(entry.dailyWage);
+    const unitWage = sanitizeWage(entry.dailyWage);
+    const gongsu = sanitizeGongsu(entry.gongsu || 1);
     const days = sanitizeDays(entry.days);
-    if (wage <= 0 || days <= 0) continue;
-    const perDay = calcDailyNetPay({ dailyWage: wage, includePensionHealth });
+    const grossPerDay = calcGrossFromGongsu(unitWage, gongsu);
+    if (grossPerDay <= 0 || days <= 0) continue;
+    const perDay = calcDailyNetPay({ dailyWage: grossPerDay, includePensionHealth });
     totalDays += days;
-    totalGross += wage * days;
+    totalGross += grossPerDay * days;
     totalNet += perDay.netPay * days;
     totalDeduction += perDay.totalDeduction * days;
   }

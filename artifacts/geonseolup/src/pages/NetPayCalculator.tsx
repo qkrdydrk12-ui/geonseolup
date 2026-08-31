@@ -6,8 +6,10 @@ import { fbLoadPublicJobs, type Job } from '@/lib/firebase';
 import {
   calcDailyNetPay,
   calcMonthlySummary,
+  calcGrossFromGongsu,
   sanitizeWage,
   sanitizeDays,
+  sanitizeGongsu,
   type MonthlyWorkEntry,
 } from '@/lib/dailyNetPay';
 
@@ -63,17 +65,18 @@ function HeroIllustration() {
   );
 }
 
-function loadCoreCache(): { dailyWage: number; includePensionHealth: boolean } {
+function loadCoreCache(): { dailyWage: number; gongsu: number; includePensionHealth: boolean } {
   try {
     const raw = localStorage.getItem('cj_net_pay_calc');
-    if (!raw) return { dailyWage: 0, includePensionHealth: false };
+    if (!raw) return { dailyWage: 0, gongsu: 1, includePensionHealth: false };
     const parsed = JSON.parse(raw);
     return {
       dailyWage: sanitizeWage(parsed?.dailyWage),
+      gongsu: parsed?.gongsu ? sanitizeGongsu(parsed.gongsu) : 1,
       includePensionHealth: !!parsed?.includePensionHealth,
     };
   } catch {
-    return { dailyWage: 0, includePensionHealth: false };
+    return { dailyWage: 0, gongsu: 1, includePensionHealth: false };
   }
 }
 
@@ -84,6 +87,7 @@ function makeEntryId() {
 export default function NetPayCalculator() {
   const cached = loadCoreCache();
   const [dailyWage, setDailyWage] = useState<number>(cached.dailyWage);
+  const [gongsu, setGongsu] = useState<number>(cached.gongsu);
   const [includePensionHealth, setIncludePensionHealth] = useState<boolean>(cached.includePensionHealth);
   const [entries, setEntries] = useState<MonthlyWorkEntry[]>([]);
   const [compareJob, setCompareJob] = useState<string>('');
@@ -98,9 +102,9 @@ export default function NetPayCalculator() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('cj_net_pay_calc', JSON.stringify({ dailyWage, includePensionHealth }));
+      localStorage.setItem('cj_net_pay_calc', JSON.stringify({ dailyWage, gongsu, includePensionHealth }));
     } catch { /* noop */ }
-  }, [dailyWage, includePensionHealth]);
+  }, [dailyWage, gongsu, includePensionHealth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,9 +117,11 @@ export default function NetPayCalculator() {
     return () => { cancelled = true; };
   }, []);
 
+  const grossWage = useMemo(() => calcGrossFromGongsu(dailyWage, gongsu), [dailyWage, gongsu]);
+
   const result = useMemo(
-    () => calcDailyNetPay({ dailyWage, includePensionHealth }),
-    [dailyWage, includePensionHealth],
+    () => calcDailyNetPay({ dailyWage: grossWage, includePensionHealth }),
+    [grossWage, includePensionHealth],
   );
 
   const monthly = useMemo(
@@ -132,7 +138,7 @@ export default function NetPayCalculator() {
   }, [compareJob, jobs]);
 
   function addEntry() {
-    setEntries((prev) => [...prev, { id: makeEntryId(), label: `현장 ${prev.length + 1}`, dailyWage: 0, days: 0 }]);
+    setEntries((prev) => [...prev, { id: makeEntryId(), label: `현장 ${prev.length + 1}`, dailyWage: 0, gongsu: 1, days: 0 }]);
   }
   function updateEntry(id: string, patch: Partial<MonthlyWorkEntry>) {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -176,8 +182,9 @@ export default function NetPayCalculator() {
 
         {/* 입력 폼 */}
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 mb-5">
-          <h2 className="font-extrabold text-[15px] mb-4" style={{ color: NAVY }}>오늘 일당 입력</h2>
-          <div className="flex items-center gap-2 mb-4">
+          <h2 className="font-extrabold text-[15px] mb-1" style={{ color: NAVY }}>1공수 단가 × 오늘 공수</h2>
+          <p className="text-[11.5px] text-gray-400 mb-3">특근·연장으로 1.2공수, 1.5공수처럼 받았다면 그대로 입력하세요</p>
+          <div className="flex items-center gap-2 mb-2">
             <input
               type="number"
               inputMode="numeric"
@@ -185,11 +192,26 @@ export default function NetPayCalculator() {
               placeholder="예: 180000"
               value={dailyWage || ''}
               onChange={(e) => setDailyWage(sanitizeWage(e.target.value))}
-              className="flex-1 rounded-lg border border-gray-200 px-3.5 py-3 text-[16px] font-bold text-gray-800 focus:outline-none focus:border-[#f97316]"
+              className="flex-1 min-w-0 rounded-lg border border-gray-200 px-3.5 py-3 text-[16px] font-bold text-gray-800 focus:outline-none focus:border-[#f97316]"
             />
-            <span className="text-[13px] text-gray-400 shrink-0">원</span>
+            <span className="text-[13px] text-gray-400 shrink-0">원 ×</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={5}
+              step={0.1}
+              placeholder="1"
+              value={gongsu === 1 ? '1' : gongsu || ''}
+              onChange={(e) => setGongsu(sanitizeGongsu(e.target.value))}
+              className="w-[64px] shrink-0 rounded-lg border border-gray-200 px-2 py-3 text-[16px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
+            />
+            <span className="text-[13px] text-gray-400 shrink-0">공수</span>
           </div>
-          <label className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-3 cursor-pointer select-none">
+          {dailyWage > 0 && gongsu !== 1 && (
+            <p className="text-[11.5px] text-gray-400 mb-2">→ 오늘 세전 급여 {grossWage.toLocaleString('ko-KR')}원</p>
+          )}
+          <label className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-3 cursor-pointer select-none mt-2">
             <input
               type="checkbox"
               checked={includePensionHealth}
@@ -256,7 +278,7 @@ export default function NetPayCalculator() {
               현재 등록된 <b style={{ color: ORANGE }}>{compareJob}</b> 공고 {jobAverage.count}건 평균 일당은{' '}
               <b className="tabular-nums">{jobAverage.avg.toLocaleString('ko-KR')}원</b>이에요.
               {dailyWage > 0 && (
-                <> 입력하신 일당은 평균보다{' '}
+                <> 입력하신 1공수 단가는 평균보다{' '}
                   <b style={{ color: dailyWage >= jobAverage.avg ? '#16a34a' : '#dc2626' }}>
                     {Math.abs(dailyWage - jobAverage.avg).toLocaleString('ko-KR')}원 {dailyWage >= jobAverage.avg ? '높아요' : '낮아요'}
                   </b>.
@@ -283,42 +305,58 @@ export default function NetPayCalculator() {
 
           <div className="flex flex-col gap-2.5 mb-3">
             {entries.map((entry) => (
-              <div key={entry.id} className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
-                <input
-                  type="text"
-                  value={entry.label}
-                  onChange={(e) => updateEntry(entry.id, { label: e.target.value })}
-                  className="w-[70px] shrink-0 rounded-lg border border-gray-200 px-2 py-2 text-[12px] font-bold text-gray-700 focus:outline-none focus:border-[#f97316]"
-                />
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  placeholder="일당"
-                  value={entry.dailyWage || ''}
-                  onChange={(e) => updateEntry(entry.id, { dailyWage: sanitizeWage(e.target.value) })}
-                  className="flex-1 min-w-0 rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
-                />
-                <span className="text-[11px] text-gray-400 shrink-0">원 ×</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={31}
-                  placeholder="일수"
-                  value={entry.days || ''}
-                  onChange={(e) => updateEntry(entry.id, { days: sanitizeDays(e.target.value) })}
-                  className="w-[56px] shrink-0 rounded-lg border border-gray-200 px-2 py-2 text-[13px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
-                />
-                <span className="text-[11px] text-gray-400 shrink-0">일</span>
-                <button
-                  type="button"
-                  onClick={() => removeEntry(entry.id)}
-                  className="shrink-0 w-7 h-7 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 cursor-pointer text-sm"
-                  aria-label="삭제"
-                >
-                  ×
-                </button>
+              <div key={entry.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={entry.label}
+                    onChange={(e) => updateEntry(entry.id, { label: e.target.value })}
+                    className="flex-1 min-w-0 rounded-lg border border-gray-200 px-2 py-1.5 text-[12px] font-bold text-gray-700 focus:outline-none focus:border-[#f97316]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeEntry(entry.id)}
+                    className="shrink-0 w-7 h-7 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 cursor-pointer text-sm"
+                    aria-label="삭제"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    placeholder="1공수 단가"
+                    value={entry.dailyWage || ''}
+                    onChange={(e) => updateEntry(entry.id, { dailyWage: sanitizeWage(e.target.value) })}
+                    className="flex-1 min-w-0 rounded-lg border border-gray-200 px-2 py-2 text-[12.5px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
+                  />
+                  <span className="text-[10.5px] text-gray-400 shrink-0">원×</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={5}
+                    step={0.1}
+                    placeholder="1"
+                    value={entry.gongsu === 1 ? '1' : entry.gongsu || ''}
+                    onChange={(e) => updateEntry(entry.id, { gongsu: sanitizeGongsu(e.target.value) })}
+                    className="w-[42px] shrink-0 rounded-lg border border-gray-200 px-1.5 py-2 text-[12.5px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
+                  />
+                  <span className="text-[10.5px] text-gray-400 shrink-0">공수×</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={31}
+                    placeholder="일수"
+                    value={entry.days || ''}
+                    onChange={(e) => updateEntry(entry.id, { days: sanitizeDays(e.target.value) })}
+                    className="w-[46px] shrink-0 rounded-lg border border-gray-200 px-1.5 py-2 text-[12.5px] font-bold text-gray-800 text-right focus:outline-none focus:border-[#f97316]"
+                  />
+                  <span className="text-[10.5px] text-gray-400 shrink-0">일</span>
+                </div>
               </div>
             ))}
           </div>
