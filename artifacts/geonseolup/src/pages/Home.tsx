@@ -159,6 +159,12 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             🏗️ 현장 소식
           </a>
+          <a
+            href="/retirement-fund-calculator"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all no-underline"
+          >
+            계산기
+          </a>
           <div className="relative" data-shuttle-menu>
             <button
               type="button"
