@@ -93,6 +93,14 @@ function detectInAppBrowser(userAgent: string | undefined): string | null {
   return null;
 }
 
+// "출처 미확인" 방문을 최소한 기기 종류로라도 나눠보기 위한 보조 분류(2026-08-31 추가).
+// 인앱브라우저 서명에 안 걸린 나머지가 진짜 순수 다이렉트 방문인지 판단할 근거가 없어서,
+// 원인 진단용으로 모바일/PC만 구분해 둔다 — 출처 자체를 바꾸지 않는다.
+function detectDevice(userAgent: string | undefined): "mobile" | "desktop" {
+  if (!userAgent) return "desktop";
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(userAgent) ? "mobile" : "desktop";
+}
+
 const INTERNAL_HOST_SUFFIXES = [
   "geonseolup.com",
   ".replit.app",
@@ -277,6 +285,8 @@ async function initTables() {
       UNIQUE(visit_date, source, ip_hash)
     );
     CREATE INDEX IF NOT EXISTS idx_visit_sources_date ON visit_sources(visit_date);
+    -- 기존 테이블에 device 컬럼이 없을 수 있으므로(2026-08-31 추가) 항상 안전하게 보강한다.
+    ALTER TABLE visit_sources ADD COLUMN IF NOT EXISTS device VARCHAR(10) NOT NULL DEFAULT 'desktop';
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS visit_attributions (
@@ -344,13 +354,15 @@ router.post("/visit", async (req: Request, res: Response) => {
         ? body.referrer
         : undefined;
     const utmSource = safeTrackingValue(body.utmSource, 50);
+    const userAgent = req.headers["user-agent"] as string | undefined;
     let source = categorizeSource(referrer, utmSource || undefined);
     // referrer도 utm도 없어 "출처 미확인"으로 떨어진 경우에만, User-Agent로 인앱브라우저
     // 추정을 시도한다(확정된 값은 절대 덮어쓰지 않음). 2026-08-30 추가.
     if (source === "unknown") {
-      const inapp = detectInAppBrowser(req.headers["user-agent"] as string | undefined);
+      const inapp = detectInAppBrowser(userAgent);
       if (inapp) source = inapp;
     }
+    const device = detectDevice(userAgent);
 
     // 같은 사이트 안에서 발생한 새로고침/이동은 전체·시간대·유입 통계 어디에도 넣지 않는다.
     if (source === "internal") {
@@ -401,8 +413,8 @@ router.post("/visit", async (req: Request, res: Response) => {
          RETURNING 1
        ),
        source_insert AS (
-         INSERT INTO visit_sources (visit_date, source, referrer_host, ip_hash)
-         SELECT $1, $2, $8, $7 FROM first_touch
+         INSERT INTO visit_sources (visit_date, source, referrer_host, ip_hash, device)
+         SELECT $1, $2, $8, $7, $9 FROM first_touch
          ON CONFLICT (visit_date, source, ip_hash) DO NOTHING
          RETURNING 1
        )
@@ -416,6 +428,7 @@ router.post("/visit", async (req: Request, res: Response) => {
         safeLandingPath(body.landingPath),
         ipHash,
         referrerHost,
+        device,
       ],
     );
 
@@ -481,12 +494,21 @@ router.get("/stats/sources", requireAdmin, async (req: Request, res: Response) =
     const fromDate =
       days === 1 ? date : new Date(new Date(date).getTime() - (days - 1) * 86400000).toISOString().slice(0, 10);
 
-    const [sourceResult, campaignResult, landingResult] = await Promise.all([
+    const [sourceResult, unknownDeviceResult, campaignResult, landingResult] = await Promise.all([
       pool.query<{ source: string; referrer_host: string | null; count: string }>(
       `SELECT source, referrer_host, COUNT(*) AS count
        FROM visit_sources
        WHERE visit_date BETWEEN $1 AND $2
        GROUP BY source, referrer_host`,
+      [fromDate, date],
+      ),
+      // "출처 미확인"만 기기 종류로 더 나눠본다(2026-08-31 추가) — 원인 진단용 보조 지표,
+      // source 자체를 대체하지 않는다.
+      pool.query<{ device: string; count: string }>(
+      `SELECT device, COUNT(*) AS count
+       FROM visit_sources
+       WHERE visit_date BETWEEN $1 AND $2 AND source = 'unknown'
+       GROUP BY device`,
       [fromDate, date],
       ),
       pool.query<{
@@ -546,8 +568,12 @@ router.get("/stats/sources", requireAdmin, async (req: Request, res: Response) =
       landingPath: row.landing_path,
       count: Number(row.count),
     }));
+    const unknownByDevice = unknownDeviceResult.rows.map((row) => ({
+      device: row.device === "mobile" ? "mobile" : "desktop",
+      count: Number(row.count),
+    }));
 
-    res.json({ date, days, from: fromDate, to: date, total, rows, campaigns, landings });
+    res.json({ date, days, from: fromDate, to: date, total, rows, campaigns, landings, unknownByDevice });
   } catch (err) {
     req.log.error({ err }, "Traffic source stats query failed");
     res.status(500).json({ error: "유입경로 통계 조회 실패" });

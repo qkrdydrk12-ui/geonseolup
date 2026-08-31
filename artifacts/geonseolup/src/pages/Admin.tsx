@@ -135,6 +135,7 @@ interface LandingRow {
   landingPath: string;
   count: number;
 }
+interface UnknownDeviceRow { device: 'mobile' | 'desktop'; count: number; }
 
 // 유입 경로별 표시 스타일 — 순서·색은 카테고리별로 고정(값 순위에 따라 바뀌지 않음)
 const SOURCE_STYLE: Record<string, { label: string; color: string; icon: string }> = {
@@ -242,6 +243,7 @@ export default function Admin() {
   const [sourceData, setSourceData] = useState<SourceRow[]>([]);
   const [campaignData, setCampaignData] = useState<CampaignRow[]>([]);
   const [landingData, setLandingData] = useState<LandingRow[]>([]);
+  const [unknownDeviceData, setUnknownDeviceData] = useState<UnknownDeviceRow[]>([]);
   const [sourceDays, setSourceDays] = useState<1 | 7>(1);
   const [settings, setSettings] = useState({
     adminPw: localStorage.getItem('cj_admin_pw') || 'wns585426!@',
@@ -454,6 +456,7 @@ export default function Admin() {
       setSourceData(sources.rows ?? []);
       setCampaignData(sources.campaigns ?? []);
       setLandingData(sources.landings ?? []);
+      setUnknownDeviceData(sources.unknownByDevice ?? []);
     } catch {
       showToast('통계 조회 실패');
     } finally {
@@ -2594,20 +2597,30 @@ export default function Admin() {
                         const pct = totalSource ? Math.round((r.count / totalSource) * 100) : 0;
                         const barPct = maxCount ? Math.max((r.count / maxCount) * 100, 4) : 0;
                         return (
-                          <div key={r.source} className="flex items-center gap-3">
-                            <span className="w-[118px] shrink-0 text-xs font-semibold text-gray-600 flex items-center gap-1.5">
-                              <span aria-hidden className="inline-flex items-center justify-center w-4 text-center">{style.icon}</span>
-                              {r.label || style.label}
-                            </span>
-                            <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{ width: `${barPct}%`, backgroundColor: style.color }}
-                              />
+                          <div key={r.source} className="flex flex-col gap-1">
+                            <div className="flex items-center gap-3">
+                              <span className="w-[118px] shrink-0 text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                <span aria-hidden className="inline-flex items-center justify-center w-4 text-center">{style.icon}</span>
+                                {r.label || style.label}
+                              </span>
+                              <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${barPct}%`, backgroundColor: style.color }}
+                                />
+                              </div>
+                              <span className="w-[92px] shrink-0 text-right text-xs font-bold text-gray-700 tabular-nums">
+                                {r.count.toLocaleString()}명 <span className="text-gray-400 font-normal">({pct}%)</span>
+                              </span>
                             </div>
-                            <span className="w-[92px] shrink-0 text-right text-xs font-bold text-gray-700 tabular-nums">
-                              {r.count.toLocaleString()}명 <span className="text-gray-400 font-normal">({pct}%)</span>
-                            </span>
+                            {/* 출처 미확인만 기기 종류로 한 번 더 쪼개서 원인 진단에 도움을 준다(2026-08-31 추가) */}
+                            {r.source === 'unknown' && unknownDeviceData.length > 0 && (
+                              <p className="pl-[130px] text-[11px] text-gray-400">
+                                {unknownDeviceData
+                                  .map((d) => `${d.device === 'mobile' ? '📱 모바일' : '💻 PC'} ${d.count.toLocaleString()}명`)
+                                  .join(' · ')}
+                              </p>
+                            )}
                           </div>
                         );
                       })}
