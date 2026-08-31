@@ -132,9 +132,15 @@ export default function NetPayCalculator() {
     [entries, includePensionHealth],
   );
 
+  // 안전담당자 등 일부 직종은 "일급"(14~18만원대)과 "월급"(250~420만원대) 공고가 같은 직종명에
+  // 섞여 올라온다 — 이 계산기는 일급(공수) 기준이므로 월급 스케일 공고(100만원 이상)는 평균에서
+  // 제외한다(2026-08-31, Detail.tsx에서 같은 문제 발견 후 동일 적용).
+  const MONTHLY_WAGE_THRESHOLD = 1_000_000;
   const jobAverage = useMemo(() => {
     if (!compareJob) return null;
-    const matched = jobs.filter((j) => j.job === compareJob && typeof j.salaryNum === 'number' && j.salaryNum! > 0);
+    const matched = jobs.filter(
+      (j) => j.job === compareJob && typeof j.salaryNum === 'number' && j.salaryNum! > 0 && j.salaryNum! < MONTHLY_WAGE_THRESHOLD,
+    );
     if (matched.length === 0) return null;
     const sum = matched.reduce((acc, j) => acc + (j.salaryNum || 0), 0);
     return { avg: Math.round(sum / matched.length), count: matched.length };
