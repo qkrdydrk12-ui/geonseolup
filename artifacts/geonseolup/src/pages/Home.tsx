@@ -9,6 +9,7 @@ import { sanitizeClientJob } from '@/lib/phone';
 const SAMPLE_JOBS = RAW_SAMPLE_JOBS.map(sanitizeClientJob);
 import { isAutoHidden, WELD_SUBS, isWeld, getJobIcon, JOB_ICON_BG, isNew } from '@/lib/utils';
 import { getToken, apiVerify } from '@/lib/adminAuth';
+import { CITY_TO_PROVINCE } from '@/lib/parseJob';
 import JobCard from '@/components/JobCard';
 
 const DEFAULT_AUTO_HIDE = 0;
@@ -326,7 +327,19 @@ function filterAndSort(jobs: Job[], state: AppState): Job[] {
   }
 
   if (state.region !== '전체') {
-    list = list.filter((j) => (j.region || '').includes(state.region));
+    // ⚠️ (2026-08-31 수정) 공고의 region 필드는 "평택"·"용인"처럼 도시명 단위로 저장되는 경우가
+    // 대부분이라, "경기"·"경남" 같은 광역 지역 버튼을 그냥 includes()로만 비교하면
+    // "평택".includes("경기") === false가 되어 광역 지역 필터가 통째로 안 잡히는 버그가 있었다
+    // (예: 경기+조공 검색 시 실제로는 공고가 많은데도 0건). 도시명이 CITY_TO_PROVINCE에서
+    // 선택된 광역 지역에 속하는지도 같이 확인한다. 기존 includes() 매칭(서울처럼 광역명을
+    // 그대로 저장한 경우, "용인 원삼"처럼 광역 지역명 자체가 부분 포함된 경우)은 그대로 유지.
+    list = list.filter((j) => {
+      const jobRegion = j.region || '';
+      if (jobRegion.includes(state.region)) return true;
+      return jobRegion
+        .split(/[·,\s]+/)
+        .some((part) => CITY_TO_PROVINCE[part] === state.region);
+    });
   }
 
   if (state.job !== '전체') {
