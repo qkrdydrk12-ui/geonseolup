@@ -3,7 +3,16 @@ import type { Job } from '@/lib/firebase';
 import { WELD_SUBS } from '@/lib/utils';
 
 const REGIONS = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '해외', '전국'];
-const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '포설', '보온', '관리자', '안전담당자', '안전시설반', '품질담당자', '공사담당자', '기타'];
+const JOBS = ['조공', '배관', '용접', '형틀', '철근', '미장', '도장', '토공', '전기', '설비', '화기감시자', '유도원', '양중', '덕트', '비계', '포설', '보온', '관리자', '안전담당자', '안전시설반', '품질담당자', '공사담당자', '칸막이', '청소', '기타'];
+// 실제 공고 텍스트에 자주 나오지만 표준 직종명과 표기가 다른 동의어 — 매칭되면 표준 직종명으로 정규화한다
+// (2026-08-31 실데이터 스캔으로 확정: "화재감시자/화재감시원"·"교통통제(원)"이 표준 직종 버튼에 하나도 안 걸려서
+// "기타"로 새고 있었음. 화재감시자=화기감시자와 동의어, 교통통제원은 실질적으로 유도원과 같은 역할.)
+const JOB_ALIASES: Record<string, string> = {
+  화재감시자: '화기감시자',
+  화재감시원: '화기감시자',
+  교통통제: '유도원',
+  신호수: '유도원',
+};
 const MEALS = ['식사제공', '식사없음', '협의', '출퇴근'];
 const LODGINGS = ['숙박제공', '숙박없음', '협의'];
 
@@ -839,11 +848,11 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
   //    "자동"은 너무 일반적이므로 용접 컨텍스트가 있을 때만 매칭에 포함
   const WELD_SUBS_SAFE = WELD_SUBS.filter((w) => w !== '자동');
   let firstJob: { job: string; idx: number } | null = null;
-  for (const job of [...JOBS, ...WELD_SUBS_SAFE]) {
+  for (const job of [...JOBS, ...WELD_SUBS_SAFE, ...Object.keys(JOB_ALIASES)]) {
     const idx = text.indexOf(job);
     if (idx >= 0 && (firstJob === null || idx < firstJob.idx)) firstJob = { job, idx };
   }
-  if (firstJob) r.job = firstJob.job;
+  if (firstJob) r.job = JOB_ALIASES[firstJob.job] ?? firstJob.job;
 
   // 1.5) "직 종 : XXX" 라벨 명시값이 있으면 최우선 (라벨 글자 사이 공백 허용)
   //      값 안에 알려진 직종이 있으면 그 직종으로, 없으면 값 그대로 사용 (예: 안전감시단)
@@ -855,8 +864,8 @@ function parseJobText(text: string): Partial<Job> & { _salaryCalc?: string; _sal
       if (/안전\s*관리자?/.test(val)) {
         r.job = '안전담당자';
       } else {
-        const known = [...JOBS, ...WELD_SUBS_SAFE].find((j) => j !== '기타' && val.includes(j));
-        r.job = known ?? val;
+        const known = [...JOBS, ...WELD_SUBS_SAFE, ...Object.keys(JOB_ALIASES)].find((j) => j !== '기타' && val.includes(j));
+        r.job = known ? (JOB_ALIASES[known] ?? known) : val;
       }
     }
   }
