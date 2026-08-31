@@ -177,16 +177,30 @@ export default function Detail({ id }: Props) {
     window.location.href = `mailto:qkrdydrk@naver.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
-  // 이 공고와 같은 직종의 다른 활성 공고 평균 단가 — 자사 실시간 데이터로만 계산(별도 시세표 미사용,
-  // 관리자가 수동 갱신 안 해도 항상 최신). 비교 대상이 너무 적으면(2건 이하) 억지 비교문을 만들지 않는다.
+  // 안전담당자 등 일부 직종은 "일급"(14~18만원대)과 "월급"(250~420만원대) 공고가 같은 직종명에
+  // 섞여 올라온다(원문 급여 문구는 정확한데, salaryNum엔 주기 구분이 없어 그대로 들어감).
+  // 100만원을 기준으로 월급/일급을 나눠, 급여 라벨 표시와 평균 비교 둘 다 같은 주기끼리만 묶는다
+  // (2026-08-31, 실사고 발견: 일급 17만원 공고가 월급 포함 평균 157만원과 비교되던 문제).
+  const MONTHLY_WAGE_THRESHOLD = 1_000_000;
+  const isMonthlyWage = (n: number) => n >= MONTHLY_WAGE_THRESHOLD;
+
+  // 이 공고와 같은 직종+같은 급여 주기(일급/월급)의 다른 활성 공고 평균 단가 — 자사 실시간 데이터로만
+  // 계산(별도 시세표 미사용, 관리자가 수동 갱신 안 해도 항상 최신). 비교 대상이 너무 적으면(2건 이하)
+  // 억지 비교문을 만들지 않는다.
   const jobAverage = useMemo(() => {
-    if (!job?.job) return null;
+    if (!job?.job || typeof job.salaryNum !== 'number' || job.salaryNum <= 0) return null;
+    const monthly = isMonthlyWage(job.salaryNum);
     const matched = jobPool.filter(
-      (j) => j.job === job.job && j.id !== job.id && typeof j.salaryNum === 'number' && j.salaryNum! > 0,
+      (j) =>
+        j.job === job.job &&
+        j.id !== job.id &&
+        typeof j.salaryNum === 'number' &&
+        j.salaryNum! > 0 &&
+        isMonthlyWage(j.salaryNum!) === monthly,
     );
     if (matched.length < 3) return null;
     const sum = matched.reduce((acc, j) => acc + (j.salaryNum || 0), 0);
-    return { avg: Math.round(sum / matched.length), count: matched.length };
+    return { avg: Math.round(sum / matched.length), count: matched.length, monthly };
   }, [job, jobPool]);
 
   if (loading) {
@@ -382,19 +396,22 @@ export default function Detail({ id }: Props) {
             <div className="flex items-center gap-2 sm:gap-2.5 rounded-[10px] px-3 sm:px-[18px] py-3 sm:py-[14px] border-2 border-[#fb923c]"
               style={{ background: 'linear-gradient(135deg,#fff7ed,#fed7aa)' }}>
               <span className="text-xl sm:text-2xl shrink-0">💰</span>
-              <span className="text-xs sm:text-[13px] text-orange-900 font-semibold shrink-0">일급</span>
+              <span className="text-xs sm:text-[13px] text-orange-900 font-semibold shrink-0">
+                {typeof job.salaryNum === 'number' && isMonthlyWage(job.salaryNum) ? '월급' : '일급'}
+              </span>
               <span className="text-[20px] sm:text-[26px] font-black text-[#f97316] min-w-0 break-all">
                 {job.salary || '협의'}
               </span>
             </div>
 
-            {/* 같은 직종 평균 단가 비교 — 건설UP에 등록된 활성 공고 실시간 집계, 비교 가능한 공고가
-                3건 미만이면 표시하지 않는다(억지 문구 방지). 원문 그대로만 있던 공고 상세페이지에
-                실제 데이터 기반 코멘트를 더해 정보 가치를 높이려는 목적(2026-08-31). */}
+            {/* 같은 직종+같은 급여주기(일급/월급) 평균 단가 비교 — 건설UP에 등록된 활성 공고 실시간
+                집계, 비교 가능한 공고가 3건 미만이면 표시하지 않는다(억지 문구 방지). 원문 그대로만
+                있던 공고 상세페이지에 실제 데이터 기반 코멘트를 더해 정보 가치를 높이려는 목적
+                (2026-08-31, 일급/월급 뒤섞여 비교되던 사고 이후 급여주기 일치 필터 추가). */}
             {jobAverage && typeof job.salaryNum === 'number' && job.salaryNum > 0 && (
               <div className="mt-2.5 text-[12.5px] sm:text-[13px] text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 leading-relaxed">
-                💡 이 공고 단가는 현재 건설UP에 등록된 <b className="text-gray-800">{job.job}</b> 공고{' '}
-                {jobAverage.count}건 평균({jobAverage.avg.toLocaleString()}원)보다{' '}
+                💡 이 공고 단가는 현재 건설UP에 등록된 <b className="text-gray-800">{job.job}</b>{' '}
+                {jobAverage.monthly ? '월급' : '일급'} 공고 {jobAverage.count}건 평균({jobAverage.avg.toLocaleString()}원)보다{' '}
                 {job.salaryNum > jobAverage.avg ? (
                   <b style={{ color: '#f97316' }}>{(job.salaryNum - jobAverage.avg).toLocaleString()}원 높아요</b>
                 ) : job.salaryNum < jobAverage.avg ? (
