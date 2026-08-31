@@ -5,4 +5,4 @@ Disallow: /api/admin
 
 Sitemap: https://geonseolup.com/sitemap.xml
 
-#DaumWebMasterTool:736afbbe1f7c343f0b485cbd8492eb17f14e800fa6e9e36c10bcfb7c945b15cd:ZFfn1xyG8nfqrwA5LNTlrg==
+#DaumWebMasterTool:9670c061087a37c797c7277d058cd1c184858c12e11a8b96b692919a64112265:4Q+JZVGYAkx0BbJJkg0XLQ==
