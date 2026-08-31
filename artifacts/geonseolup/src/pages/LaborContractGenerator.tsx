@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -11,6 +11,10 @@ import {
   type ContractInput,
   type ContractTermType,
 } from '@/lib/laborContract';
+// PDF 다운로드 전용 — 입력 즉시 결과물(파일)을 손에 쥐어주는 게 이 페이지의 핵심 가치라
+// "인쇄 대화상자를 거쳐 PDF로 저장"이라는 간접적인 방법 대신 진짜 파일 다운로드로 구현한다.
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const ORANGE = '#f97316';
 const NAVY = '#1e3a5f';
@@ -96,8 +100,27 @@ export default function LaborContractGenerator() {
 
   const filledEnough = input.companyName && input.workerName && input.startDate && input.jobType && input.unitWage > 0;
 
-  function handlePrint() {
-    window.print();
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownloadPdf() {
+    if (!previewRef.current || downloading) return;
+    setDownloading(true);
+    try {
+      const canvas = await html2canvas(previewRef.current, { scale: 2, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 12, pageWidth, imgHeight);
+      const fileName = `근로계약서_${input.workerName || '근로자'}_${input.startDate || ''}.pdf`;
+      pdf.save(fileName);
+    } catch {
+      // 캡처 실패 시 인쇄 대화상자로 폴백(브라우저에서 PDF로 저장 가능)
+      window.print();
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
@@ -125,7 +148,7 @@ export default function LaborContractGenerator() {
             <h1 className="font-extrabold text-xl sm:text-[26px] leading-tight mb-1.5" style={{ color: NAVY }}>
               건설 일용직 근로계약서 양식
             </h1>
-            <p className="text-xs sm:text-sm text-gray-500">현장명·계약기간·1공수 단가만 채우면 계약서가 바로 완성돼요</p>
+            <p className="text-xs sm:text-sm text-gray-500">현장명·계약기간·1공수 단가만 채우면 계약서 PDF를 바로 다운로드할 수 있어요</p>
           </div>
         </div>
 
@@ -338,8 +361,9 @@ export default function LaborContractGenerator() {
           </div>
         </div>
 
-        {/* 완성된 계약서 미리보기 */}
+        {/* 완성된 계약서 미리보기 — ref로 감싼 영역만 PDF로 캡처(버튼은 제외) */}
         <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-7 mb-5 print-only-card">
+          <div ref={previewRef} className="bg-white p-1">
           <h2 className="text-center font-black text-lg mb-5" style={{ color: NAVY }}>표준 근로계약서 (건설 일용직)</h2>
 
           <div className="flex flex-col gap-3 text-[13px] text-gray-700 leading-relaxed">
@@ -380,15 +404,23 @@ export default function LaborContractGenerator() {
               </div>
             </div>
           </div>
+          </div>
 
           <button
             type="button"
-            onClick={handlePrint}
-            disabled={!filledEnough}
+            onClick={handleDownloadPdf}
+            disabled={!filledEnough || downloading}
             className="no-print w-full mt-5 rounded-lg py-2.5 text-[13px] font-extrabold cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 transition-opacity"
             style={{ background: ORANGE, color: '#fff' }}
           >
-            {filledEnough ? '인쇄 / PDF로 저장하기' : '필수 항목을 먼저 채워주세요'}
+            {!filledEnough ? '필수 항목을 먼저 채워주세요' : downloading ? '파일 만드는 중...' : '계약서 PDF 다운로드'}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="no-print w-full mt-2 rounded-lg py-2 text-[12px] font-bold cursor-pointer bg-transparent border border-gray-200 text-gray-500"
+          >
+            바로 인쇄하기
           </button>
         </div>
 
