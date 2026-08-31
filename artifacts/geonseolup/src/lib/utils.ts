@@ -70,6 +70,8 @@ export const JOB_ICONS: Record<string, string> = {
   안전시설반: '🚧',
   품질담당자: '📋',
   공사담당자: '🏢',
+  칸막이: '🧱',
+  청소: '🧹',
   기타: '📌',
 };
 
@@ -108,6 +110,8 @@ export const JOB_ICON_BG: Record<string, string> = {
   안전시설반: '#fef9c3',
   품질담당자: '#eff6ff',
   공사담당자: '#f5f3ff',
+  칸막이: '#f5f5f4',
+  청소: '#f0fdfa',
   기타: '#f3f4f6',
 };
 
@@ -136,6 +140,8 @@ export const JOB_BADGE_COLOR: Record<string, { bg: string; text: string }> = {
   안전시설반: { bg: '#fef9c3', text: '#78350f' },
   품질담당자: { bg: '#eff6ff', text: '#1e40af' },
   공사담당자: { bg: '#f5f3ff', text: '#5b21b6' },
+  칸막이: { bg: '#f5f5f4', text: '#44403c' },
+  청소: { bg: '#f0fdfa', text: '#0f766e' },
   기타: { bg: '#f3f4f6', text: '#374151' },
 };
 
