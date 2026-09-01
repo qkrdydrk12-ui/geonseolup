@@ -3,7 +3,6 @@ import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
-import { notifyGoogleIndexing } from "../lib/googleIndexing";
 import { invalidateArticleCaches } from "../lib/articleMeta";
 
 const router: IRouter = Router();
@@ -201,7 +200,6 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
     const isLiveNow = saved.published && (!saved.scheduled_at || new Date(saved.scheduled_at).getTime() <= Date.now());
     if (isLiveNow) {
       notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
-      notifyGoogleIndexing(`https://geonseolup.com/info/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
     res.json({ ok: true, row: toApi(saved) });
   } catch (err: unknown) {
@@ -276,7 +274,6 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
     const isLiveNow = saved.published && (!saved.scheduled_at || new Date(saved.scheduled_at).getTime() <= Date.now());
     if (isLiveNow) {
       notifyIndexNow([`https://geonseolup.com/info/${saved.slug}`]).catch(() => {});
-      notifyGoogleIndexing(`https://geonseolup.com/info/${saved.slug}`, "URL_UPDATED").catch(() => {});
     }
     res.json({ ok: true, row: toApi(saved) });
   } catch (err) {
