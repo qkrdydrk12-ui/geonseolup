@@ -52,6 +52,19 @@ function escapeHtmlAttr(str: string): string {
     .replace(/>/g, "&gt;");
 }
 
+// 꿀팁·현장소식 본문에 쓰는 서식 기호(**굵게**, {색:텍스트}, > 인용, ---/===구분선)를 제거한다.
+// artifacts/geonseolup/src/lib/richText.tsx의 stripRichMarks()와 동일한 규칙 —
+// 프론트 패키지를 이 서버에서 직접 import할 수 없어 로직만 그대로 복제해 유지한다.
+// (2026-09-02 발견: 아래 크롤러/로딩폴백 HTML이 이 기호를 그대로 노출하던 버그 수정 — 이 기호가
+// 있는 채로 escapeHtmlAttr만 거치면 "{빨강:...}" 같은 원본 기호가 화면에 그대로 보였다.)
+function stripRichMarks(text: string): string {
+  return String(text)
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\{(?:빨강|빨간|파랑|파란|초록|주황|회색):([^}]+)\}/g, "$1")
+    .replace(/^\s*>\s?/gm, "")
+    .replace(/^\s*[-=]{3,}\s*$/gm, "");
+}
+
 // JSON을 <script type="application/ld+json"> 안에 안전하게 삽입하기 위한 이스케이프.
 // "</script" 시퀀스가 JSON 문자열 값 안에 있으면 실제로 스크립트가 조기 종료되므로 반드시 처리해야 한다.
 function escapeJsonForScriptTag(json: string): string {
@@ -983,7 +996,7 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       const full = await getBlogArticleFull(slug).catch(() => null);
       if (full) {
         const bodyHtml = full.body
-          .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(b.text)}</p>`)
+          .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(stripRichMarks(b.text))}</p>`)
           .join("\n");
         const relatedHtml = await buildRelatedLinksHtml(`info:${slug}`);
         const fallbackBody = `
@@ -1098,7 +1111,7 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
               .split(/\n{2,}/)
               .map((p) => p.trim())
               .filter(Boolean)
-              .map((p) => `<p style="margin:0 0 14px;color:#334155;white-space:pre-line">${escapeHtmlAttr(p)}</p>`)
+              .map((p) => `<p style="margin:0 0 14px;color:#334155;white-space:pre-line">${escapeHtmlAttr(stripRichMarks(p))}</p>`)
               .join("\n");
             return headingHtml + bodyHtml;
           })
