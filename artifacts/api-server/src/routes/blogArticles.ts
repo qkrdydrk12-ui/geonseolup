@@ -177,7 +177,10 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
     const slug = (body.slug ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
     const title = (body.title ?? "").trim();
     const description = (body.description ?? "").trim();
-    const emoji = (body.emoji ?? "📝").trim() || "📝";
+    // 2026-09-02: 이모지 완전 폐지(사용자 지시 — "이모지 아예 넣지마"). 예전엔 emoji가 비어있으면
+    // "📝" 기본값으로 강제 대체하던 버그가 있어서(빈 문자열을 보내도 무시됨) 정책이 실제로 적용된
+    // 적이 없었다. 이제는 무엇을 보내든 항상 빈 문자열로 저장한다 — 클라이언트가 뭘 보내도 무시.
+    const emoji = "";
     const bodyBlocks = Array.isArray(body.body) ? body.body : [];
 
     if (!slug || !title || !description || bodyBlocks.length === 0) {
@@ -227,7 +230,8 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
     };
     const title = (body.title ?? "").trim();
     const description = (body.description ?? "").trim();
-    const emoji = (body.emoji ?? "📝").trim() || "📝";
+    // 2026-09-02: 이모지 완전 폐지 — POST와 동일하게 무엇을 보내든 항상 빈 문자열로 저장한다.
+    const emoji = "";
     const bodyBlocks = Array.isArray(body.body) ? body.body : [];
     if (!title || !description || bodyBlocks.length === 0) {
       res.status(400).json({ error: "제목·설명·본문은 필수입니다" });
