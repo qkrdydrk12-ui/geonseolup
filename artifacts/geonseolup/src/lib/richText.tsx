@@ -19,12 +19,12 @@ const COLOR_MAP: Record<string, string> = {
   회색: '#6b7280',
 };
 
-// 한 줄 안의 **굵게** 와 {색:텍스트} 처리
+// 한 줄 안의 **굵게**, {색:텍스트}, [링크텍스트](URL) 처리
 export function renderInline(text: string, keyPrefix = ''): ReactNode[] {
   const out: ReactNode[] = [];
-  // **굵게** 또는 {색이름:내용} 을 찾는다
-  // 줄바꿈은 넘지 않게([^*\n], [^}\n]) — 안 닫힌 기호가 여러 줄을 통째로 꾸미는 사고 방지
-  const re = /\*\*([^*\n]+)\*\*|\{(빨강|빨간|파랑|파란|초록|주황|회색):([^}\n]+)\}/g;
+  // **굵게** 또는 {색이름:내용} 또는 [텍스트](URL) 을 찾는다
+  // 줄바꿈은 넘지 않게([^*\n], [^}\n], [^\]\n]/[^)\n]) — 안 닫힌 기호가 여러 줄을 통째로 꾸미는 사고 방지
+  const re = /\*\*([^*\n]+)\*\*|\{(빨강|빨간|파랑|파란|초록|주황|회색):([^}\n]+)\}|\[([^\]\n]+)\]\(([^)\n]+)\)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let k = 0;
@@ -32,11 +32,21 @@ export function renderInline(text: string, keyPrefix = ''): ReactNode[] {
     if (m.index > last) out.push(text.slice(last, m.index));
     if (m[1] !== undefined) {
       out.push(<strong key={`${keyPrefix}b${k++}`} className="font-bold text-gray-900">{m[1]}</strong>);
-    } else {
+    } else if (m[2] !== undefined) {
       out.push(
         <span key={`${keyPrefix}c${k++}`} style={{ color: COLOR_MAP[m[2]!] }} className="font-semibold">
           {m[3]}
         </span>
+      );
+    } else {
+      out.push(
+        <a
+          key={`${keyPrefix}l${k++}`}
+          href={m[5]}
+          className="font-semibold text-[#ea580c] underline underline-offset-2 hover:text-[#c2410c]"
+        >
+          {m[4]}
+        </a>
       );
     }
     last = m.index + m[0].length;
@@ -108,6 +118,7 @@ export function stripRichMarks(text: string): string {
   return text
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\{(?:빨강|빨간|파랑|파란|초록|주황|회색):([^}]+)\}/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/^\s*>\s?/gm, '')
     .replace(/^\s*[-=]{3,}\s*$/gm, '');
 }
