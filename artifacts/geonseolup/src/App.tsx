@@ -9,11 +9,12 @@ import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
 import Contact from '@/pages/Contact';
 import Info from '@/pages/Info';
+import Toon from '@/pages/Toon';
+import ToonDetail from '@/pages/ToonDetail';
 import News from '@/pages/News';
 import NewsDetail from '@/pages/NewsDetail';
 import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
-import Wages from '@/pages/Wages';
 import RetirementFundCalculator from '@/pages/RetirementFundCalculator';
 import NetPayCalculator from '@/pages/NetPayCalculator';
 import SeverancePayCalculator from '@/pages/SeverancePayCalculator';
@@ -198,14 +199,17 @@ function Router() {
       <Route path="/info/:slug">
         {(params) => <InfoDetail slug={params.slug} />}
       </Route>
+      <Route path="/toon">
+        <Toon />
+      </Route>
+      <Route path="/toon/:slug">
+        {(params) => <ToonDetail slug={params.slug} />}
+      </Route>
       <Route path="/news">
         <News />
       </Route>
       <Route path="/news/:slug">
         {(params) => <NewsDetail slug={params.slug} />}
-      </Route>
-      <Route path="/wages">
-        <Wages />
       </Route>
       <Route path="/retirement-fund-calculator">
         <RetirementFundCalculator />

@@ -101,7 +101,7 @@ export default function Shop() {
         </p>
 
         <div className="text-center mb-5">
-          <h1 className="text-2xl font-extrabold text-[#1e3a5f] mb-1.5">🛒 건설 추천템</h1>
+          <h1 className="text-2xl font-extrabold text-[#1e3a5f] mb-1.5">건설 추천템</h1>
           <p className="text-[13px] text-gray-500">99% 실사용 바탕으로 추천 장비·용품을 모았습니다</p>
         </div>
 
