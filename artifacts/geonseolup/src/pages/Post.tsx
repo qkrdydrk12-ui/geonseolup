@@ -287,7 +287,7 @@ export default function Post() {
 
         {/* 페이지 헤더 */}
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-extrabold text-[#1e3a5f] mb-2">📋 구인글 등록</h1>
+          <h1 className="text-2xl font-extrabold text-[#1e3a5f] mb-2">구인글 등록</h1>
           <p className="text-sm text-gray-500 leading-relaxed">
             현장 정보를 입력하시면 관리자 검토 후 게시됩니다.<br />
             허위 공고나 부적절한 내용은 삭제될 수 있습니다.

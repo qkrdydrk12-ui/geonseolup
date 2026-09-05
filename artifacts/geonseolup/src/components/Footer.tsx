@@ -19,9 +19,6 @@ export default function Footer() {
           <Link href="/toon" className="hover:text-[#f97316] transition-colors">
             노가다툰
           </Link>
-          <Link href="/wages" className="hover:text-[#f97316] transition-colors">
-            일당시세
-          </Link>
         </nav>
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full pt-3 border-t border-gray-100">
           <span className="font-semibold text-[#1e3a5f]">건설UP</span>

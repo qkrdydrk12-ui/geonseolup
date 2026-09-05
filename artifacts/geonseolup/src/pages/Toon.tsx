@@ -18,7 +18,7 @@ export default function Toon() {
       <Header />
       <main className="max-w-[860px] mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">🎨 노가다툰</h1>
+          <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">노가다툰</h1>
           <p className="text-sm text-gray-500">현장 실화를 바탕으로 한 공감 카툰. 매주 새 이야기가 올라옵니다.</p>
         </div>
 

@@ -32,7 +32,6 @@ import {
   type SalaryCandidate, type ComplexSalaryResult,
 } from '@/lib/parseJob';
 import AdminProducts from '@/components/AdminProducts';
-import AdminWageRates from '@/components/AdminWageRates';
 import AdminSiteNews from '@/components/AdminSiteNews';
 import AdminBlogArticles from '@/components/AdminBlogArticles';
 import AdminToon from '@/components/AdminToon';
@@ -116,7 +115,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'wages' | 'news' | 'blog' | 'toon' | 'settings' | 'stats';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'news' | 'blog' | 'toon' | 'settings' | 'stats';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1556,17 +1555,16 @@ export default function Admin() {
         <div className="flex gap-1 mb-5 bg-white rounded-xl p-1.5 shadow-sm overflow-x-auto">
           {(
             [
-              { key: 'jobs', label: `📋 공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 📅${reservedJobs.length}` : ''}` },
-              { key: 'add', label: '➕ 공고 등록' },
-              { key: 'pending', label: `📥 신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
-              { key: 'reports', label: `🚩 신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
-              { key: 'products', label: '🛒 추천템' },
-              { key: 'wages', label: '💰 일당 시세' },
-              { key: 'news', label: '📰 현장 소식' },
-              { key: 'blog', label: '📚 건설 꿀팁' },
-              { key: 'toon', label: '🎨 노가다툰' },
-              { key: 'stats', label: '📊 방문 통계' },
-              { key: 'settings', label: '⚙️ 설정' },
+              { key: 'jobs', label: `공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 예약${reservedJobs.length}` : ''}` },
+              { key: 'add', label: '공고 등록' },
+              { key: 'pending', label: `신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
+              { key: 'reports', label: `신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
+              { key: 'products', label: '추천템' },
+              { key: 'news', label: '현장 소식' },
+              { key: 'blog', label: '건설 꿀팁' },
+              { key: 'toon', label: '노가다툰' },
+              { key: 'stats', label: '방문 통계' },
+              { key: 'settings', label: '설정' },
             ] as { key: Tab; label: string }[]
           ).map((t) => (
             <button
@@ -2433,7 +2431,6 @@ export default function Admin() {
 
         {tab === 'products' && <AdminProducts showToast={showToast} />}
 
-        {tab === 'wages' && <AdminWageRates showToast={showToast} />}
 
         {tab === 'news' && <AdminSiteNews showToast={showToast} />}
 

@@ -15,7 +15,6 @@ import News from '@/pages/News';
 import NewsDetail from '@/pages/NewsDetail';
 import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
-import Wages from '@/pages/Wages';
 import RetirementFundCalculator from '@/pages/RetirementFundCalculator';
 import NetPayCalculator from '@/pages/NetPayCalculator';
 import SeverancePayCalculator from '@/pages/SeverancePayCalculator';
@@ -211,9 +210,6 @@ function Router() {
       </Route>
       <Route path="/news/:slug">
         {(params) => <NewsDetail slug={params.slug} />}
-      </Route>
-      <Route path="/wages">
-        <Wages />
       </Route>
       <Route path="/retirement-fund-calculator">
         <RetirementFundCalculator />

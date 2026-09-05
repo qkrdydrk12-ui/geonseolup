@@ -274,7 +274,6 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       { loc: "/", changefreq: "daily", priority: "1.0" },
       { loc: "/post", changefreq: "monthly", priority: "0.7" },
       { loc: "/shop", changefreq: "weekly", priority: "0.5" },
-      { loc: "/wages", changefreq: "daily", priority: "0.8" },
       { loc: "/retirement-fund-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/net-pay-calculator", changefreq: "monthly", priority: "0.7" },
       { loc: "/severance-pay-calculator", changefreq: "monthly", priority: "0.7" },
@@ -707,11 +706,11 @@ function replaceMetaTags(template: string, opts: { title: string; desc: string; 
   return html;
 }
 
-// ── 구인글 등록 / 일당 시세 / 건설 추천템 (2026-08-26 신설) ─────────────────────
+// ── 구인글 등록 / 건설 추천템 (2026-08-26 신설) ─────────────────────
 // 이 세 페이지는 서버 렌더링 경로가 아예 없어서, 원본 index.html에 고정된 홈 URL의
 // canonical을 그대로 물려받고 있었다 — 즉 "이 페이지는 홈페이지의 중복"이라고
 // 검색엔진에 잘못 알려주는 상태였다(title/description도 홈 문구 그대로). title/desc는
-// 실제 화면에 있는 문구(Post.tsx/Wages.tsx/Shop.tsx의 h1·부제)를 그대로 가져다 썼다.
+// 실제 화면에 있는 문구(Post.tsx/Shop.tsx의 h1·부제)를 그대로 가져다 썼다.
 router.get("/post", async (_req: Request, res: Response) => {
   try {
     const template = await getIndexTemplate();
@@ -726,26 +725,6 @@ router.get("/post", async (_req: Request, res: Response) => {
     res.send(html);
   } catch (err) {
     logger.error({ err }, "[post-form-seo] 렌더링 실패");
-    res.status(500).send("Internal Server Error");
-  }
-});
-
-router.get("/wages", async (_req: Request, res: Response) => {
-  try {
-    const template = await getIndexTemplate();
-    const html = replaceMetaTags(template, {
-      // Wages.tsx가 클라이언트에서 쓰는 것과 동일한 문구(useEffect로 document.title 갱신) —
-      // 서버 렌더링 초기 HTML에도 같은 값을 심어 크롤러·SNS 공유 미리보기에서 일치시킨다.
-      title: "이번주 건설현장 일당 시세 — 건설UP",
-      desc: "평택·용인·화성·청주 등 반도체·건설현장 지역별·직종별 일당 시세를 매주 정리해서 알려드립니다.",
-      url: `${SITE_URL}/wages`,
-      image: `${SITE_URL}/og-image.png?v=2`,
-    });
-    res.set("Content-Type", "text/html; charset=utf-8");
-    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
-    res.send(html);
-  } catch (err) {
-    logger.error({ err }, "[wages-seo] 렌더링 실패");
     res.status(500).send("Internal Server Error");
   }
 });
