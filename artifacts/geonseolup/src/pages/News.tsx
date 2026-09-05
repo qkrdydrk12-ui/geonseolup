@@ -27,7 +27,7 @@ export default function News() {
       <Header />
       <main className="max-w-[860px] mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">🏗️ 건설업 현장 소식</h1>
+          <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">건설업 현장 소식</h1>
           <p className="text-sm text-gray-500">대형 현장 착공·투자·안전 소식을 현장 근로자 시각에서 정리했습니다.</p>
         </div>
 

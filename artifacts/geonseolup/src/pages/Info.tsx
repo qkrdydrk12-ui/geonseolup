@@ -4,25 +4,6 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 
-function WageBanner() {
-  return (
-    <Link
-      href="/wages"
-      className="block no-underline mb-6 rounded-2xl p-5 text-white"
-      style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5282 100%)' }}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-semibold opacity-75 mb-1">매주 업데이트</div>
-          <div className="text-base font-bold">이번주 건설현장 일당 시세 보기</div>
-          <div className="text-xs opacity-80 mt-1">평택·용인·화성·청주 지역별·직종별 일당 정리</div>
-        </div>
-        <div className="text-lg shrink-0">→</div>
-      </div>
-    </Link>
-  );
-}
-
 export default function Info() {
   const { articles } = useMergedArticles();
 
@@ -37,11 +18,9 @@ export default function Info() {
       <Header />
       <main className="max-w-[860px] mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">📚 정보 / 꿀팁</h1>
+          <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">정보 / 꿀팁</h1>
           <p className="text-sm text-gray-500">건설 현장 일자리에 관한 실용 정보를 모았습니다.</p>
         </div>
-
-        <WageBanner />
 
         <div className="grid gap-4 sm:grid-cols-2">
           {articles.map((article) => (

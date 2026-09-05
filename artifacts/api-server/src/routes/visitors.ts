@@ -239,8 +239,8 @@ function safeLandingPath(value: unknown): string {
     /^\/$/u.test(path) ||
     /^\/detail\/[A-Za-z0-9_-]{1,100}$/u.test(path) ||
     /^\/jobs\/[^/]{1,120}\/[^/]{1,120}$/u.test(path) ||
-    /^\/(?:post|shop|info|news|wages|contact|terms|privacy)$/u.test(path) ||
-    /^\/(?:info|news)\/[A-Za-z0-9_-]{1,160}$/u.test(path);
+    /^\/(?:post|shop|info|news|toon|contact|terms|privacy)$/u.test(path) ||
+    /^\/(?:info|news|toon)\/[A-Za-z0-9_-]{1,160}$/u.test(path);
   return allowedRoute ? path : "/";
 }
 
