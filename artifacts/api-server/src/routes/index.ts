@@ -15,6 +15,7 @@ import wageRatesRouter from "./wageRates";
 import siteNewsRouter from "./siteNews";
 import blogArticlesRouter from "./blogArticles";
 import relatedLinksRouter from "./relatedLinks";
+import toonRouter from "./toon";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(wageRatesRouter);
 router.use(siteNewsRouter);
 router.use(blogArticlesRouter);
 router.use(relatedLinksRouter);
+router.use(toonRouter);
 
 export default router;

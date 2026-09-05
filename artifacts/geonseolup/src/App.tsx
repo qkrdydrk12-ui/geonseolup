@@ -9,6 +9,8 @@ import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
 import Contact from '@/pages/Contact';
 import Info from '@/pages/Info';
+import Toon from '@/pages/Toon';
+import ToonDetail from '@/pages/ToonDetail';
 import News from '@/pages/News';
 import NewsDetail from '@/pages/NewsDetail';
 import Shop from '@/pages/Shop';
@@ -197,6 +199,12 @@ function Router() {
       </Route>
       <Route path="/info/:slug">
         {(params) => <InfoDetail slug={params.slug} />}
+      </Route>
+      <Route path="/toon">
+        <Toon />
+      </Route>
+      <Route path="/toon/:slug">
+        {(params) => <ToonDetail slug={params.slug} />}
       </Route>
       <Route path="/news">
         <News />
