@@ -36,6 +36,7 @@ import AdminSiteNews from '@/components/AdminSiteNews';
 import AdminBlogArticles from '@/components/AdminBlogArticles';
 import AdminToon from '@/components/AdminToon';
 import AdminContentStats from '@/components/AdminContentStats';
+import AdminJobViews from '@/components/AdminJobViews';
 import { DEFAULT_STOPS as DEFAULT_SHUTTLE_SCHEDULE_YONGIN_SK, type ShuttleGroup as ShuttleScheduleGroup } from '@/lib/shuttleScheduleYonginSK';
 import { DEFAULT_ROUTES as DEFAULT_SHUTTLE_SCHEDULE_PYEONGTAEK_SAMSUNG, type ShuttleCompanyGroup } from '@/lib/shuttleSchedulePyeongtaekSamsung';
 import {
@@ -116,7 +117,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'news' | 'blog' | 'toon' | 'settings' | 'stats' | 'content-stats';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'news' | 'blog' | 'toon' | 'settings' | 'stats' | 'content-stats' | 'job-views';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1557,6 +1558,7 @@ export default function Admin() {
           {(
             [
               { key: 'jobs', label: `공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 예약${reservedJobs.length}` : ''}` },
+              { key: 'job-views', label: '공고 조회 현황' },
               { key: 'add', label: '공고 등록' },
               { key: 'pending', label: `신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
               { key: 'reports', label: `신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
@@ -2439,6 +2441,7 @@ export default function Admin() {
         {tab === 'blog' && <AdminBlogArticles showToast={showToast} />}
         {tab === 'toon' && <AdminToon showToast={showToast} />}
         {tab === 'content-stats' && <AdminContentStats onGoToTab={setTab} />}
+        {tab === 'job-views' && <AdminJobViews />}
 
         {tab === 'pending' && (
           <div className="bg-white rounded-xl p-6 shadow-sm">

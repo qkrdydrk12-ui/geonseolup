@@ -1,10 +1,12 @@
 import { SORT_OPTIONS, type SortKey } from '@/lib/contentStats';
 
-// 블로그/현장소식/노가다툰 관리자 목록 상단에서 공통으로 쓰는 정렬 토글.
-export default function AdminSortToggle({ value, onChange }: { value: SortKey; onChange: (v: SortKey) => void }) {
+// 블로그/현장소식/노가다툰/구인구직 관리자 목록 상단에서 공통으로 쓰는 정렬 토글.
+// keys를 주면 그 항목만 보여준다(예: 좋아요 개념이 없는 구인구직은 ['latest','views']만).
+export default function AdminSortToggle({ value, onChange, keys }: { value: SortKey; onChange: (v: SortKey) => void; keys?: SortKey[] }) {
+  const options = keys ? SORT_OPTIONS.filter((o) => keys.includes(o.key)) : SORT_OPTIONS;
   return (
     <div className="flex gap-1.5">
-      {SORT_OPTIONS.map((o) => (
+      {options.map((o) => (
         <button
           key={o.key}
           type="button"

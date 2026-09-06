@@ -8,7 +8,7 @@ import {
 } from "../lib/adminStore";
 import { updateDocument, addDocument } from "../lib/firestoreClient.js";
 import { getPublicJobs } from "../lib/jobsCache.js";
-import { getPopularJobIds } from "../lib/jobViews.js";
+import { getPopularJobIds, getJobViewCountMap } from "../lib/jobViews.js";
 import { countSubscriptions } from "../lib/pushSubscriptions.js";
 import { countEmailSubscribers } from "../lib/emailSubscribers.js";
 import { getCurrentThreadsToken } from "../lib/threadsToken.js";
@@ -143,6 +143,48 @@ router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Resp
       // 2026-08-26: Google Indexing API(신규 구인공고 즉시 알림) 자격증명 설정 여부만 확인
       // (값 자체는 절대 노출 안 함 — 있는지 없는지만 boolean으로).
       googleIndexingConfigured: isIndexingConfigured(),
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: String(err) });
+  }
+});
+
+// GET /api/admin/job-views?days=7 — 현재 활성 공고 전체에 조회수를 붙이고
+// 지역별/직종별로 집계해 "사람들이 요즘 어떤 공고를 보는지" 전체 흐름을 보여준다.
+router.get("/admin/job-views", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const days = Math.max(1, Math.min(90, Number(req.query["days"]) || 7));
+    const [{ jobs }, viewMap] = await Promise.all([getPublicJobs(), getJobViewCountMap(days)]);
+
+    const rows = jobs.map((j) => ({
+      id: j.id,
+      title: typeof j["title"] === "string" ? (j["title"] as string) : "(제목 없음)",
+      region: typeof j["region"] === "string" ? (j["region"] as string) : "지역 미상",
+      job: typeof j["job"] === "string" ? (j["job"] as string) : "직종 미상",
+      date: typeof j["date"] === "string" ? (j["date"] as string) : null,
+      views: viewMap.get(j.id) ?? 0,
+    }));
+    rows.sort((a, b) => b.views - a.views);
+
+    function aggregate(getKey: (r: (typeof rows)[number]) => string) {
+      const map = new Map<string, number>();
+      for (const r of rows) map.set(getKey(r), (map.get(getKey(r)) ?? 0) + r.views);
+      return [...map.entries()]
+        .map(([label, views]) => ({ label, views }))
+        .sort((a, b) => b.views - a.views);
+    }
+
+    const totalViews = rows.reduce((s, r) => s + r.views, 0);
+    const zeroViewCount = rows.filter((r) => r.views === 0).length;
+
+    res.json({
+      days,
+      totalJobs: rows.length,
+      totalViews,
+      zeroViewCount,
+      byRegion: aggregate((r) => r.region),
+      byJobType: aggregate((r) => r.job),
+      jobs: rows,
     });
   } catch (err) {
     res.status(500).json({ ok: false, message: String(err) });

@@ -40,7 +40,7 @@ export function sortByStat<T>(
 export interface StatsSummary {
   totalCount: number;
   totalViews: number;
-  totalLikes: number;
+  totalLikes?: number; // 좋아요 개념이 없는 콘텐츠(예: 구인구직 공고)는 생략 가능 — 요약바에서 해당 타일을 숨긴다.
   zeroViewCount: number;
 }
 
