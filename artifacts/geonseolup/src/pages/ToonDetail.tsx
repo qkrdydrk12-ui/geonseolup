@@ -11,6 +11,7 @@ import {
   type CarouselApi,
 } from '@/components/ui/carousel';
 import { useToonEpisode } from '@/lib/toonApi';
+import LikeButton from '@/components/LikeButton';
 
 // 조회수 집계용 — 같은 방문자가 새로고침해도 서버에서 하루 1회만 카운트되므로
 // 실패해도(네트워크 오류 등) 무시하고 조용히 넘어간다 (부가 기능, jobs Detail.tsx와 동일한 방식).
@@ -98,6 +99,10 @@ export default function ToonDetail({ slug }: { slug: string }) {
             <p className="text-center text-xs text-gray-400 mt-1">
               {current + 1} / {episode.panels.length}컷 · 좌우로 넘겨보세요
             </p>
+
+            <div className="mt-5 flex justify-center">
+              <LikeButton type="toon" slug={episode.slug} />
+            </div>
 
             <p className="text-[11px] text-gray-400 leading-relaxed mt-6 border-t border-gray-200 pt-4">
               ※ {episode.disclaimer}
