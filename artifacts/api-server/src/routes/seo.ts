@@ -5,6 +5,7 @@ import { logger } from "../lib/logger.js";
 import { getAllInfoOverrides } from "../lib/infoOverrides.js";
 import { INDEXNOW_KEY } from "../lib/indexNow.js";
 import { getRelatedLinksMap } from "./relatedLinks.js";
+import { pgPool } from "../lib/db.js";
 
 const router = Router();
 
@@ -1116,6 +1117,95 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
     res.status(meta ? 200 : 404).send(html);
   } catch (err) {
     logger.error({ err, slug }, "[news-seo] 렌더링 실패");
+    try {
+      const template = await getIndexTemplate();
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(template);
+    } catch {
+      res.status(500).send("Internal Server Error");
+    }
+  }
+});
+
+// ── GET /toon, /toon/:slug ──────────────────────────────────────────────────
+// 노가다툰(카드뉴스형 웹툰) 공유 미리보기(OG 태그) 대응 (2026-09-07 신설 — 어제 추가된
+// 기능인데 이 SSR 라우트가 아예 없어서 카카오톡 등에 공유하면 사이트 기본 og:image만
+// 뜨던 문제 수정). info/news와 달리 프론트 정적 파일이 아니라 DB(toon_episodes/toon_panels)
+// 전용 데이터라 pgPool로 직접 조회한다. 대표 이미지는 0번 패널(toon.ts의 coverImageUrl과 동일 규칙).
+router.get("/toon", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "노가다툰 | 건설UP",
+      desc: "건설 현장 실제 경험을 바탕으로 각색한 풍자 웹툰, 노가다툰.",
+      url: `${SITE_URL}/toon`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[toon-seo] 목록 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/toon/:slug", async (req: Request, res: Response) => {
+  const slug = String(req.params.slug);
+  try {
+    const [template, result] = await Promise.all([
+      getIndexTemplate(),
+      pgPool.query<{
+        title: string;
+        description: string;
+        published: boolean;
+        scheduled_at: string | null;
+        created_at: string;
+        updated_at: string;
+      }>(
+        `SELECT title, description, published, scheduled_at, created_at, updated_at
+         FROM toon_episodes WHERE slug = $1`,
+        [slug]
+      ),
+    ]);
+    const row = result.rows[0];
+    const isLive = !!row && row.published && (!row.scheduled_at || new Date(row.scheduled_at).getTime() <= Date.now());
+    const meta = isLive ? row : undefined;
+    const pageUrl = `${SITE_URL}/toon/${encodeURIComponent(slug)}`;
+    // 대표 이미지 = 0번 패널 (toon.ts toApiListItem의 coverImageUrl과 동일 규칙).
+    const imageUrl = meta
+      ? `${SITE_URL}/api/toon-panel-image/${encodeURIComponent(slug)}/0?v=${new Date(meta.updated_at).getTime()}`
+      : `${SITE_URL}/og-image.png?v=2`;
+    let html = replaceMetaTags(template, {
+      title: meta ? `${meta.title} | 노가다툰 | 건설UP` : "노가다툰 | 건설UP",
+      desc: meta ? meta.description : "건설 현장 실제 경험을 바탕으로 각색한 풍자 웹툰입니다.",
+      url: meta ? pageUrl : `${SITE_URL}/toon`,
+      image: imageUrl,
+    });
+    if (meta) {
+      const ldTags =
+        buildArticleLd({
+          type: "Article",
+          headline: meta.title,
+          description: meta.description,
+          url: pageUrl,
+          image: imageUrl,
+          datePublished: meta.created_at,
+          dateModified: meta.updated_at,
+        }) +
+        buildBreadcrumbLd([
+          { name: "건설UP", url: `${SITE_URL}/` },
+          { name: "노가다툰", url: `${SITE_URL}/toon` },
+          { name: meta.title, url: pageUrl },
+        ]);
+      html = html.replace("</head>", `${ldTags}</head>`);
+    }
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    // 존재하지 않거나 아직 비공개/예약 상태인 에피소드는 404로 응답 (SPA 셸은 그대로 렌더링).
+    res.status(meta ? 200 : 404).send(html);
+  } catch (err) {
+    logger.error({ err, slug }, "[toon-seo] 렌더링 실패");
     try {
       const template = await getIndexTemplate();
       res.set("Content-Type", "text/html; charset=utf-8");
