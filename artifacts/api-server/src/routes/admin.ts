@@ -170,8 +170,8 @@ router.get("/admin/job-views", requireAdmin, async (req: Request, res: Response)
       const map = new Map<string, number>();
       for (const r of rows) map.set(getKey(r), (map.get(getKey(r)) ?? 0) + r.views);
       return [...map.entries()]
-        .map(([label, views]) => ({ label, views }))
-        .sort((a, b) => b.views - a.views);
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value);
     }
 
     const totalViews = rows.reduce((s, r) => s + r.views, 0);

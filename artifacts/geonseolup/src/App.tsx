@@ -20,6 +20,7 @@ import NetPayCalculator from '@/pages/NetPayCalculator';
 import SeverancePayCalculator from '@/pages/SeverancePayCalculator';
 import LaborContractGenerator from '@/pages/LaborContractGenerator';
 import VisitorWidget from '@/components/VisitorWidget';
+import PageFlowTracker from '@/components/PageFlowTracker';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 
 // ── 관리자가 저장한 head 코드를 <head>에 동적으로 주입 ──────────────────────
@@ -271,6 +272,7 @@ function App() {
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <ScrollToTop />
+      <PageFlowTracker />
       <Router />
       <VisitorWidget />
     </WouterRouter>

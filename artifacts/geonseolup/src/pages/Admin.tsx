@@ -37,6 +37,7 @@ import AdminBlogArticles from '@/components/AdminBlogArticles';
 import AdminToon from '@/components/AdminToon';
 import AdminContentStats from '@/components/AdminContentStats';
 import AdminJobViews from '@/components/AdminJobViews';
+import AdminFunnelStats from '@/components/AdminFunnelStats';
 import { DEFAULT_STOPS as DEFAULT_SHUTTLE_SCHEDULE_YONGIN_SK, type ShuttleGroup as ShuttleScheduleGroup } from '@/lib/shuttleScheduleYonginSK';
 import { DEFAULT_ROUTES as DEFAULT_SHUTTLE_SCHEDULE_PYEONGTAEK_SAMSUNG, type ShuttleCompanyGroup } from '@/lib/shuttleSchedulePyeongtaekSamsung';
 import {
@@ -2738,6 +2739,8 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+
+              <AdminFunnelStats />
             </div>
           );
         })()}

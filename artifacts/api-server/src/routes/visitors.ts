@@ -244,6 +244,49 @@ function safeLandingPath(value: unknown): string {
   return allowedRoute ? path : "/";
 }
 
+// 페이지 흐름(체류시간·이탈) 추적용 — 위 safeLandingPath보다 넓게 허용한다(계산기·약관 페이지 등
+// 실제 존재하는 모든 라우트를 포함해야 이탈지점 집계가 정확함). 유입경로 attribution 분류 체계는
+// 건드리지 않기 위해 별도 함수로 둔다.
+function safePageViewPath(value: unknown): string | null {
+  if (typeof value !== "string" || !value.startsWith("/")) return null;
+  const path = value.split(/[?#]/, 1)[0].slice(0, 255) || "/";
+  const allowedRoute =
+    /^\/$/u.test(path) ||
+    /^\/detail\/[A-Za-z0-9_-]{1,100}$/u.test(path) ||
+    /^\/jobs\/[^/]{1,120}\/[^/]{1,120}$/u.test(path) ||
+    /^\/(?:post|shop|info|news|toon|contact|terms|privacy|admin|retirement-fund-calculator|net-pay-calculator|severance-pay-calculator|labor-contract-template)$/u.test(path) ||
+    /^\/(?:info|news|toon)\/[A-Za-z0-9_-]{1,160}$/u.test(path);
+  return allowedRoute ? path : null;
+}
+
+function safeSessionId(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : null;
+}
+
+// 실제 공고/글마다 다른 경로(/detail/abc123 등)를 사람이 읽을 라벨로 묶어서
+// "이탈 지점"·"페이지별 체류시간" 집계가 공고 하나하나가 아니라 페이지 종류 단위로 나오게 한다.
+function pathLabel(path: string): string {
+  if (path === "/") return "홈";
+  if (/^\/detail\//.test(path)) return "공고 상세";
+  if (/^\/jobs\//.test(path)) return "지역/직종별 목록";
+  if (path === "/post") return "공고 등록";
+  if (path === "/shop") return "추천템";
+  if (path === "/info") return "건설 꿀팁 목록";
+  if (/^\/info\//.test(path)) return "건설 꿀팁 상세";
+  if (path === "/news") return "현장 소식 목록";
+  if (/^\/news\//.test(path)) return "현장 소식 상세";
+  if (path === "/toon") return "노가다툰 목록";
+  if (/^\/toon\//.test(path)) return "노가다툰 상세";
+  if (path === "/admin") return "관리자";
+  if (path === "/retirement-fund-calculator") return "퇴직금 계산기";
+  if (path === "/net-pay-calculator") return "실수령액 계산기";
+  if (path === "/severance-pay-calculator") return "퇴직금 계산기(구)";
+  if (path === "/labor-contract-template") return "근로계약서 양식";
+  if (path === "/contact") return "문의하기";
+  if (path === "/terms" || path === "/privacy") return "약관/정책";
+  return path;
+}
+
 function safeStatsDate(value: unknown): string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return todayKST();
   const parsed = new Date(`${value}T00:00:00Z`);
@@ -301,6 +344,21 @@ async function initTables() {
       UNIQUE(visit_date, ip_hash)
     );
     CREATE INDEX IF NOT EXISTS idx_visit_attributions_date ON visit_attributions(visit_date);
+  `);
+  // 체류시간·이탈률 — 세션(브라우저 탭 하나) 안에서 페이지를 몇 개 봤는지, 마지막으로 본 페이지가
+  // 어디인지, 각 페이지에 얼마나 머물렀는지를 기록한다. id 오름차순이 곧 조회 순서다.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS page_view_events (
+      id SERIAL PRIMARY KEY,
+      visit_date DATE NOT NULL,
+      session_id VARCHAR(64) NOT NULL,
+      path VARCHAR(255) NOT NULL,
+      ip_hash VARCHAR(16) NOT NULL,
+      duration_ms INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_page_view_events_session ON page_view_events(session_id, id);
+    CREATE INDEX IF NOT EXISTS idx_page_view_events_date ON page_view_events(visit_date);
   `);
 }
 const tablesReady = initTables();
@@ -580,11 +638,144 @@ router.get("/stats/sources", requireAdmin, async (req: Request, res: Response) =
   }
 });
 
+// POST /api/page-view — 페이지 진입 기록 (인증 불필요). 관리자 자신의 브라우저는
+// 프론트에서 애초에 이 API를 호출하지 않는다(VisitorWidget과 동일한 owner 판단 재사용).
+router.post("/page-view", async (req: Request, res: Response) => {
+  try {
+    await tablesReady;
+    const sessionId = safeSessionId((req.body as { sessionId?: unknown })?.sessionId);
+    const path = safePageViewPath((req.body as { path?: unknown })?.path);
+    if (!sessionId || !path) {
+      res.status(400).json({ ok: false });
+      return;
+    }
+    const rawIp =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "0.0.0.0";
+    const ipHash = hashIp(rawIp);
+    const result = await pool.query<{ id: number }>(
+      `INSERT INTO page_view_events (visit_date, session_id, path, ip_hash)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [todayKST(), sessionId, path, ipHash],
+    );
+    res.json({ ok: true, id: result.rows[0]?.id });
+  } catch (err) {
+    req.log.error({ err }, "Page view recording failed");
+    res.status(500).json({ ok: false });
+  }
+});
+
+// POST /api/page-view/:id/duration — 그 페이지에 머문 시간(ms) 기록.
+// sendBeacon으로 페이지 이탈 시점(라우트 전환/탭 닫기)에 보내진다.
+router.post("/page-view/:id/duration", async (req: Request, res: Response) => {
+  try {
+    await tablesReady;
+    const id = Number(req.params["id"]);
+    const durationMsRaw = Number((req.body as { durationMs?: unknown })?.durationMs);
+    // 1시간 넘게 열어둔 탭(방치)은 실제 체류가 아니므로 상한을 둔다.
+    if (!Number.isFinite(id) || !Number.isFinite(durationMsRaw) || durationMsRaw < 0) {
+      res.status(400).json({ ok: false });
+      return;
+    }
+    const durationMs = Math.min(Math.round(durationMsRaw), 3600_000);
+    await pool.query(
+      `UPDATE page_view_events SET duration_ms = $1 WHERE id = $2 AND duration_ms IS NULL`,
+      [durationMs, id],
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Page view duration recording failed");
+    res.status(500).json({ ok: false });
+  }
+});
+
+// GET /api/stats/funnel?days=N — 이탈률·이탈지점·페이지별 체류시간 (관리자 전용)
+router.get("/stats/funnel", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await tablesReady;
+    const days = Math.max(1, Math.min(90, Number(req.query["days"]) || 7));
+    const since = kstDateOffset(days - 1);
+
+    const [sessionResult, durationResult] = await Promise.all([
+      pool.query<{ exit_path: string; page_count: string; sessions: string }>(
+        `WITH session_agg AS (
+           SELECT session_id, COUNT(*) AS page_count, MAX(id) AS last_id
+           FROM page_view_events
+           WHERE visit_date >= $1
+           GROUP BY session_id
+         )
+         SELECT pve.path AS exit_path, sa.page_count, COUNT(*) AS sessions
+         FROM session_agg sa
+         JOIN page_view_events pve ON pve.id = sa.last_id
+         GROUP BY pve.path, sa.page_count`,
+        [since],
+      ),
+      pool.query<{ path: string; avg_ms: string; samples: string }>(
+        `SELECT path, AVG(duration_ms) AS avg_ms, COUNT(*) AS samples
+         FROM page_view_events
+         WHERE visit_date >= $1 AND duration_ms IS NOT NULL
+         GROUP BY path`,
+        [since],
+      ),
+    ]);
+
+    // 세션별 페이지 종류(라벨)로 묶어서 이탈 지점·체류시간을 계산한다.
+    const exitByLabel = new Map<string, number>();
+    let totalSessions = 0;
+    let bounceSessions = 0;
+    for (const row of sessionResult.rows) {
+      const sessions = Number(row.sessions);
+      const pageCount = Number(row.page_count);
+      totalSessions += sessions;
+      if (pageCount === 1) bounceSessions += sessions;
+      const label = pathLabel(row.exit_path);
+      exitByLabel.set(label, (exitByLabel.get(label) ?? 0) + sessions);
+    }
+    const exitPoints = [...exitByLabel.entries()]
+      .map(([label, count]) => ({ label, value: count }))
+      .sort((a, b) => b.value - a.value);
+
+    const durationTotals = new Map<string, { sumMs: number; samples: number }>();
+    for (const row of durationResult.rows) {
+      const label = pathLabel(row.path);
+      const prev = durationTotals.get(label) ?? { sumMs: 0, samples: 0 };
+      const samples = Number(row.samples);
+      prev.sumMs += Number(row.avg_ms) * samples;
+      prev.samples += samples;
+      durationTotals.set(label, prev);
+    }
+    const avgDurationByPage = [...durationTotals.entries()]
+      .map(([label, { sumMs, samples }]) => ({ label, value: Math.round(sumMs / samples / 1000) })) // 초 단위
+      .sort((a, b) => b.value - a.value);
+    const overallAvgSec = durationResult.rows.length
+      ? Math.round(
+          durationResult.rows.reduce((s, r) => s + Number(r.avg_ms) * Number(r.samples), 0) /
+            Math.max(durationResult.rows.reduce((s, r) => s + Number(r.samples), 0), 1) /
+            1000,
+        )
+      : 0;
+
+    res.json({
+      days,
+      totalSessions,
+      bounceSessions,
+      bounceRate: totalSessions ? bounceSessions / totalSessions : 0,
+      overallAvgDurationSec: overallAvgSec,
+      exitPoints,
+      avgDurationByPage,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Funnel stats query failed");
+    res.status(500).json({ error: "이탈/체류시간 통계 조회 실패" });
+  }
+});
+
 // POST /api/stats/visitors/reset — 통계 초기화 (관리자 전용)
 router.post("/stats/visitors/reset", requireAdmin, async (_req: Request, res: Response) => {
   try {
     await tablesReady;
-    await pool.query("TRUNCATE visitor_logs, visit_hourly, visit_sources, visit_attributions");
+    await pool.query("TRUNCATE visitor_logs, visit_hourly, visit_sources, visit_attributions, page_view_events");
     res.json({ success: true, total: 0, today: 0, yesterday: 0, week: 0 });
   } catch (err) {
     _req.log.error({ err }, "Visitor stats reset failed");
