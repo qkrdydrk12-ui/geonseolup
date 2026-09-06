@@ -5,6 +5,7 @@ const inputCls = 'w-full py-2.5 px-3.5 border border-gray-300 rounded-lg text-sm
 
 interface SiteNews {
   id: number;
+  slug: string | null;
   title: string;
   body: string;
   imageUrl: string | null;
@@ -60,6 +61,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export default function AdminSiteNews({ showToast }: { showToast: (msg: string) => void }) {
   const [rows, setRows] = useState<SiteNews[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<Record<string, { views: number; likes: number }>>({});
   const [form, setForm] = useState<NewsForm>(emptyForm());
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null); // 새로 고른 이미지
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null); // 수정 중인 항목의 기존 이미지
@@ -81,7 +83,19 @@ export default function AdminSiteNews({ showToast }: { showToast: (msg: string) 
     }
   }
 
-  useEffect(() => { reload(); }, []);
+  // 조회수·좋아요 — 목록과 별개로 조용히 불러온다 (실패해도 숫자만 안 보일 뿐 목록엔 영향 없음).
+  async function reloadCounts() {
+    try {
+      const data = await apiFetch('/api/admin/content-views?type=news');
+      const map: Record<string, { views: number; likes: number }> = {};
+      for (const r of data.rows ?? []) map[r.contentId] = { views: r.views, likes: r.likes };
+      setCounts(map);
+    } catch {
+      // 조용히 무시 — 조회수는 부가 정보
+    }
+  }
+
+  useEffect(() => { reload(); reloadCounts(); }, []);
 
   function setField<K extends keyof NewsForm>(key: K, val: string) {
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -284,6 +298,14 @@ export default function AdminSiteNews({ showToast }: { showToast: (msg: string) 
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2 whitespace-pre-line">{r.body}</p>
                   <p className="text-[11px] text-gray-400 mt-1">
                     {new Date(r.publishedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+                    {r.slug && (
+                      <>
+                        {' · '}
+                        <span className="font-semibold text-gray-500">👁 {counts[r.slug]?.views ?? 0}</span>
+                        {' · '}
+                        <span className="font-semibold text-gray-500">❤️ {counts[r.slug]?.likes ?? 0}</span>
+                      </>
+                    )}
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">

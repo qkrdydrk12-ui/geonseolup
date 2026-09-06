@@ -73,6 +73,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export default function AdminBlogArticles({ showToast }: { showToast: (msg: string) => void }) {
   const [rows, setRows] = useState<BlogArticle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<Record<string, { views: number; likes: number }>>({});
   const [form, setForm] = useState<ArticleForm>(emptyForm());
   const [blocks, setBlocks] = useState<BodyBlock[]>([{ subtitle: '', text: '' }]);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
@@ -95,7 +96,19 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     }
   }
 
-  useEffect(() => { reload(); }, []);
+  // 조회수·좋아요 — 목록과 별개로 조용히 불러온다 (실패해도 숫자만 안 보일 뿐 목록엔 영향 없음).
+  async function reloadCounts() {
+    try {
+      const data = await apiFetch('/api/admin/content-views?type=blog');
+      const map: Record<string, { views: number; likes: number }> = {};
+      for (const r of data.rows ?? []) map[r.contentId] = { views: r.views, likes: r.likes };
+      setCounts(map);
+    } catch {
+      // 조용히 무시 — 조회수는 부가 정보
+    }
+  }
+
+  useEffect(() => { reload(); reloadCounts(); }, []);
 
   function setField<K extends keyof ArticleForm>(key: K, val: ArticleForm[K]) {
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -352,7 +365,13 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>
-                  <p className="text-[11px] text-gray-400 mt-1">/info/{r.slug}</p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    /info/{r.slug}
+                    {' · '}
+                    <span className="font-semibold text-gray-500">👁 {counts[r.slug]?.views ?? 0}</span>
+                    {' · '}
+                    <span className="font-semibold text-gray-500">❤️ {counts[r.slug]?.likes ?? 0}</span>
+                  </p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
                     {new Date(r.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })} 등록
                     {' · '}올린 곳: {r.createdBy ? r.createdBy.split('|')[0]!.trim() : '기록 없음 (예전 글)'}
@@ -386,7 +405,13 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">기본 글</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.description}</p>
-                <p className="text-[11px] text-gray-400 mt-1">/info/{a.slug}</p>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  /info/{a.slug}
+                  {' · '}
+                  <span className="font-semibold text-gray-500">👁 {counts[a.slug]?.views ?? 0}</span>
+                  {' · '}
+                  <span className="font-semibold text-gray-500">❤️ {counts[a.slug]?.likes ?? 0}</span>
+                </p>
               </div>
               <div className="flex flex-col gap-1.5 shrink-0">
                 <button type="button" onClick={() => startEditStatic(a.slug)} className="bg-white border border-blue-200 text-blue-600 px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-blue-50 font-[inherit]">수정</button>

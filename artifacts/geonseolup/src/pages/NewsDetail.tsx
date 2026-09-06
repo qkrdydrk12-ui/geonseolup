@@ -10,6 +10,12 @@ interface Props {
   slug: string;
 }
 
+// 조회수 집계용 — 같은 방문자가 새로고침해도 서버에서 하루 1회만 카운트되므로
+// 실패해도(네트워크 오류 등) 무시하고 조용히 넘어간다 (부가 기능, jobs Detail.tsx와 동일한 방식).
+function recordServerView(slug: string): void {
+  fetch(`/api/site-news/${encodeURIComponent(slug)}/view`, { method: 'POST' }).catch(() => {});
+}
+
 export default function NewsDetail({ slug }: Props) {
   const { articles, loading } = useMergedNews();
   const article = articles.find((a) => a.slug === slug);
@@ -19,6 +25,7 @@ export default function NewsDetail({ slug }: Props) {
       document.title = `${article.title} — 건설UP`;
       let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
       if (meta) meta.content = article.description;
+      recordServerView(article.slug);
     } else {
       document.title = '페이지를 찾을 수 없습니다 — 건설UP';
     }

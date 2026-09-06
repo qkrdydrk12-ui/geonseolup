@@ -4,6 +4,7 @@ import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
 import { invalidateArticleCaches } from "../lib/articleMeta";
+import { recordContentView, extractIp } from "../lib/contentEngagement.js";
 
 const router: IRouter = Router();
 
@@ -147,6 +148,18 @@ router.get("/blog-articles/all", requireAdmin, async (_req: Request, res: Respon
   } catch (err) {
     console.error("[BlogArticles] GET all error:", err);
     res.status(500).json({ error: "건설 꿀팁 목록 조회 실패" });
+  }
+});
+
+// POST /api/blog-articles/:slug/view — 조회 기록 (관리자 통계용, 인증 불필요, 하루 1회/IP만 카운트).
+// 기본 내장 글(코드에 있는 INFO_ARTICLES)도 slug만 맞으면 똑같이 기록된다.
+router.post("/blog-articles/:slug/view", async (req: Request, res: Response) => {
+  try {
+    const ip = extractIp(req);
+    const counted = await recordContentView("blog", String(req.params["slug"]), ip);
+    res.json({ ok: true, counted });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
   }
 });
 

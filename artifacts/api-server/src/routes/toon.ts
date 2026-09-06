@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin, getTokenFromReq, isTokenValid } from "../lib/adminStore";
+import { recordContentView, extractIp } from "../lib/contentEngagement.js";
 
 const router: IRouter = Router();
 
@@ -168,6 +169,17 @@ router.get("/toon/:slug", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[Toon] GET detail error:", err);
     res.status(500).json({ error: "에피소드 조회 실패" });
+  }
+});
+
+// POST /api/toon/:slug/view — 조회 기록 (관리자 통계용, 인증 불필요, 하루 1회/IP만 카운트).
+router.post("/toon/:slug/view", async (req: Request, res: Response) => {
+  try {
+    const ip = extractIp(req);
+    const counted = await recordContentView("toon", String(req.params["slug"]), ip);
+    res.json({ ok: true, counted });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
   }
 });
 
