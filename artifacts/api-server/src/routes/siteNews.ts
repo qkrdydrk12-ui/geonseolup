@@ -4,6 +4,7 @@ import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
 import { invalidateArticleCaches } from "../lib/articleMeta";
+import { recordContentView, extractIp } from "../lib/contentEngagement.js";
 
 const router: IRouter = Router();
 
@@ -172,6 +173,17 @@ router.get("/site-news/by-slug/:slug", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[SiteNews] GET by-slug error:", err);
     res.status(500).json({ error: "조회 실패" });
+  }
+});
+
+// POST /api/site-news/:slug/view — 조회 기록 (관리자 통계용, 인증 불필요, 하루 1회/IP만 카운트).
+router.post("/site-news/:slug/view", async (req: Request, res: Response) => {
+  try {
+    const ip = extractIp(req);
+    const counted = await recordContentView("news", String(req.params["slug"]), ip);
+    res.json({ ok: true, counted });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
   }
 });
 

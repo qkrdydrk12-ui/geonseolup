@@ -12,6 +12,12 @@ import {
 } from '@/components/ui/carousel';
 import { useToonEpisode } from '@/lib/toonApi';
 
+// 조회수 집계용 — 같은 방문자가 새로고침해도 서버에서 하루 1회만 카운트되므로
+// 실패해도(네트워크 오류 등) 무시하고 조용히 넘어간다 (부가 기능, jobs Detail.tsx와 동일한 방식).
+function recordServerView(slug: string): void {
+  fetch(`/api/toon/${encodeURIComponent(slug)}/view`, { method: 'POST' }).catch(() => {});
+}
+
 export default function ToonDetail({ slug }: { slug: string }) {
   const { episode, loading, notFound } = useToonEpisode(slug);
   const [api, setApi] = useState<CarouselApi>();
@@ -22,6 +28,7 @@ export default function ToonDetail({ slug }: { slug: string }) {
     document.title = `${episode.title} — 노가다툰 — 건설UP`;
     let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     if (meta) meta.content = episode.description;
+    recordServerView(episode.slug);
   }, [episode]);
 
   useEffect(() => {

@@ -71,6 +71,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export default function AdminToon({ showToast }: { showToast: (msg: string) => void }) {
   const [rows, setRows] = useState<ToonEpisode[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<Record<string, { views: number; likes: number }>>({});
   const [form, setForm] = useState<EpisodeForm>(emptyForm(1));
   const [panels, setPanels] = useState<PanelDraft[]>([{ imageDataUrl: null, existingUrl: null, caption: '' }]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -94,7 +95,19 @@ export default function AdminToon({ showToast }: { showToast: (msg: string) => v
     }
   }
 
-  useEffect(() => { reload(); }, []);
+  // 조회수·좋아요 — 목록과 별개로 조용히 불러온다 (실패해도 숫자만 안 보일 뿐 목록엔 영향 없음).
+  async function reloadCounts() {
+    try {
+      const data = await apiFetch('/api/admin/content-views?type=toon');
+      const map: Record<string, { views: number; likes: number }> = {};
+      for (const r of data.rows ?? []) map[r.contentId] = { views: r.views, likes: r.likes };
+      setCounts(map);
+    } catch {
+      // 조용히 무시 — 조회수는 부가 정보
+    }
+  }
+
+  useEffect(() => { reload(); reloadCounts(); }, []);
 
   function setField<K extends keyof EpisodeForm>(key: K, val: EpisodeForm[K]) {
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -339,7 +352,13 @@ export default function AdminToon({ showToast }: { showToast: (msg: string) => v
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>
-                  <p className="text-[11px] text-gray-400 mt-1">/toon/{r.slug}</p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    /toon/{r.slug}
+                    {' · '}
+                    <span className="font-semibold text-gray-500">👁 {counts[r.slug]?.views ?? 0}</span>
+                    {' · '}
+                    <span className="font-semibold text-gray-500">❤️ {counts[r.slug]?.likes ?? 0}</span>
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
                   <button type="button" onClick={() => startEdit(r)} className="bg-white border border-blue-200 text-blue-600 px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-blue-50 font-[inherit]">수정</button>
