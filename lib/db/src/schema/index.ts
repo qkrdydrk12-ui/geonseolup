@@ -140,6 +140,15 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 	index("idx_push_subs_region_job").using("btree", table.region.asc().nullsLast().op("text_ops"), table.job.asc().nullsLast().op("text_ops")),
 ]);
 
+export const pushPendingJobs = pgTable("push_pending_jobs", {
+    jobId: text("job_id").primaryKey().notNull(),
+    title: text(),
+    region: text(),
+    job: text(),
+    salary: text(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 export const infoOverrides = pgTable("info_overrides", {
 	slug: text().primaryKey().notNull(),
 	data: jsonb().notNull(),
