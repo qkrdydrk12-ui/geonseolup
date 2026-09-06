@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { getToken } from '@/lib/adminAuth';
 import { INFO_ARTICLES, getArticleImage } from '@/lib/infoData';
+import { sortByStat, summarizeStats, getCounts, isLowPerformer, type SortKey } from '@/lib/contentStats';
+import AdminSortToggle from './AdminSortToggle';
+import AdminStatsSummaryBar from './AdminStatsSummaryBar';
+import AdminViewModeToggle, { type ViewMode } from './AdminViewModeToggle';
+import AdminContentTable from './AdminContentTable';
 
 const inputCls = 'w-full py-2.5 px-3.5 border border-gray-300 rounded-lg text-sm outline-none font-[inherit] focus:border-[#f97316] focus:ring-2 focus:ring-orange-100 transition-all bg-white';
 
@@ -74,6 +79,8 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
   const [rows, setRows] = useState<BlogArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState<Record<string, { views: number; likes: number }>>({});
+  const [sortKey, setSortKey] = useState<SortKey>('latest');
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [form, setForm] = useState<ArticleForm>(emptyForm());
   const [blocks, setBlocks] = useState<BodyBlock[]>([{ subtitle: '', text: '' }]);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
@@ -238,6 +245,8 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
   }
 
   const previewSrc = imageDataUrl || existingImageUrl;
+  const sortedRows = sortByStat(rows, counts, (r) => r.slug, sortKey);
+  const statsSummary = summarizeStats(rows, counts, (r) => r.slug);
 
   return (
     <div className="flex flex-col gap-5">
@@ -345,15 +354,46 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
-        <h3 className="text-sm font-extrabold text-gray-700 mb-4 border-b border-gray-100 pb-3">전체 글 ({rows.length})</h3>
+        <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3 flex-wrap gap-2">
+          <h3 className="text-sm font-extrabold text-gray-700">전체 글 ({rows.length})</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            {rows.length > 1 && <AdminSortToggle value={sortKey} onChange={setSortKey} />}
+            <AdminViewModeToggle value={viewMode} onChange={setViewMode} />
+          </div>
+        </div>
+        <AdminStatsSummaryBar stats={statsSummary} />
         {loading ? (
           <div className="text-center py-10 text-gray-400 text-sm">불러오는 중...</div>
         ) : rows.length === 0 ? (
           <div className="text-center py-10 text-gray-400 text-sm">등록된 글이 없습니다. 위에서 작성해보세요.</div>
+        ) : viewMode === 'table' ? (
+          <AdminContentTable
+            sortKey={sortKey}
+            onSortChange={setSortKey}
+            rows={sortedRows.map((r) => {
+              const c = getCounts(counts, r.slug);
+              return {
+                key: r.id,
+                title: `${r.emoji} ${r.title}`,
+                badges: [
+                  ...(!r.published ? [{ label: '비공개', className: 'bg-gray-100 text-gray-500' }] : []),
+                  ...(r.scheduledAt && new Date(r.scheduledAt).getTime() > Date.now() ? [{ label: '예약', className: 'bg-blue-50 text-blue-600' }] : []),
+                ],
+                metaLine: `/info/${r.slug} · ${new Date(r.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })} 등록`,
+                views: c.views,
+                likes: c.likes,
+                lowView: isLowPerformer(c.views, new Date(r.createdAt).getTime()),
+                onEdit: () => startEdit(r),
+                onDelete: () => handleDelete(r),
+              };
+            })}
+          />
         ) : (
           <div className="flex flex-col gap-3">
-            {rows.map((r) => (
-              <div key={r.id} className="flex gap-3 border border-gray-100 rounded-xl p-3">
+            {sortedRows.map((r) => {
+              const lowView = isLowPerformer(counts[r.slug]?.views ?? 0, new Date(r.createdAt).getTime());
+              return (
+              <div key={r.id} className={`flex gap-3 border rounded-xl p-3 ${lowView ? 'border-red-100 bg-red-50/40' : 'border-gray-100'}`}>
                 {r.imageUrl && <img src={r.imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg shrink-0 border border-gray-100" />}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -363,6 +403,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
                     {r.scheduledAt && new Date(r.scheduledAt).getTime() > Date.now() && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">예약</span>
                     )}
+                    {lowView && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">저조</span>}
                   </div>
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>
                   <p className="text-[11px] text-gray-400 mt-1">
@@ -385,7 +426,8 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
                   <button type="button" onClick={() => handleDelete(r)} className="bg-white border border-red-200 text-red-500 px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-red-50 font-[inherit]">삭제</button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
