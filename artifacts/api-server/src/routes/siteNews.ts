@@ -4,7 +4,7 @@ import { pgPool } from "../lib/db";
 import { requireAdmin } from "../lib/adminStore";
 import { notifyIndexNow } from "../lib/indexNow";
 import { invalidateArticleCaches } from "../lib/articleMeta";
-import { recordContentView, extractIp } from "../lib/contentEngagement.js";
+import { recordContentView, extractIp, getEngagement, toggleLike } from "../lib/contentEngagement.js";
 
 const router: IRouter = Router();
 
@@ -182,6 +182,28 @@ router.post("/site-news/:slug/view", async (req: Request, res: Response) => {
     const ip = extractIp(req);
     const counted = await recordContentView("news", String(req.params["slug"]), ip);
     res.json({ ok: true, counted });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// GET /api/site-news/:slug/engagement — 공개, 조회수·좋아요 수·내가 좋아요 눌렀는지 조회.
+router.get("/site-news/:slug/engagement", async (req: Request, res: Response) => {
+  try {
+    const ip = extractIp(req);
+    const data = await getEngagement("news", String(req.params["slug"]), ip);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// POST /api/site-news/:slug/like — 공개, 좋아요 토글(누르면 등록, 다시 누르면 취소). 인증 불필요.
+router.post("/site-news/:slug/like", async (req: Request, res: Response) => {
+  try {
+    const ip = extractIp(req);
+    const result = await toggleLike("news", String(req.params["slug"]), ip);
+    res.json({ ok: true, ...result });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
   }

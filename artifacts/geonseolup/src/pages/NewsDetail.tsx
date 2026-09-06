@@ -3,6 +3,7 @@ import { Link } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import RelatedLinks from '@/components/RelatedLinks';
+import LikeButton from '@/components/LikeButton';
 import { useMergedNews } from '@/lib/useMergedNews';
 import { renderRichText } from '@/lib/richText';
 
@@ -114,9 +115,14 @@ export default function NewsDetail({ slug }: Props) {
               ))}
             </div>
 
+            {/* 좋아요 */}
+            <div className="mt-8 flex justify-center">
+              <LikeButton type="news" slug={article.slug} />
+            </div>
+
             {/* 구인 목록 CTA */}
             <div
-              className="mt-8 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+              className="mt-6 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
               style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}
             >
               <div className="text-white flex-1">
