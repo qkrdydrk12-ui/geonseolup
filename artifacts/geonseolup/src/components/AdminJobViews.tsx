@@ -25,10 +25,14 @@ interface JobViewsResponse {
   jobs: JobViewRow[];
 }
 
+// range는 그대로 서버로 전달된다 — 'today'/'yesterday'는 그 하루만 정확히 집계하고,
+// 나머지는 오늘부터 N일 전까지 누적 집계한다 (2026-09-08 "오늘/어제" 옵션 추가).
 const PERIODS = [
-  { days: 7, label: '최근 7일' },
-  { days: 14, label: '최근 14일' },
-  { days: 30, label: '최근 30일' },
+  { range: 'today', label: '오늘' },
+  { range: 'yesterday', label: '어제' },
+  { range: '7', label: '최근 7일' },
+  { range: '14', label: '최근 14일' },
+  { range: '30', label: '최근 30일' },
 ];
 
 async function apiFetch(url: string) {
@@ -41,7 +45,7 @@ async function apiFetch(url: string) {
 // 활성 구인구직 공고 전체의 조회수를 지역별·직종별로 집계해 "사람들이 요즘 어떤 공고를
 // 보고 있는지" 전체 흐름을 보여주는 탭. 개별 공고 관리(수정/삭제)는 "공고 관리" 탭에서 한다.
 export default function AdminJobViews() {
-  const [days, setDays] = useState(7);
+  const [range, setRange] = useState('7');
   const [data, setData] = useState<JobViewsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>('views');
@@ -49,12 +53,12 @@ export default function AdminJobViews() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    apiFetch(`/api/admin/job-views?days=${days}`)
+    apiFetch(`/api/admin/job-views?range=${range}`)
       .then((d) => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setData(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [days]);
+  }, [range]);
 
   const jobs = data?.jobs ?? [];
   const sortedJobs = sortKey === 'latest'
@@ -84,11 +88,11 @@ export default function AdminJobViews() {
           <div className="flex gap-1 bg-gray-100 rounded-full p-0.5">
             {PERIODS.map((p) => (
               <button
-                key={p.days}
+                key={p.range}
                 type="button"
-                onClick={() => setDays(p.days)}
+                onClick={() => setRange(p.range)}
                 className={`text-[11px] font-bold px-2.5 py-1 rounded-full cursor-pointer font-[inherit] transition-colors ${
-                  days === p.days ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                  range === p.range ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 {p.label}
@@ -96,7 +100,7 @@ export default function AdminJobViews() {
             ))}
           </div>
         </div>
-        <p className="text-[11px] text-gray-400 mb-4 border-b border-gray-100 pb-3">현재 활성 공고 기준 — 마감/만료된 공고는 집계에서 빠집니다.</p>
+        <p className="text-[11px] text-gray-400 mb-4 border-b border-gray-100 pb-3">이 기간에 조회 기록이 있는 공고는 마감된 공고도 포함됩니다 — 완전히 만료(마감 후 90일 경과)되거나 삭제된 공고만 제외됩니다.</p>
         {loading ? (
           <div className="text-center py-10 text-gray-400 text-sm">불러오는 중...</div>
         ) : !summary ? (

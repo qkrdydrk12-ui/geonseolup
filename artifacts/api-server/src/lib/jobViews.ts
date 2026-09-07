@@ -84,16 +84,18 @@ export async function getPopularJobIds(limit = 10, days = 7): Promise<{ jobId: s
   }
 }
 
-// 최근 N일간 전체 공고의 조회수 맵 (건수 제한 없음) — 관리자 "조회 현황" 화면에서
-// 활성 공고 전체와 조인해 지역별/직종별 합계·순위를 계산하는 데 쓴다.
-export async function getJobViewCountMap(days = 7): Promise<Map<string, number>> {
+// 최근 N일간(또는 exact=true면 그 날짜 하루만) 전체 공고의 조회수 맵 (건수 제한 없음)
+// — 관리자 "조회 현황" 화면에서 공고 목록과 조인해 지역별/직종별 합계·순위를 계산하는 데 쓴다.
+// exact=true + days=0 → 오늘 하루, exact=true + days=1 → 어제 하루 (2026-09-08 "오늘/어제" 옵션 추가).
+export async function getJobViewCountMap(days = 7, exact = false): Promise<Map<string, number>> {
   await ensureTable();
   const since = kstDateOffset(days);
+  const whereClause = exact ? `view_date = $1` : `view_date >= $1`;
   try {
     const result = await pgPool.query<{ job_id: string; views: string }>(
       `SELECT job_id, COUNT(*) AS views
        FROM job_view_events
-       WHERE view_date >= $1
+       WHERE ${whereClause}
        GROUP BY job_id`,
       [since]
     );
