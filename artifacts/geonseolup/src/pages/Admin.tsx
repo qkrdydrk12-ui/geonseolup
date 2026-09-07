@@ -1564,11 +1564,11 @@ export default function Admin() {
               { key: 'content-stats', label: '콘텐츠 성과' },
               { key: 'stats', label: '방문 통계' },
               { key: 'toon', label: '노가다툰' },
-              { key: 'add', label: '공고 등록' },
               { key: 'pending', label: `신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
               { key: 'reports', label: `신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
               { key: 'jobs', label: `공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 예약${reservedJobs.length}` : ''}` },
               { key: 'products', label: '추천템' },
+              { key: 'add', label: '공고 등록' },
               { key: 'settings', label: '설정' },
             ] as { key: Tab; label: string }[]
           ).map((t) => (
