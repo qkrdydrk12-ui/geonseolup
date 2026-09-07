@@ -544,7 +544,13 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
   const jobType = decodeURIComponent(String(req.params.job));
   const jobDisplay = JOB_DISPLAY_ALIAS[jobType] ?? jobType;
   try {
-    const [template, { jobs }] = await Promise.all([getIndexTemplate(), getPublicJobs()]);
+    const [template, { jobs: cachedJobs }] = await Promise.all([getIndexTemplate(), getPublicJobs()]);
+    // 실제 방문자가 보는 /api/jobs, sitemap.xml과 동일하게 활성(모집 중) 공고만 센다.
+    // 마감(48시간 경과)됐지만 아직 만료(90일) 전인 공고까지 여기서 세면, 그 공고가
+    // 마감된 뒤에도 이 페이지가 "N건 있음"으로 계속 색인/크롤링되다가 실제 방문자에겐
+    // 0건으로 보이는 불일치가 생긴다(2026-09-07 발견 — 구글 검색결과를 클릭해 들어온
+    // 사용자가 "총 0개"만 보는 사고로 확인됨, site-news ?limit=30 버그와 동일 계열).
+    const jobs = filterActiveJobs(cachedJobs);
 
     const matched = jobs.filter(
       (j) => (typeof j.region === "string" ? j.region : "") === region &&
