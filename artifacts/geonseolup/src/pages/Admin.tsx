@@ -1558,7 +1558,6 @@ export default function Admin() {
         <div className="flex gap-1 mb-5 bg-white rounded-xl p-1.5 shadow-sm overflow-x-auto">
           {(
             [
-              { key: 'jobs', label: `공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 예약${reservedJobs.length}` : ''}` },
               { key: 'job-views', label: '공고 조회 현황' },
               { key: 'news', label: '현장 소식' },
               { key: 'blog', label: '건설 꿀팁' },
@@ -1568,6 +1567,7 @@ export default function Admin() {
               { key: 'add', label: '공고 등록' },
               { key: 'pending', label: `신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
               { key: 'reports', label: `신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
+              { key: 'jobs', label: `공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 예약${reservedJobs.length}` : ''}` },
               { key: 'products', label: '추천템' },
               { key: 'settings', label: '설정' },
             ] as { key: Tab; label: string }[]
