@@ -73,6 +73,20 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+// 기존(서버에 이미 저장된) 패널 이미지를 실제 base64로 받아온다. PUT /api/toon/:id는
+// panels를 항상 통째로 교체하는 구조라, 새로 안 바꾼 컷도 진짜 이미지 데이터를 같이
+// 보내야만 컷 삭제·순서변경이 저장된다(아래 handleSave 주석 참고).
+async function urlToDataUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function AdminToon({ showToast }: { showToast: (msg: string) => void }) {
   const [rows, setRows] = useState<ToonEpisode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,12 +203,8 @@ export default function AdminToon({ showToast }: { showToast: (msg: string) => v
     if (!title) { showToast('제목을 입력해주세요'); return; }
     if (!description) { showToast('설명을 입력해주세요'); return; }
 
-    // 새 이미지가 있는 패널만 서버로 보낸다. 수정 시 이미지를 하나도 안 바꿨으면 패널은 그대로 유지(서버가 비어있으면 기존 유지).
     const allHaveImage = panels.every((p) => p.imageDataUrl || p.existingUrl);
-    if (!editingId && !allHaveImage) { showToast('모든 컷에 이미지를 넣어주세요'); return; }
-
-    const anyNewImage = panels.some((p) => p.imageDataUrl);
-    if (editingId && anyNewImage && !allHaveImage) { showToast('일부 컷에만 새 이미지를 넣으면 안 됩니다 — 전체 컷을 다시 채워주세요'); return; }
+    if (!allHaveImage) { showToast('모든 컷에 이미지를 넣어주세요'); return; }
 
     setSaving(true);
     try {
@@ -203,10 +213,16 @@ export default function AdminToon({ showToast }: { showToast: (msg: string) => v
         title, description, disclaimer, episodeNumber: form.episodeNumber,
         published: form.published, scheduledAt: scheduledAtIso,
       };
-      // 새 이미지가 하나라도 있으면(등록 시엔 항상) 패널 전체를 새로 보낸다 — 서버가 기존 패널을 통째로 교체.
-      if (!editingId || anyNewImage) {
-        payload.panels = panels.map((p) => ({ imageBase64: p.imageDataUrl || p.existingUrl, caption: p.caption.trim() || undefined }));
-      }
+      // PUT은 패널을 항상 통째로 교체하는 구조라, 새 이미지를 안 바꾼 컷도 실제 이미지
+      // 바이트를 같이 보내야 한다. 예전엔 "새 이미지가 하나도 없으면 panels 필드 자체를
+      // 아예 안 보냄" 방식이라, 이미지 교체 없이 컷 삭제·순서변경만 하면 서버가 그걸
+      // 받지도 못해서 반영이 안 됐다(2026-09-08 발견 — 컷 삭제해도 저장 후 그대로 남던 버그).
+      payload.panels = await Promise.all(
+        panels.map(async (p) => ({
+          imageBase64: p.imageDataUrl || (p.existingUrl ? await urlToDataUrl(p.existingUrl) : null),
+          caption: p.caption.trim() || undefined,
+        }))
+      );
       if (editingId) {
         await apiFetch(`/api/toon/${editingId}`, {
           method: 'PUT',
@@ -318,7 +334,7 @@ export default function AdminToon({ showToast }: { showToast: (msg: string) => v
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-gray-400">수정 시 이미지를 하나라도 새로 바꾸면 전체 컷 순서가 지금 화면 그대로 다시 저장됩니다.</p>
+            <p className="mt-2 text-[11px] text-gray-400">저장하면 지금 화면에 보이는 컷 구성(삭제·순서변경 포함) 그대로 반영됩니다.</p>
           </div>
 
           <label className="flex items-center gap-2 text-xs font-semibold text-gray-600">
