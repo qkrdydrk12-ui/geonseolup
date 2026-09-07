@@ -171,6 +171,11 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
       "@type": "Place",
       address: {
         "@type": "PostalAddress",
+        // 2026-09-07 추가 — 서치콘솔 "채용 정보" 개선사항 리포트에서
+        // addressLocality 누락 경고가 계속 잡혀서 확인. 실제 도로명주소/우편번호는
+        // 갖고 있는 데이터가 없어 지어낼 수 없지만(구조화 데이터 스팸 정책 위반 위험),
+        // region(예: "평택")은 실제 시/군 단위 값이라 addressLocality로 그대로 쓸 수 있다.
+        addressLocality: region || undefined,
         addressRegion: region || "대한민국",
         addressCountry: "KR",
       },
