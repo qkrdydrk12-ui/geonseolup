@@ -101,7 +101,11 @@ export function useMergedNews() {
       setLoading(false);
       return;
     }
-    fetch('/api/site-news')
+    // limit 안 주면 서버 기본값(30)만 받아와서, 현장소식이 30건 넘어가면 오래된 글일수록
+    // 이 목록에 안 잡혀 상세페이지가 "페이지를 찾을 수 없습니다"로 잘못 뜨는 버그가 있었다
+    // (2026-09-07 발견 — SSR/메타 쪽은 DB 전체를 보므로 정상인데 클라이언트만 깨짐,
+    // 구글이 이 상태를 크롤링해서 Soft 404로 오판함). 서버 상한(100)까지 받아온다.
+    fetch('/api/site-news?limit=100')
       .then((res) => res.json())
       .then((data: { rows: SiteNewsApiRow[] }) => {
         const dynamic = (data.rows ?? []).filter((r) => r.slug).map(toDisplay);
