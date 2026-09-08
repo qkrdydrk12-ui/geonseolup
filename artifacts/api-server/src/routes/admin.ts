@@ -149,6 +149,22 @@ router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Resp
   }
 });
 
+// 공고 region 필드는 "평택"/"경기 평택"/"평택 고덕"/"평택(고덕 삼성물산 P4-PH2)"처럼 자유
+// 텍스트라, "지역별 조회수" 집계에서 이 값을 그대로 키로 쓰면 전부 같은 평택인데도 4~5줄로
+// 쪼개져 보인다(2026-09-08 사용자 지적 — "평택 고덕 평택. 다 평택인데"). 광역 지역명 접두사를
+// 떼고 남은 첫 단어(보통 시/군 이름)만 집계 키로 써서 같은 도시를 하나로 합친다. 개별 공고
+// 목록(rows)의 region 표시값 자체는 원문 그대로 두고, 이 집계 전용으로만 정규화한다.
+const PROVINCE_NAMES = new Set([
+  "서울", "경기", "인천", "강원", "충북", "충남", "대전", "세종",
+  "경북", "경남", "대구", "울산", "부산", "전북", "전남", "광주", "제주",
+]);
+function normalizeRegionForAgg(region: string): string {
+  const tokens = region.replace(/\([^)]*\)/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return region || "지역 미상";
+  if (tokens.length > 1 && PROVINCE_NAMES.has(tokens[0]!)) return tokens[1]!;
+  return tokens[0]!;
+}
+
 // GET /api/admin/job-views?range=today|yesterday|7|14|30 — 공고 전체에 조회수를 붙이고
 // 지역별/직종별로 집계해 "사람들이 요즘 어떤 공고를 보는지" 전체 흐름을 보여준다.
 router.get("/admin/job-views", requireAdmin, async (req: Request, res: Response) => {
@@ -211,7 +227,7 @@ router.get("/admin/job-views", requireAdmin, async (req: Request, res: Response)
       totalJobs: rows.length,
       totalViews,
       zeroViewCount,
-      byRegion: aggregate((r) => r.region),
+      byRegion: aggregate((r) => normalizeRegionForAgg(r.region)),
       byJobType: aggregate((r) => r.job),
       jobs: rows,
     });
