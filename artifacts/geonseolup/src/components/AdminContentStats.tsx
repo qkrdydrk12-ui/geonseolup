@@ -23,6 +23,17 @@ interface UnifiedRow {
   editTab: 'blog' | 'news' | 'toon';
 }
 
+// [[job-views]]의 AdminJobViews.tsx와 동일한 패턴 (2026-09-08 추가) — range는 그대로
+// /api/admin/content-views에 전달된다. ''(전체)은 기존 기본 동작(전체 누적) 그대로 유지.
+const PERIODS = [
+  { range: '', label: '전체' },
+  { range: 'today', label: '오늘' },
+  { range: 'yesterday', label: '어제' },
+  { range: '7', label: '최근 7일' },
+  { range: '14', label: '최근 14일' },
+  { range: '30', label: '최근 30일' },
+];
+
 async function apiFetch(url: string) {
   const token = getToken();
   const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
@@ -36,27 +47,21 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
   const [rows, setRows] = useState<UnifiedRow[]>([]);
   const [counts, setCounts] = useState<CountsMap>({});
   const [loading, setLoading] = useState(true);
+  const [countsLoading, setCountsLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>('views');
   const [typeFilter, setTypeFilter] = useState<ContentType | 'all'>('all');
+  const [range, setRange] = useState('');
 
+  // 글 목록(제목/날짜 등) — 기간과 무관하니 마운트 시 한 번만.
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const [blogList, newsList, toonList, blogCounts, newsCounts, toonCounts] = await Promise.all([
+        const [blogList, newsList, toonList] = await Promise.all([
           apiFetch('/api/blog-articles/all'),
           apiFetch('/api/site-news/all'),
           apiFetch('/api/toon/all'),
-          apiFetch('/api/admin/content-views?type=blog'),
-          apiFetch('/api/admin/content-views?type=news'),
-          apiFetch('/api/admin/content-views?type=toon'),
         ]);
-
-        const mergedCounts: CountsMap = {};
-        for (const src of [blogCounts, newsCounts, toonCounts]) {
-          for (const r of src.rows ?? []) mergedCounts[r.contentId] = { views: r.views, likes: r.likes };
-        }
-        setCounts(mergedCounts);
 
         const unified: UnifiedRow[] = [
           ...(blogList.rows ?? []).map((r: { id: number; slug: string; title: string; createdAt: string }) => ({
@@ -77,6 +82,30 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
       }
     })();
   }, []);
+
+  // 조회수·좋아요 — 기간 선택(range)이 바뀔 때마다 다시 불러온다.
+  useEffect(() => {
+    (async () => {
+      setCountsLoading(true);
+      try {
+        const qs = range ? `&range=${range}` : '';
+        const [blogCounts, newsCounts, toonCounts] = await Promise.all([
+          apiFetch(`/api/admin/content-views?type=blog${qs}`),
+          apiFetch(`/api/admin/content-views?type=news${qs}`),
+          apiFetch(`/api/admin/content-views?type=toon${qs}`),
+        ]);
+        const mergedCounts: CountsMap = {};
+        for (const src of [blogCounts, newsCounts, toonCounts]) {
+          for (const r of src.rows ?? []) mergedCounts[r.contentId] = { views: r.views, likes: r.likes };
+        }
+        setCounts(mergedCounts);
+      } catch {
+        // 조용히 무시 — 통계 탭은 부가 정보라 실패해도 다른 탭 사용엔 지장 없음
+      } finally {
+        setCountsLoading(false);
+      }
+    })();
+  }, [range]);
 
   const filteredRows = typeFilter === 'all' ? rows : rows.filter((r) => r.type === typeFilter);
   const sortedRows = sortByStat(filteredRows, counts, (r) => r.slug, sortKey);
@@ -121,11 +150,26 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
                 </button>
               ))}
             </div>
+            <div className="flex gap-1 bg-gray-100 rounded-full p-0.5">
+              {PERIODS.map((p) => (
+                <button
+                  key={p.range}
+                  type="button"
+                  onClick={() => setRange(p.range)}
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-full cursor-pointer font-[inherit] transition-colors ${
+                    range === p.range ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
             {rows.length > 1 && <AdminSortToggle value={sortKey} onChange={setSortKey} />}
           </div>
         </div>
+        <p className="text-[11px] text-gray-400 mb-3">조회수는 선택한 기간 기준, 좋아요는 항상 전체 누적입니다.</p>
         <AdminStatsSummaryBar stats={statsSummary} />
-        {loading ? (
+        {loading || countsLoading ? (
           <div className="text-center py-10 text-gray-400 text-sm">불러오는 중...</div>
         ) : filteredRows.length === 0 ? (
           <div className="text-center py-10 text-gray-400 text-sm">등록된 글이 없습니다.</div>
