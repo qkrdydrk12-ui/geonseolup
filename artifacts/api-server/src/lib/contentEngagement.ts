@@ -190,6 +190,38 @@ export async function getAllCounts(type: ContentType): Promise<{ contentId: stri
   }
 }
 
+// getAllCounts와 같은 모양이지만 조회수만 기간으로 제한한다 (2026-09-08 "오늘/어제/N일" 기간
+// 선택 추가 — [[job-views]]의 getJobViewCountMap과 동일한 원리, exact=true면 그 날짜 하루만
+// `view_date = since`, 아니면 오늘부터 days일 전까지 누적 `view_date >= since`).
+// 좋아요는 날짜 구분이 없는 영구 집계라 기간과 무관하게 항상 전체 누적으로 붙인다.
+export async function getRangedCounts(
+  type: ContentType,
+  days: number,
+  exact: boolean
+): Promise<{ contentId: string; views: number; likes: number }[]> {
+  await ensureTables();
+  const since = kstDateOffset(days);
+  const dateClause = exact ? `view_date = $2` : `view_date >= $2`;
+  try {
+    const result = await pgPool.query<{ content_id: string; views: string; likes: string }>(
+      `SELECT
+         COALESCE(v.content_id, l.content_id) AS content_id,
+         COALESCE(v.views, 0) AS views,
+         COALESCE(l.likes, 0) AS likes
+       FROM
+         (SELECT content_id, COUNT(*) AS views FROM content_view_events WHERE content_type = $1 AND ${dateClause} GROUP BY content_id) v
+         FULL OUTER JOIN
+         (SELECT content_id, COUNT(*) AS likes FROM content_likes WHERE content_type = $1 GROUP BY content_id) l
+         ON v.content_id = l.content_id`,
+      [type, since]
+    );
+    return result.rows.map((r) => ({ contentId: r.content_id, views: Number(r.views), likes: Number(r.likes) }));
+  } catch (err) {
+    logger.warn({ err: String(err), type, days, exact }, "[content-engagement] 기간별 카운트 조회 실패");
+    return [];
+  }
+}
+
 // 위 인기 콘텐츠 id들의 좋아요 수를 한 번에 조회 (관리자 통계 테이블용)
 export async function getLikeCounts(type: ContentType, contentIds: string[]): Promise<Map<string, number>> {
   await ensureTables();
