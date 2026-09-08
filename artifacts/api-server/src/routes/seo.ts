@@ -118,7 +118,32 @@ function extractSalaryNumFromText(salary: string): number | undefined {
     const n = Math.round(parseFloat(manMatch[1]) * 10000);
     if (n > 1000) return n;
   }
+  // "120,000 ~ 125,000"처럼 단위(원/만) 없이 콤마 구분 숫자만 있는 경우 (2026-09-08 추가 —
+  // 서치콘솔 채용정보 baseSalary 누락 경고에서 실제로 이 패턴의 공고가 있는 걸 확인).
+  // 범위면 더 낮은(첫) 값을 쓴다 — 다른 곳(관리자 화면 등)의 하한값 표기 관례와 동일.
+  const bareMatch = salary.match(/\d{2,3}(?:,\d{3})+/);
+  if (bareMatch) {
+    const n = parseInt(bareMatch[0].replace(/,/g, ""), 10);
+    if (n > 1000) return n;
+  }
   return undefined;
+}
+
+// 실제 주소가 확인된 대형 현장만 streetAddress/postalCode를 채운다(2026-09-08 추가 — 서치콘솔
+// "새로운 채용 정보 구조화된 데이터 문제" 이메일 알림, streetAddress/postalCode 누락 125건).
+// 공고 region이 그냥 "평택"/"용인"이라고 무조건 이 주소를 붙이면 실제로는 다른 현장인 공고에
+// 엉뚱한 주소가 달릴 위험이 있다 — 그래서 region뿐 아니라 title/detail에도 그 현장을 가리키는
+// 구체적 단서(고덕/삼성전자/P4/P5/PH2 등)가 실제로 있을 때만 적용한다. 용인 SK하이닉스 클러스터는
+// 아직 공사 중이라 공식적으로 확정된 도로명주소를 찾지 못해 이번엔 포함하지 않는다(추측 주소를
+// 구조화 데이터에 넣는 게 오히려 스팸/부정확 판정 위험이 더 크다).
+function detectKnownSiteAddress(
+  haystack: string
+): { streetAddress: string; postalCode: string } | null {
+  // 삼성전자 평택캠퍼스(고덕) — 경기도 평택시 삼성로 114, 고덕동, 우편번호 17786.
+  if (/평택/.test(haystack) && /고덕|삼성전자|삼성\s*전자|삼성캠퍼스|\bP[45]\b|PH2|FAB/i.test(haystack)) {
+    return { streetAddress: "삼성로 114", postalCode: "17786" };
+  }
+  return null;
 }
 
 // ── 채용공고 JobPosting 구조화 데이터 (Google 채용정보 검색 노출용) ─────────────
@@ -149,6 +174,8 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   ].filter(Boolean);
   const description = descriptionParts.join(". ") || `건설 현장 ${jobType || "인력"} 구인 공고`;
 
+  const knownSiteAddress = detectKnownSiteAddress(`${region} ${rawTitle} ${detail}`);
+
   const ld: Record<string, unknown> = {
     "@context": "https://schema.org/",
     "@type": "JobPosting",
@@ -178,6 +205,9 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
         addressLocality: region || undefined,
         addressRegion: region || "대한민국",
         addressCountry: "KR",
+        // 공고 자체 텍스트에 구체적 현장 단서가 있어 실제 주소를 확신할 수 있는 경우만
+        // 채운다(바로 위 detectKnownSiteAddress, 2026-09-08 추가) — 나머지는 계속 비워둔다.
+        ...(knownSiteAddress ?? {}),
       },
     },
     directApply: true,
