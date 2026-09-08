@@ -6,7 +6,7 @@ import {
   getTokenFromReq,
   requireAdmin,
 } from "../lib/adminStore";
-import { updateDocument, addDocument } from "../lib/firestoreClient.js";
+import { updateDocument, addDocument, getDocument } from "../lib/firestoreClient.js";
 import { getPublicJobs } from "../lib/jobsCache.js";
 import { getPopularJobIds, getJobViewCountMap } from "../lib/jobViews.js";
 import { countSubscriptions } from "../lib/pushSubscriptions.js";
@@ -149,14 +149,42 @@ router.get("/admin/stats/summary", requireAdmin, async (_req: Request, res: Resp
   }
 });
 
-// GET /api/admin/job-views?days=7 — 현재 활성 공고 전체에 조회수를 붙이고
+// GET /api/admin/job-views?range=today|yesterday|7|14|30 — 공고 전체에 조회수를 붙이고
 // 지역별/직종별로 집계해 "사람들이 요즘 어떤 공고를 보는지" 전체 흐름을 보여준다.
 router.get("/admin/job-views", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const days = Math.max(1, Math.min(90, Number(req.query["days"]) || 7));
-    const [{ jobs }, viewMap] = await Promise.all([getPublicJobs(), getJobViewCountMap(days)]);
+    const rangeParam = typeof req.query["range"] === "string" ? req.query["range"] : "";
+    // 하위호환: range가 없으면 예전 ?days= 파라미터를 그대로 쓴다.
+    const isExact = rangeParam === "today" || rangeParam === "yesterday";
+    const days = isExact
+      ? (rangeParam === "yesterday" ? 1 : 0)
+      : Math.max(1, Math.min(90, Number(rangeParam || req.query["days"]) || 7));
 
-    const rows = jobs.map((j) => ({
+    const [{ jobs }, viewMap] = await Promise.all([
+      getPublicJobs(),
+      getJobViewCountMap(days, isExact),
+    ]);
+
+    // getPublicJobs()는 최신 등록순 상한(top-N, 60초 캐시) 목록이라 "N일"을 골라도
+    // 그 상한 밖으로 밀려난 예전 공고는 실제 조회 기록이 있어도 여기 안 잡혔다 — 공고가
+    // 하루에 수백 건씩 새로 쏟아지는 요즘은 사실상 최근 하루치만 보이는 것과 같았다
+    // (2026-09-08 발견). viewMap에 잡힌 job_id를 전부 기준으로 잡고, 캐시에 없는 id는
+    // Firestore에서 개별로 마저 가져와 채운다.
+    const byId = new Map<string, Record<string, unknown> & { id: string }>(
+      jobs.map((j) => [j.id, j])
+    );
+    const missingIds = [...viewMap.keys()].filter((id) => !byId.has(id));
+    if (missingIds.length > 0) {
+      const missingDocs = await Promise.all(
+        missingIds.map((id) => getDocument("jobs", id).catch(() => null))
+      );
+      for (let i = 0; i < missingIds.length; i++) {
+        const doc = missingDocs[i];
+        if (doc) byId.set(missingIds[i]!, doc);
+      }
+    }
+
+    const rows = [...byId.values()].map((j) => ({
       id: j.id,
       title: typeof j["title"] === "string" ? (j["title"] as string) : "(제목 없음)",
       region: typeof j["region"] === "string" ? (j["region"] as string) : "지역 미상",
@@ -179,6 +207,7 @@ router.get("/admin/job-views", requireAdmin, async (req: Request, res: Response)
 
     res.json({
       days,
+      range: rangeParam || String(days),
       totalJobs: rows.length,
       totalViews,
       zeroViewCount,
