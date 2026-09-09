@@ -34,7 +34,9 @@ export function renderInline(text: string, keyPrefix = ''): ReactNode[] {
       // **{색:텍스트}** 처럼 굵게 안에 색상 태그를 통째로 감싼 경우 — 단일 패스 파서라
       // 굵게(**...**)가 먼저 매치되면서 안쪽 {색:텍스트}를 문자 그대로 삼켜버리는 사고가
       // 실제 발행 글에서 반복 발생함(2026-09-09). 이 조합만 따로 감지해서 색상+굵게를 함께 적용.
-      const nestedColor = /^\{(빨강|빨간|파랑|파란|초록|주황|회색):([^}\n]+)\}$/.exec(m[1]);
+      // 닫는 중괄호가 하나 더 붙는 흔한 오타(`{색:텍스트}}`)도 같은 날 별도로 재현돼서
+      // 마지막 `\}` 하나는 있어도 없어도 허용하도록 함께 방어.
+      const nestedColor = /^\{(빨강|빨간|파랑|파란|초록|주황|회색):([^}\n]+)\}\}?$/.exec(m[1]);
       if (nestedColor) {
         out.push(
           <span key={`${keyPrefix}b${k++}`} style={{ color: COLOR_MAP[nestedColor[1]!] }} className="font-bold">
