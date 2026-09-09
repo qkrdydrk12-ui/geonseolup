@@ -31,7 +31,19 @@ export function renderInline(text: string, keyPrefix = ''): ReactNode[] {
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
     if (m[1] !== undefined) {
-      out.push(<strong key={`${keyPrefix}b${k++}`} className="font-bold text-gray-900">{m[1]}</strong>);
+      // **{색:텍스트}** 처럼 굵게 안에 색상 태그를 통째로 감싼 경우 — 단일 패스 파서라
+      // 굵게(**...**)가 먼저 매치되면서 안쪽 {색:텍스트}를 문자 그대로 삼켜버리는 사고가
+      // 실제 발행 글에서 반복 발생함(2026-09-09). 이 조합만 따로 감지해서 색상+굵게를 함께 적용.
+      const nestedColor = /^\{(빨강|빨간|파랑|파란|초록|주황|회색):([^}\n]+)\}$/.exec(m[1]);
+      if (nestedColor) {
+        out.push(
+          <span key={`${keyPrefix}b${k++}`} style={{ color: COLOR_MAP[nestedColor[1]!] }} className="font-bold">
+            {nestedColor[2]}
+          </span>
+        );
+      } else {
+        out.push(<strong key={`${keyPrefix}b${k++}`} className="font-bold text-gray-900">{m[1]}</strong>);
+      }
     } else if (m[2] !== undefined) {
       out.push(
         <span key={`${keyPrefix}c${k++}`} style={{ color: COLOR_MAP[m[2]!] }} className="font-semibold">
