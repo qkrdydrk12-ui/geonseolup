@@ -10,7 +10,7 @@ import {
   CarouselNext,
   type CarouselApi,
 } from '@/components/ui/carousel';
-import { useToonEpisode } from '@/lib/toonApi';
+import { useToonEpisode, useToonEpisodes } from '@/lib/toonApi';
 import LikeButton from '@/components/LikeButton';
 
 // 조회수 집계용 — 같은 방문자가 새로고침해도 서버에서 하루 1회만 카운트되므로
@@ -21,8 +21,15 @@ function recordServerView(slug: string): void {
 
 export default function ToonDetail({ slug }: { slug: string }) {
   const { episode, loading, notFound } = useToonEpisode(slug);
+  const { episodes } = useToonEpisodes();
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
+
+  // /api/toon은 episode_number 내림차순(최신화가 0번)으로 오므로
+  // "다음 화"(회차 번호 +1)는 리스트에서 인덱스 -1, "이전 화"는 인덱스 +1 (InfoDetail.tsx와 동일 패턴).
+  const currentIdx = episodes.findIndex((e) => e.slug === slug);
+  const nextEpisode = currentIdx > 0 ? episodes[currentIdx - 1] : null;
+  const prevEpisode = currentIdx >= 0 && currentIdx < episodes.length - 1 ? episodes[currentIdx + 1] : null;
 
   useEffect(() => {
     if (!episode) return;
@@ -107,6 +114,34 @@ export default function ToonDetail({ slug }: { slug: string }) {
             <p className="text-[11px] text-gray-400 leading-relaxed mt-6 border-t border-gray-200 pt-4">
               ※ {episode.disclaimer}
             </p>
+
+            {/* 이전 화 / 다음 화 */}
+            {(prevEpisode || nextEpisode) && (
+              <div className="flex gap-3 mt-4">
+                {prevEpisode ? (
+                  <Link
+                    href={`/toon/${prevEpisode.slug}`}
+                    className="flex-1 bg-white rounded-xl border border-gray-200 p-4 no-underline hover:border-[#f97316] transition-colors"
+                  >
+                    <p className="text-[10px] text-gray-400 mb-1">← 이전 화</p>
+                    <p className="text-xs font-semibold text-[#1e3a5f] line-clamp-2">
+                      {prevEpisode.episodeNumber}화 · {prevEpisode.title}
+                    </p>
+                  </Link>
+                ) : <div className="flex-1" />}
+                {nextEpisode ? (
+                  <Link
+                    href={`/toon/${nextEpisode.slug}`}
+                    className="flex-1 bg-white rounded-xl border border-gray-200 p-4 no-underline hover:border-[#f97316] transition-colors text-right"
+                  >
+                    <p className="text-[10px] text-gray-400 mb-1">다음 화 →</p>
+                    <p className="text-xs font-semibold text-[#1e3a5f] line-clamp-2">
+                      {nextEpisode.episodeNumber}화 · {nextEpisode.title}
+                    </p>
+                  </Link>
+                ) : <div className="flex-1" />}
+              </div>
+            )}
           </>
         )}
       </main>

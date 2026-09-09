@@ -12,6 +12,7 @@ interface BlogArticleApiRow {
   emoji: string;
   body: InfoArticle['body'];
   imageUrl: string | null;
+  relatedJob?: string | null;
 }
 
 let cache: DisplayArticle[] | null = null;
@@ -46,6 +47,7 @@ export function useMergedArticles() {
           emoji: r.emoji,
           body: r.body,
           imageSrc: r.imageUrl || getArticleImage(r.slug),
+          relatedJob: r.relatedJob ?? null,
         }));
         const staticArticles = staticOnly().filter(
           (s) => !dynamic.some((d) => d.slug === s.slug)
