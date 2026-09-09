@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getToken } from '@/lib/adminAuth';
 import { INFO_ARTICLES, getArticleImage } from '@/lib/infoData';
+import { JOBS } from '@/lib/parseJob';
 import { sortByStat, summarizeStats, getCounts, isLowPerformer, type SortKey } from '@/lib/contentStats';
 import AdminSortToggle from './AdminSortToggle';
 import AdminStatsSummaryBar from './AdminStatsSummaryBar';
@@ -23,6 +24,7 @@ interface BlogArticle {
   scheduledAt: string | null;
   createdAt: string;
   createdBy?: string | null;
+  relatedJob?: string | null;
 }
 
 interface ArticleForm {
@@ -32,10 +34,11 @@ interface ArticleForm {
   emoji: string;
   published: boolean;
   scheduledAt: string; // datetime-local 문자열, 비워두면 즉시 공개
+  relatedJob: string; // 빈 문자열이면 미지정 — 글 하단 CTA가 홈으로 연결됨(기존 동작 그대로)
 }
 
 function emptyForm(): ArticleForm {
-  return { slug: '', title: '', description: '', emoji: '📝', published: true, scheduledAt: '' };
+  return { slug: '', title: '', description: '', emoji: '📝', published: true, scheduledAt: '', relatedJob: '' };
 }
 
 function slugify(title: string): string {
@@ -149,6 +152,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     setForm({
       slug: r.slug, title: r.title, description: r.description, emoji: r.emoji, published: r.published,
       scheduledAt: r.scheduledAt ? new Date(new Date(r.scheduledAt).getTime() + 9 * 3600000).toISOString().slice(0, 16) : '',
+      relatedJob: r.relatedJob ?? '',
     });
     setBlocks(r.body.length ? r.body : [{ subtitle: '', text: '' }]);
     setExistingImageUrl(r.imageUrl);
@@ -164,7 +168,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     const a = INFO_ARTICLES.find((x) => x.slug === slug);
     if (!a) return;
     setEditingId(null);
-    setForm({ slug: a.slug, title: a.title, description: a.description, emoji: a.emoji, published: true, scheduledAt: '' });
+    setForm({ slug: a.slug, title: a.title, description: a.description, emoji: a.emoji, published: true, scheduledAt: '', relatedJob: '' });
     setBlocks(a.body.length ? a.body.map((b) => ({ ...b })) : [{ subtitle: '', text: '' }]);
     setExistingImageUrl(getArticleImage(a.slug));
     setImageDataUrl(null);
@@ -205,6 +209,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
         title, description, emoji: form.emoji.trim() || '📝',
         body: cleanBlocks, published: form.published,
         scheduledAt: scheduledAtIso,
+        relatedJob: form.relatedJob,
       };
       if (imageDataUrl) payload.imageBase64 = imageDataUrl;
       if (editingId) {
@@ -281,6 +286,15 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">목록에 보일 요약 설명 *</label>
             <input type="text" value={form.description} onChange={(e) => setField('description', e.target.value)} placeholder="카드 목록에 짧게 보일 설명" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">관련 직종 (선택 — 글 하단 CTA를 해당 직종 구인공고로 연결)</label>
+            <select value={form.relatedJob} onChange={(e) => setField('relatedJob', e.target.value)} className={inputCls}>
+              <option value="">선택 안 함 (기본 홈 링크)</option>
+              {JOBS.map((j) => (
+                <option key={j} value={j}>{j}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">대표 이미지 (16:9)</label>

@@ -4,6 +4,8 @@ export interface InfoArticle {
   description: string;
   emoji: string;
   body: { subtitle?: string; text: string; image?: string }[];
+  // 글 하단 CTA를 해당 직종 구인공고로 연결 (parseJob.ts JOBS 값 중 하나). 미지정이면 기본 홈 링크.
+  relatedJob?: string | null;
 }
 
 export const INFO_ARTICLES: InfoArticle[] = [

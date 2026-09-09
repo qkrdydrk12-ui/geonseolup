@@ -140,21 +140,25 @@ function InfoArticleDetail({ slug }: Props) {
             <LikeButton type="blog" slug={article.slug} />
           </div>
 
-          {/* 구인 목록 CTA */}
+          {/* 구인 목록 CTA — relatedJob이 지정된 글이면 해당 직종 공고로, 아니면 기존처럼 홈으로 (2026-09-09) */}
           <div
             className="mt-6 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
             style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}
           >
             <div className="text-white flex-1">
-              <p className="font-bold text-sm mb-0.5">지금 바로 건설 일자리를 찾아보세요</p>
-              <p className="text-xs text-white/70">전국 건설 현장 실시간 구인 정보</p>
+              <p className="font-bold text-sm mb-0.5">
+                {article.relatedJob ? `지금 바로 ${article.relatedJob} 공고를 확인해보세요` : '지금 바로 건설 일자리를 찾아보세요'}
+              </p>
+              <p className="text-xs text-white/70">
+                {article.relatedJob ? `전국 ${article.relatedJob} 현장 실시간 구인 정보` : '전국 건설 현장 실시간 구인 정보'}
+              </p>
             </div>
             <Link
-              href="/"
+              href={article.relatedJob ? `/jobs/전체/${encodeURIComponent(article.relatedJob)}` : '/'}
               className="shrink-0 px-4 py-2 rounded-lg text-xs font-extrabold no-underline transition-colors hover:opacity-90"
               style={{ background: '#f97316', color: '#fff' }}
             >
-              구인 목록 보기 →
+              {article.relatedJob ? `${article.relatedJob} 공고 알아보기 →` : '구인 목록 보기 →'}
             </Link>
           </div>
 
