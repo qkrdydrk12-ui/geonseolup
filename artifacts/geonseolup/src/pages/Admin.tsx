@@ -35,6 +35,7 @@ import AdminProducts from '@/components/AdminProducts';
 import AdminSiteNews from '@/components/AdminSiteNews';
 import AdminBlogArticles from '@/components/AdminBlogArticles';
 import AdminToon from '@/components/AdminToon';
+import AdminComments from '@/components/AdminComments';
 import AdminContentStats from '@/components/AdminContentStats';
 import AdminJobViews from '@/components/AdminJobViews';
 import AdminFunnelStats from '@/components/AdminFunnelStats';
@@ -118,7 +119,7 @@ function emptyForm(): Partial<Job> {
   };
 }
 
-type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'products' | 'news' | 'blog' | 'toon' | 'settings' | 'stats' | 'content-stats' | 'job-views';
+type Tab = 'jobs' | 'add' | 'pending' | 'reports' | 'comments' | 'products' | 'news' | 'blog' | 'toon' | 'settings' | 'stats' | 'content-stats' | 'job-views';
 
 interface HourlyRow { hour: number; count: number; }
 interface VisitorTotals { today: number; yesterday: number; week: number; total: number; }
@@ -1566,6 +1567,7 @@ export default function Admin() {
               { key: 'toon', label: '노가다툰' },
               { key: 'pending', label: `신청 관리 (${pending.filter((p) => p.status === 'pending').length})` },
               { key: 'reports', label: `신고 관리${reports.length > 0 ? ` (${reports.length})` : ''}` },
+              { key: 'comments', label: '댓글 관리' },
               { key: 'jobs', label: `공고 관리 (${activeJobs.length})${reservedJobs.length > 0 ? ` 예약${reservedJobs.length}` : ''}` },
               { key: 'products', label: '추천템' },
               { key: 'add', label: '공고 등록' },
@@ -2441,6 +2443,7 @@ export default function Admin() {
 
         {tab === 'blog' && <AdminBlogArticles showToast={showToast} />}
         {tab === 'toon' && <AdminToon showToast={showToast} />}
+        {tab === 'comments' && <AdminComments showToast={showToast} />}
         {tab === 'content-stats' && <AdminContentStats onGoToTab={setTab} />}
         {tab === 'job-views' && <AdminJobViews />}
 

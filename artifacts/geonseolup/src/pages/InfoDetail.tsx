@@ -4,6 +4,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import RelatedLinks from '@/components/RelatedLinks';
 import LikeButton from '@/components/LikeButton';
+import CommentSection from '@/components/CommentSection';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 import { renderRichText } from '@/lib/richText';
 import ShuttleScheduleYonginSK from '@/components/ShuttleScheduleYonginSK';
@@ -157,6 +158,9 @@ function InfoArticleDetail({ slug }: Props) {
           <div className="mt-8 flex justify-center">
             <LikeButton type="blog" slug={article.slug} />
           </div>
+
+          {/* 댓글 (2026-09-10 신설) */}
+          <CommentSection type="blog" slug={article.slug} />
 
           {/* 구인 목록 CTA — relatedJob이 지정된 글이면 해당 직종 공고로, 아니면 기존처럼 홈으로 (2026-09-09) */}
           <div

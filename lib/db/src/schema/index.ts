@@ -293,3 +293,24 @@ export const contentLikesTable = pgTable(
     index("idx_content_likes_item").on(table.contentType, table.contentId),
   ]
 );
+
+// 댓글(2026-09-10 신설) — 로그인 없이 IP 기준으로 남기는 익명 댓글. content_likes와 동일한
+// (content_type, content_id) 키 체계를 그대로 쓴다. 관리자가 hidden=true로 숨길 수 있다(하드 삭제 대신
+// 소프트 삭제 — 스팸 판단이 잘못됐을 때 복구 가능하도록).
+export const contentCommentsTable = pgTable(
+  "content_comments",
+  {
+    id: serial("id").primaryKey(),
+    contentType: varchar("content_type", { length: 20 }).notNull(),
+    contentId: varchar("content_id", { length: 150 }).notNull(),
+    author: varchar("author", { length: 30 }).notNull().default("익명"),
+    body: varchar("body", { length: 500 }).notNull(),
+    ipHash: varchar("ip_hash", { length: 16 }).notNull(),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_content_comments_item").on(table.contentType, table.contentId),
+    index("idx_content_comments_created").on(table.createdAt),
+  ]
+);

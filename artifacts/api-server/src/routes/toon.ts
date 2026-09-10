@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import express from "express";
 import { pgPool } from "../lib/db";
 import { requireAdmin, getTokenFromReq, isTokenValid } from "../lib/adminStore";
-import { recordContentView, extractIp, getEngagement, toggleLike } from "../lib/contentEngagement.js";
+import { recordContentView, extractIp, getEngagement, toggleLike, getComments, addComment } from "../lib/contentEngagement.js";
 
 const router: IRouter = Router();
 
@@ -200,6 +200,32 @@ router.post("/toon/:slug/like", async (req: Request, res: Response) => {
     const ip = extractIp(req);
     const result = await toggleLike("toon", String(req.params["slug"]), ip);
     res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// GET /api/toon/:slug/comments — 공개, 댓글 목록 조회.
+router.get("/toon/:slug/comments", async (req: Request, res: Response) => {
+  try {
+    const rows = await getComments("toon", String(req.params["slug"]));
+    res.json({ ok: true, rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// POST /api/toon/:slug/comments — 공개, 댓글 작성. 인증 불필요(로그인 없는 사이트).
+router.post("/toon/:slug/comments", async (req: Request, res: Response) => {
+  try {
+    const ip = extractIp(req);
+    const body = req.body as { author?: string; body?: string };
+    const result = await addComment("toon", String(req.params["slug"]), ip, body.author ?? "", body.body ?? "");
+    if (!result.ok) {
+      res.status(400).json({ ok: false, reason: result.reason });
+      return;
+    }
+    res.json({ ok: true, comment: result.comment });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
   }

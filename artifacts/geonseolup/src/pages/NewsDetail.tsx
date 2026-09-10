@@ -4,6 +4,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import RelatedLinks from '@/components/RelatedLinks';
 import LikeButton from '@/components/LikeButton';
+import CommentSection from '@/components/CommentSection';
 import { useMergedNews } from '@/lib/useMergedNews';
 import { renderRichText } from '@/lib/richText';
 
@@ -119,6 +120,9 @@ export default function NewsDetail({ slug }: Props) {
             <div className="mt-8 flex justify-center">
               <LikeButton type="news" slug={article.slug} />
             </div>
+
+            {/* 댓글 (2026-09-10 신설) */}
+            <CommentSection type="news" slug={article.slug} />
 
             {/* 구인 목록 CTA */}
             <div
