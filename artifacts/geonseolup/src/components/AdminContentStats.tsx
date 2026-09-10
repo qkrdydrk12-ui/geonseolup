@@ -52,7 +52,11 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
   const [typeFilter, setTypeFilter] = useState<ContentType | 'all'>('all');
   const [range, setRange] = useState('');
 
-  // 글 목록(제목/날짜 등) — 기간과 무관하니 마운트 시 한 번만.
+  // 글 목록(제목/날짜 등) — 처음 마운트될 때 + reloadKey가 바뀔 때(새로고침 버튼) 다시 불러온다.
+  // 2026-09-10: 예전엔 마운트 시 한 번만 불러왔는데, 이 탭을 오래 띄워둔 채로 있으면(다른 탭 안 갔다옴)
+  // 새 글이 올라와도 숫자가 안 늘어나 보인다는 지적(사용자: "콘텐츠 성과 총 글이 112개로 업데이트가 안된거같아")
+  // — 새로고침 버튼을 추가해서 페이지 리로드 없이도 최신 상태를 다시 불러올 수 있게 함.
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -81,7 +85,7 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
         setLoading(false);
       }
     })();
-  }, []);
+  }, [reloadKey]);
 
   // 조회수·좋아요 — 기간 선택(range)이 바뀔 때마다 다시 불러온다.
   useEffect(() => {
@@ -105,7 +109,7 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
         setCountsLoading(false);
       }
     })();
-  }, [range]);
+  }, [range, reloadKey]);
 
   const filteredRows = typeFilter === 'all' ? rows : rows.filter((r) => r.type === typeFilter);
   const sortedRows = sortByStat(filteredRows, counts, (r) => r.slug, sortKey);
@@ -165,6 +169,14 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
               ))}
             </div>
             {rows.length > 1 && <AdminSortToggle value={sortKey} onChange={setSortKey} />}
+            <button
+              type="button"
+              onClick={() => setReloadKey((k) => k + 1)}
+              disabled={loading || countsLoading}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full cursor-pointer bg-gray-100 text-gray-500 border-none disabled:opacity-50 font-[inherit]"
+            >
+              ↻ 새로고침
+            </button>
           </div>
         </div>
         <p className="text-[11px] text-gray-400 mb-3">조회수는 선택한 기간 기준, 좋아요는 항상 전체 누적입니다.</p>
