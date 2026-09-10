@@ -521,10 +521,7 @@ export default function Detail({ id }: Props) {
           )}
         </div>
 
-        {/* 비슷한 일자리 — 마감 공고에서는 마감 배너 바로 아래에 표시됨 */}
-        {!isClosed && relatedSection}
-
-        {/* 직종 설명 블로그 글 백링크 — job.job과 태그가 일치하는 글이 있을 때만 표시(2026-09-10 신설) */}
+        {/* 직종 설명 블로그 글 백링크 — 원문 내용 바로 아래(2026-09-10, 위치 조정) job.job과 태그가 일치하는 글이 있을 때만 표시 */}
         {relatedArticle && (
           <a
             href={`/info/${relatedArticle.slug}`}
@@ -543,6 +540,9 @@ export default function Detail({ id }: Props) {
             </span>
           </a>
         )}
+
+        {/* 비슷한 일자리 — 마감 공고에서는 마감 배너 바로 아래에 표시됨 */}
+        {!isClosed && relatedSection}
 
         {/* 더 많은 공고 배너 */}
         <a
