@@ -52,6 +52,7 @@ export default function Detail({ id }: Props) {
   const [, setLocation] = useLocation();
   const [job, setJob] = useState<Job | null>(null);
   const [related, setRelated] = useState<Job[]>([]);
+  const [relatedArticle, setRelatedArticle] = useState<{ slug: string; title: string } | null>(null);
   const [loading, setLoading] = useState(true);
   // 같은 직종 공고 전체 풀 — 아래 "평균 단가 대비" 한 줄 비교에만 쓴다(관련 공고 목록과는 별개).
   const [jobPool, setJobPool] = useState<Job[]>([]);
@@ -122,6 +123,25 @@ export default function Detail({ id }: Props) {
     }
     load();
   }, [id]);
+
+  // 직종 설명 블로그 글 백링크(2026-09-10 신설) — 공고 직종(job.job)과 blog_articles.relatedJob이
+  // 일치하는 글을 자동 매칭해서 보여준다. 공고 하나하나 수동으로 연결하는 게 아니라, 직종 설명 글에
+  // relatedJob 태그만 달아두면 그 직종의 모든 공고(하루 수십 건이든 상관없이)에 자동으로 반영된다.
+  // 매칭되는 글이 없으면(아직 그 직종 설명 글을 안 썼으면) 조용히 섹션을 숨긴다.
+  useEffect(() => {
+    const jobType = job?.job;
+    if (!jobType) { setRelatedArticle(null); return; }
+    let cancelled = false;
+    fetch('/api/blog-articles?limit=100')
+      .then((r) => r.json())
+      .then((data: { rows?: { slug: string; title: string; relatedJob?: string | null }[] }) => {
+        if (cancelled) return;
+        const match = (data.rows || []).find((r) => r.relatedJob === jobType);
+        setRelatedArticle(match ? { slug: match.slug, title: match.title } : null);
+      })
+      .catch(() => { if (!cancelled) setRelatedArticle(null); });
+    return () => { cancelled = true; };
+  }, [job?.job]);
 
   // 브라우저 제목/설명을 공고 내용에 맞춰 갱신 (서버 SEO 태그와 동일한 규칙)
   useEffect(() => {
@@ -503,6 +523,26 @@ export default function Detail({ id }: Props) {
 
         {/* 비슷한 일자리 — 마감 공고에서는 마감 배너 바로 아래에 표시됨 */}
         {!isClosed && relatedSection}
+
+        {/* 직종 설명 블로그 글 백링크 — job.job과 태그가 일치하는 글이 있을 때만 표시(2026-09-10 신설) */}
+        {relatedArticle && (
+          <a
+            href={`/info/${relatedArticle.slug}`}
+            className="flex items-center gap-3 rounded-xl border-2 border-[#fed7aa] bg-[#fffaf5] px-4 py-3.5 mb-5 no-underline text-gray-800 hover:border-[#f97316] hover:shadow-md transition-all"
+            onClick={(e) => { e.preventDefault(); setLocation(`/info/${relatedArticle.slug}`); window.scrollTo(0, 0); }}
+          >
+            <div className="w-10 h-10 shrink-0 rounded-[8px] flex items-center justify-center text-lg" style={{ background: '#fed7aa' }}>
+              📖
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-bold text-[#f97316] mb-0.5">{job.job} 직종이 궁금하다면</div>
+              <div className="text-[13px] font-bold leading-snug line-clamp-1">{relatedArticle.title}</div>
+            </div>
+            <span className="shrink-0 text-[11px] font-bold text-white bg-[#f97316] rounded-lg px-3 py-2 whitespace-nowrap">
+              읽어보기 →
+            </span>
+          </a>
+        )}
 
         {/* 더 많은 공고 배너 */}
         <a
