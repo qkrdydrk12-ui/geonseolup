@@ -25,6 +25,7 @@ interface BlogArticle {
   createdAt: string;
   createdBy?: string | null;
   relatedJob?: string | null;
+  relatedCalculator?: string | null;
 }
 
 interface ArticleForm {
@@ -35,10 +36,17 @@ interface ArticleForm {
   published: boolean;
   scheduledAt: string; // datetime-local 문자열, 비워두면 즉시 공개
   relatedJob: string; // 빈 문자열이면 미지정 — 글 하단 CTA가 홈으로 연결됨(기존 동작 그대로)
+  relatedCalculator: string; // 빈 문자열이면 미지정 — 본문에 계산기 위젯 없음
 }
 
+const CALCULATOR_OPTIONS: { value: string; label: string }[] = [
+  { value: 'retirement-fund', label: '퇴직공제금 계산기' },
+  { value: 'net-pay', label: '실수령액 계산기' },
+  { value: 'severance-pay', label: '퇴직금 계산기' },
+];
+
 function emptyForm(): ArticleForm {
-  return { slug: '', title: '', description: '', emoji: '📝', published: true, scheduledAt: '', relatedJob: '' };
+  return { slug: '', title: '', description: '', emoji: '📝', published: true, scheduledAt: '', relatedJob: '', relatedCalculator: '' };
 }
 
 function slugify(title: string): string {
@@ -153,6 +161,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
       slug: r.slug, title: r.title, description: r.description, emoji: r.emoji, published: r.published,
       scheduledAt: r.scheduledAt ? new Date(new Date(r.scheduledAt).getTime() + 9 * 3600000).toISOString().slice(0, 16) : '',
       relatedJob: r.relatedJob ?? '',
+      relatedCalculator: r.relatedCalculator ?? '',
     });
     setBlocks(r.body.length ? r.body : [{ subtitle: '', text: '' }]);
     setExistingImageUrl(r.imageUrl);
@@ -168,7 +177,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     const a = INFO_ARTICLES.find((x) => x.slug === slug);
     if (!a) return;
     setEditingId(null);
-    setForm({ slug: a.slug, title: a.title, description: a.description, emoji: a.emoji, published: true, scheduledAt: '', relatedJob: '' });
+    setForm({ slug: a.slug, title: a.title, description: a.description, emoji: a.emoji, published: true, scheduledAt: '', relatedJob: '', relatedCalculator: '' });
     setBlocks(a.body.length ? a.body.map((b) => ({ ...b })) : [{ subtitle: '', text: '' }]);
     setExistingImageUrl(getArticleImage(a.slug));
     setImageDataUrl(null);
@@ -210,6 +219,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
         body: cleanBlocks, published: form.published,
         scheduledAt: scheduledAtIso,
         relatedJob: form.relatedJob,
+        relatedCalculator: form.relatedCalculator,
       };
       if (imageDataUrl) payload.imageBase64 = imageDataUrl;
       if (editingId) {
@@ -293,6 +303,15 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
               <option value="">선택 안 함 (기본 홈 링크)</option>
               {JOBS.map((j) => (
                 <option key={j} value={j}>{j}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">관련 계산기 (선택 — 글 본문 끝에 계산기 위젯을 인라인으로 삽입, 체류시간 개선용)</label>
+            <select value={form.relatedCalculator} onChange={(e) => setField('relatedCalculator', e.target.value)} className={inputCls}>
+              <option value="">삽입 안 함</option>
+              {CALCULATOR_OPTIONS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
           </div>

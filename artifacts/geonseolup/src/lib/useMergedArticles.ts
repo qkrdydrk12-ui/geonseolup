@@ -13,6 +13,7 @@ interface BlogArticleApiRow {
   body: InfoArticle['body'];
   imageUrl: string | null;
   relatedJob?: string | null;
+  relatedCalculator?: string | null;
 }
 
 let cache: DisplayArticle[] | null = null;
@@ -48,6 +49,7 @@ export function useMergedArticles() {
           body: r.body,
           imageSrc: r.imageUrl || getArticleImage(r.slug),
           relatedJob: r.relatedJob ?? null,
+          relatedCalculator: r.relatedCalculator ?? null,
         }));
         const staticArticles = staticOnly().filter(
           (s) => !dynamic.some((d) => d.slug === s.slug)
