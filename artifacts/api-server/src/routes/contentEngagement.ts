@@ -4,7 +4,10 @@
 // 라우트(blogArticles.ts/siteNews.ts/toon.ts)의 POST .../:slug/view 에서 이뤄진다.
 import { Router, type Request, type Response } from "express";
 import { requireAdmin } from "../lib/adminStore";
-import { getAllCounts, getRangedCounts, CONTENT_TYPES, type ContentType } from "../lib/contentEngagement.js";
+import {
+  getAllCounts, getRangedCounts, CONTENT_TYPES, type ContentType,
+  getRecentCommentsAdmin, setCommentHidden, deleteComment,
+} from "../lib/contentEngagement.js";
 
 const router = Router();
 
@@ -30,6 +33,40 @@ router.get("/admin/content-views", requireAdmin, async (req: Request, res: Respo
     : Math.max(1, Math.min(90, Number(rangeParam) || 7));
   const rows = await getRangedCounts(type as ContentType, days, isExact);
   res.json({ ok: true, rows, range: rangeParam });
+});
+
+// ── 댓글 모더레이션(2026-09-10 신설) — 관리자 전용 ───────────────────────
+
+// GET /api/admin/comments — 최근 댓글 목록(숨김 포함, 스팸 걸러내기용).
+router.get("/admin/comments", requireAdmin, async (req: Request, res: Response) => {
+  const limitParam = Number(req.query["limit"]);
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 200;
+  const rows = await getRecentCommentsAdmin(limit);
+  res.json({ ok: true, rows });
+});
+
+// PUT /api/admin/comments/:id/hidden — 댓글 숨김/숨김해제(소프트 삭제, 복구 가능).
+router.put("/admin/comments/:id/hidden", requireAdmin, async (req: Request, res: Response) => {
+  const id = Number(req.params["id"]);
+  if (!id) {
+    res.status(400).json({ ok: false, error: "잘못된 id" });
+    return;
+  }
+  const body = req.body as { hidden?: boolean };
+  const hidden = body.hidden !== false;
+  const success = await setCommentHidden(id, hidden);
+  res.json({ ok: success });
+});
+
+// DELETE /api/admin/comments/:id — 댓글 완전 삭제.
+router.delete("/admin/comments/:id", requireAdmin, async (req: Request, res: Response) => {
+  const id = Number(req.params["id"]);
+  if (!id) {
+    res.status(400).json({ ok: false, error: "잘못된 id" });
+    return;
+  }
+  const success = await deleteComment(id);
+  res.json({ ok: success });
 });
 
 export default router;
