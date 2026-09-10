@@ -8,6 +8,14 @@ import { useMergedArticles } from '@/lib/useMergedArticles';
 import { renderRichText } from '@/lib/richText';
 import ShuttleScheduleYonginSK from '@/components/ShuttleScheduleYonginSK';
 import ShuttleSchedulePyeongtaekSamsung from '@/components/ShuttleSchedulePyeongtaekSamsung';
+import RetirementFundCalculatorWidget from '@/components/RetirementFundCalculatorWidget';
+
+// 블로그 글 본문에 인라인으로 삽입 가능한 계산기 위젯 맵(2026-09-10 신설, 체류시간 개선 목적).
+// 키는 admin 폼의 relatedCalculator 값·API의 RELATED_CALCULATOR_OPTIONS와 정확히 일치해야 한다.
+// 지금은 퇴직공제금 계산기만 위젯화돼 있고, 실수령액/퇴직금은 다음 단계에서 추가 예정.
+const CALCULATOR_WIDGETS: Record<string, React.ComponentType> = {
+  'retirement-fund': RetirementFundCalculatorWidget,
+};
 
 interface Props {
   slug: string;
@@ -134,6 +142,16 @@ function InfoArticleDetail({ slug }: Props) {
               </div>
             ))}
           </div>
+
+          {/* 관련 계산기 위젯 — relatedCalculator가 지정된 글에서만 표시 (2026-09-10 신설) */}
+          {article.relatedCalculator && CALCULATOR_WIDGETS[article.relatedCalculator] && (
+            <div className="mt-6">
+              {(() => {
+                const CalcWidget = CALCULATOR_WIDGETS[article.relatedCalculator]!;
+                return <CalcWidget />;
+              })()}
+            </div>
+          )}
 
           {/* 좋아요 */}
           <div className="mt-8 flex justify-center">

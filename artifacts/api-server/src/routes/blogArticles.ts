@@ -28,6 +28,16 @@ function normalizeRelatedJob(v: unknown): string | null {
   return RELATED_JOB_OPTIONS.has(s) ? s : null;
 }
 
+// 글 본문 안에 인라인으로 삽입할 계산기 위젯(2026-09-10 신설) — 체류시간 개선 목적.
+// InfoDetail.tsx의 CALCULATOR_WIDGETS 맵 키와 정확히 일치해야 한다.
+const RELATED_CALCULATOR_OPTIONS = new Set([
+  'retirement-fund', 'net-pay', 'severance-pay',
+]);
+function normalizeRelatedCalculator(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  return RELATED_CALCULATOR_OPTIONS.has(s) ? s : null;
+}
+
 async function initTables() {
   await pgPool.query(`
     CREATE TABLE IF NOT EXISTS blog_articles (
@@ -50,6 +60,8 @@ async function initTables() {
     ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
     -- 2026-09-09: 글 하단 CTA를 해당 직종 구인공고로 연결하기 위한 직종 태그 (parseJob.ts JOBS 값 중 하나, 미지정 가능).
     ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS related_job VARCHAR(30);
+    -- 2026-09-10: 글 본문 안에 인라인으로 삽입할 계산기 위젯 ('retirement-fund'|'net-pay'|'severance-pay', 미지정 가능).
+    ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS related_calculator VARCHAR(30);
   `);
   // 잘못 저장된 깨진 이미지(수십 바이트짜리 쓰레기 데이터) 자동 정리 — 목록에서 엑박 방지
   await pgPool.query(
@@ -90,6 +102,7 @@ interface BlogArticleRow {
   updated_at: string;
   created_by?: string | null;
   related_job: string | null;
+  related_calculator: string | null;
 }
 
 function toApi(row: BlogArticleRow, includeCreator = false) {
@@ -113,6 +126,7 @@ function toApiBase(row: BlogArticleRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     relatedJob: row.related_job,
+    relatedCalculator: row.related_calculator,
   };
 }
 
@@ -136,7 +150,7 @@ function decodeImage(imageBase64?: string): { data: Buffer; mime: string } | nul
 }
 
 const SELECT_COLS = `id, slug, title, description, emoji, body,
-  (image_data IS NOT NULL AND length(image_data) > 100) AS has_image, published, scheduled_at, created_at, updated_at, created_by, related_job`;
+  (image_data IS NOT NULL AND length(image_data) > 100) AS has_image, published, scheduled_at, created_at, updated_at, created_by, related_job, related_calculator`;
 
 // GET /api/blog-articles — 공개, 발행된 글 최신순
 // scheduled_at이 미래인 글은 그 시각이 지나기 전까지 목록에서 숨긴다(예약 발행).
@@ -224,7 +238,7 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
   try {
     const body = req.body as {
       slug?: string; title?: string; description?: string; emoji?: string;
-      body?: BodyBlock[]; imageBase64?: string; published?: boolean; scheduledAt?: string; relatedJob?: string;
+      body?: BodyBlock[]; imageBase64?: string; published?: boolean; scheduledAt?: string; relatedJob?: string; relatedCalculator?: string;
     };
     const slug = (body.slug ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
     const title = (body.title ?? "").trim();
@@ -244,13 +258,14 @@ router.post("/blog-articles", requireAdmin, bustCache, jsonBig, async (req: Requ
     const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
     const scheduledAtIso = scheduledAt && scheduledAt.getTime() > Date.now() ? scheduledAt.toISOString() : null;
     const relatedJob = normalizeRelatedJob(body.relatedJob);
+    const relatedCalculator = normalizeRelatedCalculator(body.relatedCalculator);
 
     const result = await pgPool.query<BlogArticleRow>(
-      `INSERT INTO blog_articles (slug, title, description, emoji, body, image_data, image_mime, published, scheduled_at, created_by, related_job)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO blog_articles (slug, title, description, emoji, body, image_data, image_mime, published, scheduled_at, created_by, related_job, related_calculator)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING ${SELECT_COLS}`,
       [slug, title, description, emoji, JSON.stringify(bodyBlocks),
-        image?.data ?? null, image?.mime ?? null, body.published !== false, scheduledAtIso, creatorInfo(req), relatedJob]
+        image?.data ?? null, image?.mime ?? null, body.published !== false, scheduledAtIso, creatorInfo(req), relatedJob, relatedCalculator]
     );
     const saved = result.rows[0]!;
     const isLiveNow = saved.published && (!saved.scheduled_at || new Date(saved.scheduled_at).getTime() <= Date.now());
@@ -279,7 +294,7 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
     }
     const body = req.body as {
       title?: string; description?: string; emoji?: string;
-      body?: BodyBlock[]; imageBase64?: string; published?: boolean; scheduledAt?: string | null; relatedJob?: string;
+      body?: BodyBlock[]; imageBase64?: string; published?: boolean; scheduledAt?: string | null; relatedJob?: string; relatedCalculator?: string;
     };
     const title = (body.title ?? "").trim();
     const description = (body.description ?? "").trim();
@@ -297,31 +312,32 @@ router.put("/blog-articles/:id", requireAdmin, bustCache, jsonBig, async (req: R
     const scheduledDate = body.scheduledAt ? new Date(body.scheduledAt) : null;
     const scheduledAtIso = scheduledDate && scheduledDate.getTime() > Date.now() ? scheduledDate.toISOString() : null;
     const relatedJob = normalizeRelatedJob(body.relatedJob);
+    const relatedCalculator = normalizeRelatedCalculator(body.relatedCalculator);
 
     const result = image
       ? await pgPool.query<BlogArticleRow>(
           hasScheduledAtField
             ? `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
-                 image_data=$5, image_mime=$6, published=$7, scheduled_at=$8, related_job=$9, updated_at=now()
-               WHERE id=$10 RETURNING ${SELECT_COLS}`
+                 image_data=$5, image_mime=$6, published=$7, scheduled_at=$8, related_job=$9, related_calculator=$10, updated_at=now()
+               WHERE id=$11 RETURNING ${SELECT_COLS}`
             : `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
-                 image_data=$5, image_mime=$6, published=$7, related_job=$8, updated_at=now()
-               WHERE id=$9 RETURNING ${SELECT_COLS}`,
+                 image_data=$5, image_mime=$6, published=$7, related_job=$8, related_calculator=$9, updated_at=now()
+               WHERE id=$10 RETURNING ${SELECT_COLS}`,
           hasScheduledAtField
-            ? [title, description, emoji, JSON.stringify(bodyBlocks), image.data, image.mime, published, scheduledAtIso, relatedJob, id]
-            : [title, description, emoji, JSON.stringify(bodyBlocks), image.data, image.mime, published, relatedJob, id]
+            ? [title, description, emoji, JSON.stringify(bodyBlocks), image.data, image.mime, published, scheduledAtIso, relatedJob, relatedCalculator, id]
+            : [title, description, emoji, JSON.stringify(bodyBlocks), image.data, image.mime, published, relatedJob, relatedCalculator, id]
         )
       : await pgPool.query<BlogArticleRow>(
           hasScheduledAtField
             ? `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
-                 published=$5, scheduled_at=$6, related_job=$7, updated_at=now()
-               WHERE id=$8 RETURNING ${SELECT_COLS}`
+                 published=$5, scheduled_at=$6, related_job=$7, related_calculator=$8, updated_at=now()
+               WHERE id=$9 RETURNING ${SELECT_COLS}`
             : `UPDATE blog_articles SET title=$1, description=$2, emoji=$3, body=$4,
-                 published=$5, related_job=$6, updated_at=now()
-               WHERE id=$7 RETURNING ${SELECT_COLS}`,
+                 published=$5, related_job=$6, related_calculator=$7, updated_at=now()
+               WHERE id=$8 RETURNING ${SELECT_COLS}`,
           hasScheduledAtField
-            ? [title, description, emoji, JSON.stringify(bodyBlocks), published, scheduledAtIso, relatedJob, id]
-            : [title, description, emoji, JSON.stringify(bodyBlocks), published, relatedJob, id]
+            ? [title, description, emoji, JSON.stringify(bodyBlocks), published, scheduledAtIso, relatedJob, relatedCalculator, id]
+            : [title, description, emoji, JSON.stringify(bodyBlocks), published, relatedJob, relatedCalculator, id]
         );
 
     if (result.rows.length === 0) {

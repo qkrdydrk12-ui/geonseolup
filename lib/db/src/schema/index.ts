@@ -106,6 +106,9 @@ export const blogArticles = pgTable("blog_articles", {
 	// 글 하단 CTA를 해당 직종 구인공고로 연결하기 위한 필드(2026-09-09 신설).
 	// parseJob.ts JOBS 배열 값 중 하나(예: "덕트") 또는 미지정(null) — 미지정이면 기존처럼 홈으로 연결.
 	relatedJob: varchar("related_job", { length: 30 }),
+	// 글 본문 안에 인라인으로 삽입할 계산기 위젯(2026-09-10 신설, 체류시간 개선 목적).
+	// 'retirement-fund' | 'net-pay' | 'severance-pay' 중 하나 또는 미지정(null) — 미지정이면 위젯 없음.
+	relatedCalculator: varchar("related_calculator", { length: 30 }),
 }, (table) => [
 	index("idx_blog_articles_created").using("btree", table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
 	unique("blog_articles_slug_key").on(table.slug),
