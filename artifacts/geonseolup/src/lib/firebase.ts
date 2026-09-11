@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { sanitizeClientJob } from '@/lib/phone';
+import { requirePersistedReport } from '@/lib/reportSubmission';
 import {
   getFirestore,
   collection,
@@ -595,31 +596,20 @@ function localLoadReports(): JobReport[] {
   }
 }
 
-function localSaveReport(r: JobReport): void {
-  const list = localLoadReports();
-  list.unshift(r);
-  localStorage.setItem('cj_reports', JSON.stringify(list.slice(0, 200)));
-}
-
 function localDeleteReport(id: string): void {
   const list = localLoadReports().filter((r) => r.id !== id);
   localStorage.setItem('cj_reports', JSON.stringify(list));
 }
 
 export async function fbAddReport(entry: Omit<JobReport, 'id' | '_createdAt'>): Promise<string> {
-  // Firestore 우선 시도
   try {
-    const ref = await addDoc(REPORTS_COL, {
+    return await requirePersistedReport(() => addDoc(REPORTS_COL, {
       ...entry,
       _createdAt: serverTimestamp(),
-    });
-    return ref.id;
+    }));
   } catch (e) {
-    console.warn('[Firebase] fbAddReport failed, falling back to local:', e);
-    // 로컬 폴백 — Firestore 권한 오류 시에도 신고 접수 성공으로 처리
-    const id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    localSaveReport({ id, ...entry } as JobReport);
-    return id;
+    console.warn('[Firebase] fbAddReport failed; report was not accepted:', e);
+    throw e;
   }
 }
 

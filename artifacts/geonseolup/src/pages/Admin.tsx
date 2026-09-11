@@ -25,6 +25,7 @@ import {
 } from '@/lib/firebase';
 import { SAMPLE_JOBS } from '@/data/sampleJobs';
 import { formatDate, parseSalaryNum, WELD_SUBS } from '@/lib/utils';
+import { getAdminJobStats, getOtherNonVisibleCount } from '@/lib/adminJobStats';
 import {
   REGIONS, JOBS, MEALS, LODGINGS,
   extractPhones, parseJobText, generateSEOTitle,
@@ -286,7 +287,7 @@ export default function Admin() {
     const stored = JSON.parse(localStorage.getItem('cj_dup_settings') || '{}');
     return stored.autoDeleteHours != null ? String(stored.autoDeleteHours) : '0';
   });
-  const [dupStats, setDupStats] = useState({ visible: 0, autoHidden: 0, manualHidden: 0, similarPairs: 0 });
+  const [dupStats, setDupStats] = useState(() => getAdminJobStats([], 0));
   const [adPageTab, setAdPageTab] = useState<'main' | 'detail'>('main');
   const [adCodes, setAdCodes] = useState({
     mainTop: localStorage.getItem('cj_ad_main_top') || '',
@@ -500,21 +501,9 @@ export default function Admin() {
   }
 
   function computeDupStats(jobList: typeof jobs, hideHours: string) {
-    const hours = parseInt(hideHours) || 0;
-    const now = Date.now();
-    let visible = 0, autoHidden = 0, manualHidden = 0;
-    const contactMap = new Map<string, number>();
-    for (const j of jobList) {
-      if (j.hidden) { manualHidden++; continue; }
-      const ageH = (now - new Date(j.date).getTime()) / 36e5;
-      if (hours > 0 && ageH >= hours) { autoHidden++; } else { visible++; }
-      if (j.contact?.trim()) {
-        const key = j.contact.trim();
-        contactMap.set(key, (contactMap.get(key) || 0) + 1);
-      }
-    }
-    const similarPairs = [...contactMap.values()].filter((v) => v > 1).length;
-    setDupStats({ visible, autoHidden, manualHidden, similarPairs });
+    const parsedHours = parseInt(hideHours, 10);
+    const hours = Number.isFinite(parsedHours) && parsedHours > 0 ? parsedHours : 0;
+    setDupStats(getAdminJobStats(jobList, hours));
   }
 
   async function loadJobs() {
@@ -2788,9 +2777,8 @@ export default function Admin() {
               <div className="mt-4 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800 leading-relaxed">
                 <span className="text-base shrink-0">💡</span>
                 <div>
-                  <p className="font-semibold mb-1">크로스 디바이스 신고 수신을 활성화하려면:</p>
-                  <p>Firebase Console → Firestore → 규칙에서 <code className="bg-white px-1 rounded text-[11px]">match /reports/&#123;id&#125;</code> 에 <code className="bg-white px-1 rounded text-[11px]">allow create: if true;</code> 추가 필요.</p>
-                  <p className="mt-1">규칙을 추가하지 않아도 사용자에게는 정상 접수 메시지가 표시되며, 같은 기기의 신고만 관리자 페이지에서 보입니다.</p>
+                  <p className="font-semibold mb-1">신고 접수 기준</p>
+                  <p>신고는 Firestore 저장이 완료된 경우에만 접수 처리됩니다. 저장에 실패하면 사용자에게 실패 안내가 표시되며, 관리자 신고 목록에도 새 신고가 추가되지 않습니다.</p>
                 </div>
               </div>
             </div>
@@ -2916,11 +2904,13 @@ export default function Admin() {
                   🔄 새로고침
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
-                  { icon: '✅', label: '노출 중', value: dupStats.visible, color: 'text-emerald-600' },
+                  { icon: '📦', label: '전체 보관', value: dupStats.total, color: 'text-[#1e3a5f]' },
+                  { icon: '✅', label: '현재 노출', value: dupStats.visible, color: 'text-emerald-600' },
                   { icon: '⏱️', label: '자동숨김', value: dupStats.autoHidden, color: 'text-amber-500' },
                   { icon: '🙈', label: '수동숨김', value: dupStats.manualHidden, color: 'text-gray-500' },
+                  { icon: '📁', label: '기타 미노출', value: getOtherNonVisibleCount(dupStats), color: 'text-slate-500' },
                   { icon: '🔍', label: '유사공고 쌍', value: dupStats.similarPairs, color: 'text-purple-600' },
                 ].map((s) => (
                   <div key={s.label} className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
@@ -2930,6 +2920,9 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
+              <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+                전체 보관 = 현재 노출 + 자동숨김 + 수동숨김 + 기타 미노출입니다. 기타 미노출에는 모집 마감·만료, 예약, 발행 실패, 삭제 상태가 포함됩니다.
+              </p>
             </div>
 
             {/* 사이트 텍스트 & 디자인 설정 */}
@@ -3694,7 +3687,7 @@ export default function Admin() {
                   </div>
                 </div>
                 <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-                  <span>🔒</span> 계정 정보는 서버에 안전하게 저장됩니다. 서버 재시작 시 초기값으로 돌아갑니다.
+                  <span>⚠️</span> 계정 정보 변경은 현재 서버가 실행되는 동안에만 적용됩니다. 서버 재시작 또는 재배포 후에는 변경 전 값으로 돌아갈 수 있습니다.
                 </p>
               </div>
             </div>
@@ -4384,9 +4377,11 @@ export default function Admin() {
               </h2>
               <div className="grid gap-2 text-sm text-gray-700">
                 {[
-                  { icon: '📄', label: '총 등록 공고', value: jobs.length },
-                  { icon: '👁', label: '공개 중', value: jobs.filter((j) => !j.hidden).length },
-                  { icon: '🙈', label: '숨김 중', value: jobs.filter((j) => !!j.hidden).length },
+                  { icon: '📦', label: '전체 보관 공고', value: dupStats.total },
+                  { icon: '👁', label: '현재 노출', value: dupStats.visible },
+                  { icon: '⏱️', label: '자동숨김', value: dupStats.autoHidden },
+                  { icon: '🙈', label: '수동숨김', value: dupStats.manualHidden },
+                  { icon: '📁', label: '기타 미노출', value: getOtherNonVisibleCount(dupStats) },
                   { icon: '🔧', label: '용접 계열', value: jobs.filter((j) => j.job === '용접' || j.weldSub).length },
                   { icon: '🔥', label: '화기감시자', value: jobs.filter((j) => j.job === '화기감시자').length },
                 ].map((row) => (

@@ -6,3 +6,4 @@
 - [Geonseolup 시간·override](geonseolup-time-and-overrides.md) — 외부 업로드가 KST를 Z로 저장해 "방금 전" 고착; 관리자 info override는 image 필드가 없어 병합 시 이미지 소실.
 - [Geonseolup 전화번호 마스킹](geonseolup-contact-privacy.md) — 공개 응답은 전부 sanitizePublicJob/maskDeep 경유; jobsCache 우회 라우트(rss 등)가 누출 함정. 실번호는 /contact 엔드포인트로만.
 - [Coupang Partners API quirks](coupang-partners-api.md) — deeplink 200+rCode 400 quirk; search limit≤10, curated feed; coupa.ng↔link.coupang.com/a 매핑; partner-link-or-fail 원칙.
+- [Node TypeScript regression scripts](node-typescript-regression-scripts.md) — geonseolup에는 tsx 실행 파일이 없어, 의존성 없는 테스트는 Node 타입 제거 실행과 명시적 .ts 경로를 쓴다.
