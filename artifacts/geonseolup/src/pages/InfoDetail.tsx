@@ -7,6 +7,7 @@ import LikeButton from '@/components/LikeButton';
 import CommentSection from '@/components/CommentSection';
 import { useMergedArticles } from '@/lib/useMergedArticles';
 import { renderRichText } from '@/lib/richText';
+import type { InfoArticleTable } from '@/lib/infoData';
 import ShuttleScheduleYonginSK from '@/components/ShuttleScheduleYonginSK';
 import ShuttleSchedulePyeongtaekSamsung from '@/components/ShuttleSchedulePyeongtaekSamsung';
 import RetirementFundCalculatorWidget from '@/components/RetirementFundCalculatorWidget';
@@ -34,6 +35,45 @@ const CUSTOM_INFO_PAGES: Record<string, React.ComponentType> = {
   'yongin-sk-shuttle-schedule': ShuttleScheduleYonginSK,
   'pyeongtaek-samsung-shuttle-schedule': ShuttleSchedulePyeongtaekSamsung,
 };
+
+function ArticleDataTable({ table }: { table: InfoArticleTable }) {
+  return (
+    <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200">
+      <table className="w-full table-fixed border-collapse text-left text-[13px] sm:text-sm">
+        <caption className="sr-only">{table.caption}</caption>
+        <thead className="bg-slate-50 text-[#1e3a5f]">
+          <tr>
+            {table.headers.map((header) => (
+              <th key={header} scope="col" className="px-3 sm:px-4 py-3 font-bold whitespace-nowrap">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {table.rows.map((row, rowIndex) => (
+            <tr key={`${row[0]}-${rowIndex}`} className="bg-white">
+              {row.map((cell, cellIndex) => (
+                <td
+                  key={`${cell}-${cellIndex}`}
+                  className={`px-3 sm:px-4 py-3 ${cellIndex === 0 ? 'font-semibold text-gray-900' : 'text-gray-700'}`}
+                >
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// 과거 편집본에 표의 값을 `{ 조공 }`처럼 넣은 경우가 있어도, 이 글에서만
+// 단순 중괄호를 풀어 표시한다. 공통 리치텍스트 문법({주황:강조})은 건드리지 않는다.
+function normalizeLegacyWageMarkers(text: string): string {
+  return text.replace(/\{\s*([^{}\n:]+?)\s*\}/g, '$1');
+}
 
 export default function InfoDetail({ slug }: Props) {
   const CustomPage = CUSTOM_INFO_PAGES[slug];
@@ -139,7 +179,12 @@ function InfoArticleDetail({ slug }: Props) {
                     className="w-full rounded-xl border border-gray-200 mb-3"
                   />
                 )}
-                {renderRichText(block.text)}
+                {block.table && <ArticleDataTable table={block.table} />}
+                {block.text && renderRichText(
+                  article.slug === 'wage-gyeonggi-202608'
+                    ? normalizeLegacyWageMarkers(block.text)
+                    : block.text
+                )}
               </div>
             ))}
           </div>
