@@ -201,6 +201,59 @@ export default function ShuttleScheduleYonginSK() {
           ))}
         </div>
 
+        {/* 셔틀버스 이용 전 확인사항 */}
+        <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+          <h2 className="text-lg font-extrabold text-gray-900">
+            용인 SK 셔틀버스 이용 전 확인사항
+          </h2>
+
+          <ol className="mt-4 space-y-4 text-sm leading-6 text-gray-600">
+            <li>
+              <strong className="block text-gray-900">① 정류장 찾는 순서</strong>
+              위 목록에서 숙소 주변 정류장을 찾고, 정류장을 펼쳐 출근·퇴근 방향의 시간을 확인하세요.
+              지도 위치와 실제 승차 위치가 맞는지 담당자에게 확인하세요.
+            </li>
+            <li>
+              <strong className="block text-gray-900">② 출근·퇴근 계획</strong>
+              숙소에서 정류장까지 이동, 버스 대기·탑승, 하차 후 집결 장소까지 걸리는 시간을 함께
+              고려하세요. 조출·연장·주말 근무일에도 이용 가능한지는 해당 근무조 담당자에게 확인하세요.
+            </li>
+            <li>
+              <strong className="block text-gray-900">③ 탑승 대상과 변경 공지</strong>
+              이 페이지는 시간표 참고 안내입니다. 소속 업체별 탑승 가능 여부, 필요한 확인 절차, 운행
+              변경 공지는 소속 업체 또는 현장 담당자에게 확인하세요.
+            </li>
+          </ol>
+
+          <blockquote className="mt-5 rounded-lg border-l-4 border-[#EE1C25] bg-slate-50 px-4 py-3 text-sm leading-6 text-gray-700">
+            용인 원삼 ○○현장 ○○근무조입니다. ○○정류장에서 이용 가능한 출근편과 퇴근편, 실제 승차
+            위치를 알려주세요. 조출·연장·주말 이용 여부와 탑승 시 필요한 확인사항도 부탁드립니다.
+          </blockquote>
+
+          <div className="mt-5 border-t border-gray-100 pt-4">
+            <p className="text-xs font-bold text-gray-500">관련 안내</p>
+            <div className="mt-2 flex flex-col items-start gap-2 text-sm">
+              <Link
+                href="/info/yongin-wonsam-housing-shortage-tips"
+                className="text-[#EE1C25] hover:underline"
+              >
+                용인 원삼 숙소 확인사항 →
+              </Link>
+              <Link href="/info/guide5" className="text-[#EE1C25] hover:underline">
+                숙식 제공 조건 체크리스트 →
+              </Link>
+              <div>
+                <Link href="/" className="text-[#EE1C25] hover:underline">
+                  용인 구인공고 찾아보기 →
+                </Link>
+                <span className="ml-1 text-xs text-gray-400">
+                  홈에서 용인 또는 원삼을 검색하세요.
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* 구인 목록 CTA */}
         <div
           className="mt-8 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
