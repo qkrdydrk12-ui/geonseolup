@@ -262,6 +262,57 @@ export default function ShuttleSchedulePyeongtaekSamsung() {
           ))}
         </div>
 
+        {/* 셔틀버스 이용 전 확인사항 */}
+        <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+          <h2 className="text-lg font-extrabold text-gray-900">
+            평택 기술인 셔틀버스 이용 전 확인사항
+          </h2>
+
+          <ol className="mt-4 space-y-4 text-sm leading-6 text-gray-600">
+            <li>
+              <strong className="block text-gray-900">① 노선 찾는 순서</strong>
+              운영사와 승차장을 찾고 도착 게이트가 본인 집결 장소와 맞는지 확인하세요. 노선을 펼친 뒤
+              출근·퇴근 방향과 평일·주말 표시를 구분하세요.
+            </li>
+            <li>
+              <strong className="block text-gray-900">② 조출·연장 퇴근편</strong>
+              주간 출근편이 있다고 조출이나 연장 후 퇴근편도 있는 것은 아닙니다. 해당 근무일과 근무조에
+              이용할 수 있는 차량인지 담당자에게 확인하세요.
+            </li>
+            <li>
+              <strong className="block text-gray-900">③ 탑승 대상과 준비사항</strong>
+              이 페이지는 시간표 참고 안내입니다. 탑승 가능 대상, 필요한 확인 절차, 실제 승차 위치는
+              소속 업체 또는 현장 담당자에게 확인하세요.
+            </li>
+          </ol>
+
+          <blockquote className="mt-5 rounded-lg border-l-4 border-[#1428A0] bg-slate-50 px-4 py-3 text-sm leading-6 text-gray-700">
+            평택 ○○현장 ○○근무조입니다. ○○정류장에서 탑승 가능한 노선과 출발 시각, 도착 게이트를
+            알려주세요. 주말·조출·연장 후 퇴근편과 탑승 시 필요한 확인사항도 부탁드립니다.
+          </blockquote>
+
+          <div className="mt-5 border-t border-gray-100 pt-4">
+            <p className="text-xs font-bold text-gray-500">관련 안내</p>
+            <div className="mt-2 flex flex-col items-start gap-2 text-sm">
+              <Link
+                href="/info/pyeongtaek-godeok-housing-guide"
+                className="text-[#1428A0] hover:underline"
+              >
+                평택 숙소 확인사항 →
+              </Link>
+              <Link href="/info/guide5" className="text-[#1428A0] hover:underline">
+                숙식 제공 조건 체크리스트 →
+              </Link>
+              <div>
+                <Link href="/" className="text-[#1428A0] hover:underline">
+                  평택 구인공고 찾아보기 →
+                </Link>
+                <span className="ml-1 text-xs text-gray-400">홈에서 ‘평택’을 검색하세요.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* 구인 목록 CTA */}
         <div
           className="mt-8 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
