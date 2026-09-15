@@ -182,15 +182,47 @@ router.get("/blog-articles", async (_req: Request, res: Response) => {
 // ⚠️ 아래 GET /blog-articles/:slug(단건 상세)보다 반드시 먼저 등록돼 있어야 한다 —
 // Express는 등록 순서대로 매칭해서, :slug가 먼저 있으면 "/blog-articles/all"도
 // slug="all"인 단건 조회로 잘못 잡혀버린다(관리자 인증도 건너뛰게 됨).
+// 2026-09-15: 여기도 SELECT_COLS(body 포함)를 쓰고 있어서 공개 목록과 똑같은 버그가
+// 재발했다 — 글이 쌓이면서(body에 문단별 base64 이미지 포함 가능) 관리자 목록 300건 응답이
+// 다시 비대해져 /api/blog-articles/all이 503으로 죽었고, AdminContentStats.tsx가
+// Promise.all + 조용한 catch로 이 실패를 삼켜버려 "콘텐츠 성과 0건"으로 보이는 사고로 이어짐.
+// body는 SELECT_COLS_LIST로 빼고, 수정화면 진입 시엔 아래 GET /blog-articles-full/:id로 따로 받는다.
 router.get("/blog-articles/all", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query<BlogArticleRow>(
-      `SELECT ${SELECT_COLS} FROM blog_articles ORDER BY created_at DESC LIMIT 300`
+      `SELECT ${SELECT_COLS_LIST} FROM blog_articles ORDER BY created_at DESC LIMIT 300`
     );
     res.json({ rows: result.rows.map((r) => toApi(r, true)) });
   } catch (err) {
     console.error("[BlogArticles] GET all error:", err);
     res.status(500).json({ error: "건설 꿀팁 목록 조회 실패" });
+  }
+});
+
+// GET /api/blog-articles-full/:id — 관리자 전용, 단건 전체(body 포함, 발행상태 무관).
+// 관리자 화면에서 "수정" 버튼 눌렀을 때만 호출 — 목록(/blog-articles/all)엔 더 이상 body가 없어서 필요.
+// 경로를 /blog-articles/ 하위가 아니라 하이픈으로 뺀 이유는 /blog-articles/:slug(공개, published만)와
+// 겹치지 않게 하기 위함 — blog-articles-image/:slug와 같은 네이밍 패턴.
+router.get("/blog-articles-full/:id", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params["id"]);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "잘못된 id" });
+      return;
+    }
+    const result = await pgPool.query<BlogArticleRow>(
+      `SELECT ${SELECT_COLS} FROM blog_articles WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      res.status(404).json({ error: "글을 찾을 수 없습니다" });
+      return;
+    }
+    res.json(toApi(row, true));
+  } catch (err) {
+    console.error("[BlogArticles] GET full error:", err);
+    res.status(500).json({ error: "건설 꿀팁 상세 조회 실패" });
   }
 });
 

@@ -18,7 +18,9 @@ interface BlogArticle {
   title: string;
   description: string;
   emoji: string;
-  body: BodyBlock[];
+  // 2026-09-15: 목록 응답(/blog-articles/all)엔 더 이상 body가 없다(37MB 사고 재발 방지, blogArticles.ts 참고).
+  // 수정 버튼 누를 때 /blog-articles-full/:id로 따로 받아온다 — startEdit() 참고.
+  body?: BodyBlock[];
   imageUrl: string | null;
   published: boolean;
   scheduledAt: string | null;
@@ -94,6 +96,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [form, setForm] = useState<ArticleForm>(emptyForm());
   const [blocks, setBlocks] = useState<BodyBlock[]>([{ subtitle: '', text: '' }]);
+  const [blocksLoading, setBlocksLoading] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -155,7 +158,9 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
     setBlocks((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  function startEdit(r: BlogArticle) {
+  // 2026-09-15: 목록 응답에 더 이상 body가 없어서(위 BlogArticle 주석 참고) 수정 진입 시
+  // /blog-articles-full/:id로 본문을 따로 받아온다. 폼 자체는 즉시 열고, 본문만 로딩 중 표시.
+  async function startEdit(r: BlogArticle) {
     setEditingId(r.id);
     setForm({
       slug: r.slug, title: r.title, description: r.description, emoji: r.emoji, published: r.published,
@@ -163,12 +168,22 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
       relatedJob: r.relatedJob ?? '',
       relatedCalculator: r.relatedCalculator ?? '',
     });
-    setBlocks(r.body.length ? r.body : [{ subtitle: '', text: '' }]);
+    setBlocks([{ subtitle: '', text: '본문 불러오는 중...' }]);
+    setBlocksLoading(true);
     setExistingImageUrl(r.imageUrl);
     setImageDataUrl(null);
     setSlugTouched(true);
     if (fileInputRef.current) fileInputRef.current.value = '';
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try {
+      const full = await apiFetch(`/api/blog-articles-full/${r.id}`);
+      setBlocks(full.body?.length ? full.body : [{ subtitle: '', text: '' }]);
+    } catch {
+      showToast('❌ 본문을 불러오지 못했습니다');
+      setBlocks([{ subtitle: '', text: '' }]);
+    } finally {
+      setBlocksLoading(false);
+    }
   }
 
   // 코드에 내장된 기본 꿀팁 글을 수정 폼으로 불러온다.
@@ -377,7 +392,7 @@ export default function AdminBlogArticles({ showToast }: { showToast: (msg: stri
           </div>
         </div>
         <div className="flex gap-2 mt-4">
-          <button type="button" onClick={handleSave} disabled={saving} className="bg-[#f97316] text-white border-none px-6 py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors disabled:opacity-50 font-[inherit]">
+          <button type="button" onClick={handleSave} disabled={saving || blocksLoading} className="bg-[#f97316] text-white border-none px-6 py-2.5 rounded-lg text-sm font-bold cursor-pointer hover:bg-[#ea580c] transition-colors disabled:opacity-50 font-[inherit]">
             {saving ? '저장 중...' : editingId ? '수정 저장' : '게시하기'}
           </button>
           {editingId && (
