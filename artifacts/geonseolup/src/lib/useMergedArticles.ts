@@ -10,7 +10,9 @@ interface BlogArticleApiRow {
   title: string;
   description: string;
   emoji: string;
-  body: InfoArticle['body'];
+  // 2026-09-15: 목록 API(/api/blog-articles)는 더 이상 body를 내려주지 않는다(37MB까지 불어나서
+  // 모바일에서 느려지다 500 에러로 죽었던 사고 — 상세 절차는 InfoDetail.tsx 참고). 목록/이전·다음
+  // 글 네비게이션은 body가 필요 없으므로 여기선 아예 안 받는다.
   imageUrl: string | null;
   relatedJob?: string | null;
   relatedCalculator?: string | null;
@@ -46,7 +48,10 @@ export function useMergedArticles() {
           title: r.title,
           description: r.description,
           emoji: r.emoji,
-          body: r.body,
+          // 목록 API가 body를 안 주므로 빈 배열로 채워둔다 — 이 훅은 목록 화면과
+          // 이전/다음 글 네비게이션에만 쓰고, 실제 본문 렌더링은 InfoDetail.tsx가
+          // /api/blog-articles/:slug(단건, body 포함)를 따로 받아서 한다.
+          body: [],
           imageSrc: r.imageUrl || getArticleImage(r.slug),
           relatedJob: r.relatedJob ?? null,
           relatedCalculator: r.relatedCalculator ?? null,
