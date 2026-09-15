@@ -6,7 +6,10 @@ import { recordContentView, extractIp, getEngagement, toggleLike, getComments, a
 
 const router: IRouter = Router();
 
-const jsonBig = express.json({ limit: "8mb" });
+// 2026-09-15: blog/news와 달리 노가다툰 한 화엔 컷 이미지가 보통 6~7장(대표컷 1장뿐인 다른
+// 콘텐츠와 다름) 들어가서 8mb로는 부족 — "급여일 잠수 사장님" 편(7컷, 원본 합계 11.5MB,
+// base64 인코딩하면 더 커짐) 등록 시 POST /api/toon이 413(Payload Too Large)로 실패한 사고로 발견.
+const jsonBig = express.json({ limit: "30mb" });
 
 async function initTables() {
   await pgPool.query(`
