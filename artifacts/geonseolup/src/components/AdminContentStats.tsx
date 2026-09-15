@@ -61,11 +61,21 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
     (async () => {
       setLoading(true);
       try {
-        const [blogList, newsList, toonList] = await Promise.all([
+        // 2026-09-15: Promise.all이었을 때 셋 중 하나(blog-articles/all)만 503으로 실패해도
+        // 나머지 둘(news/toon)까지 통째로 버려져 "콘텐츠 성과 0건"으로 보이는 사고가 있었다
+        // (blog-articles/all의 근본 원인은 blogArticles.ts에서 수정, 여기는 재발방지 차원의 방어).
+        // allSettled로 바꿔서 일부만 실패해도 나머지는 정상 표시되게 한다.
+        const [blogResult, newsResult, toonResult] = await Promise.allSettled([
           apiFetch('/api/blog-articles/all'),
           apiFetch('/api/site-news/all'),
           apiFetch('/api/toon/all'),
         ]);
+        const blogList = blogResult.status === 'fulfilled' ? blogResult.value : { rows: [] };
+        const newsList = newsResult.status === 'fulfilled' ? newsResult.value : { rows: [] };
+        const toonList = toonResult.status === 'fulfilled' ? toonResult.value : { rows: [] };
+        for (const [label, r] of [['blog', blogResult], ['news', newsResult], ['toon', toonResult]] as const) {
+          if (r.status === 'rejected') console.error(`[ContentStats] ${label} 목록 조회 실패:`, r.reason);
+        }
 
         const unified: UnifiedRow[] = [
           ...(blogList.rows ?? []).map((r: { id: number; slug: string; title: string; createdAt: string }) => ({
@@ -93,14 +103,16 @@ export default function AdminContentStats({ onGoToTab }: { onGoToTab: (tab: 'blo
       setCountsLoading(true);
       try {
         const qs = range ? `&range=${range}` : '';
-        const [blogCounts, newsCounts, toonCounts] = await Promise.all([
+        // 위 글 목록 로딩과 같은 이유로 allSettled — 조회수 API 하나가 실패해도 나머지 타입 숫자는 보여준다.
+        const results = await Promise.allSettled([
           apiFetch(`/api/admin/content-views?type=blog${qs}`),
           apiFetch(`/api/admin/content-views?type=news${qs}`),
           apiFetch(`/api/admin/content-views?type=toon${qs}`),
         ]);
         const mergedCounts: CountsMap = {};
-        for (const src of [blogCounts, newsCounts, toonCounts]) {
-          for (const r of src.rows ?? []) mergedCounts[r.contentId] = { views: r.views, likes: r.likes };
+        for (const r of results) {
+          if (r.status !== 'fulfilled') { console.error('[ContentStats] 조회수 조회 실패:', r.reason); continue; }
+          for (const row of r.value.rows ?? []) mergedCounts[row.contentId] = { views: row.views, likes: row.likes };
         }
         setCounts(mergedCounts);
       } catch {
