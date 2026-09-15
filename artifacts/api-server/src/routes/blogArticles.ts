@@ -117,6 +117,8 @@ function toApiBase(row: BlogArticleRow) {
     title: row.title,
     description: row.description,
     emoji: row.emoji,
+    // 목록 응답(SELECT_COLS_LIST)엔 body 컬럼 자체를 안 뽑아오므로 row.body가 undefined일 수 있다 —
+    // 그대로 undefined를 내려보내면 프론트가 실수로 목록 응답에 기대는 걸 방지하는 효과도 있다.
     body: row.body,
     imageUrl: row.has_image
       ? `/api/blog-articles-image/${row.slug}?v=${new Date(row.updated_at).getTime()}`
@@ -152,12 +154,20 @@ function decodeImage(imageBase64?: string): { data: Buffer; mime: string } | nul
 const SELECT_COLS = `id, slug, title, description, emoji, body,
   (image_data IS NOT NULL AND length(image_data) > 100) AS has_image, published, scheduled_at, created_at, updated_at, created_by, related_job, related_calculator`;
 
+// 2026-09-15: 목록/네비게이션용 컬럼 — body(JSONB, 문단별 base64 이미지 포함 가능)를 뺀 경량 버전.
+// 글이 늘면서 body를 포함한 목록 응답이 37MB까지 불어나 모바일에서 느려지다가 결국 500 에러로
+// 죽는 사고가 있었다(프론트가 목록 API 하나로 목록 화면과 상세 화면(글 찾기)을 둘 다 처리했었음).
+// 목록/이전-다음 글 네비게이션은 body가 필요 없으므로 아예 빼고, 상세 글 본문은 아래
+// GET /blog-articles/:slug(단건, body 포함)로 따로 받는다.
+const SELECT_COLS_LIST = `id, slug, title, description, emoji,
+  (image_data IS NOT NULL AND length(image_data) > 100) AS has_image, published, scheduled_at, created_at, updated_at, created_by, related_job, related_calculator`;
+
 // GET /api/blog-articles — 공개, 발행된 글 최신순
 // scheduled_at이 미래인 글은 그 시각이 지나기 전까지 목록에서 숨긴다(예약 발행).
 router.get("/blog-articles", async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query<BlogArticleRow>(
-      `SELECT ${SELECT_COLS} FROM blog_articles
+      `SELECT ${SELECT_COLS_LIST} FROM blog_articles
        WHERE published = true AND (scheduled_at IS NULL OR scheduled_at <= now())
        ORDER BY created_at DESC LIMIT 100`
     );
@@ -169,6 +179,9 @@ router.get("/blog-articles", async (_req: Request, res: Response) => {
 });
 
 // GET /api/blog-articles/all — 관리자 전용, 비공개 포함 전체
+// ⚠️ 아래 GET /blog-articles/:slug(단건 상세)보다 반드시 먼저 등록돼 있어야 한다 —
+// Express는 등록 순서대로 매칭해서, :slug가 먼저 있으면 "/blog-articles/all"도
+// slug="all"인 단건 조회로 잘못 잡혀버린다(관리자 인증도 건너뛰게 됨).
 router.get("/blog-articles/all", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query<BlogArticleRow>(
@@ -178,6 +191,29 @@ router.get("/blog-articles/all", requireAdmin, async (_req: Request, res: Respon
   } catch (err) {
     console.error("[BlogArticles] GET all error:", err);
     res.status(500).json({ error: "건설 꿀팁 목록 조회 실패" });
+  }
+});
+
+// GET /api/blog-articles/:slug — 공개, 단건 상세(body 포함). 상세 페이지 전용(2026-09-15 신설).
+// 목록 API(위 /blog-articles)에서 body를 뺀 대신, 상세 화면은 이걸로 딱 한 건만 받는다.
+// 반드시 /blog-articles/all 다음에 등록한다(위 주석 참고).
+router.get("/blog-articles/:slug", async (req: Request, res: Response) => {
+  try {
+    const result = await pgPool.query<BlogArticleRow>(
+      `SELECT ${SELECT_COLS} FROM blog_articles
+       WHERE slug = $1 AND published = true AND (scheduled_at IS NULL OR scheduled_at <= now())
+       LIMIT 1`,
+      [req.params["slug"]]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      res.status(404).json({ error: "글을 찾을 수 없습니다" });
+      return;
+    }
+    res.json(toApi(row));
+  } catch (err) {
+    console.error("[BlogArticles] GET one error:", err);
+    res.status(500).json({ error: "건설 꿀팁 조회 실패" });
   }
 });
 

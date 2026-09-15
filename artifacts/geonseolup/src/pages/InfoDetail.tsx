@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -6,8 +6,8 @@ import RelatedLinks from '@/components/RelatedLinks';
 import LikeButton from '@/components/LikeButton';
 import CommentSection from '@/components/CommentSection';
 import { useMergedArticles } from '@/lib/useMergedArticles';
+import type { InfoArticle } from '@/lib/infoData';
 import { renderRichText } from '@/lib/richText';
-import type { InfoArticleTable } from '@/lib/infoData';
 import ShuttleScheduleYonginSK from '@/components/ShuttleScheduleYonginSK';
 import ShuttleSchedulePyeongtaekSamsung from '@/components/ShuttleSchedulePyeongtaekSamsung';
 import RetirementFundCalculatorWidget from '@/components/RetirementFundCalculatorWidget';
@@ -36,45 +36,6 @@ const CUSTOM_INFO_PAGES: Record<string, React.ComponentType> = {
   'pyeongtaek-samsung-shuttle-schedule': ShuttleSchedulePyeongtaekSamsung,
 };
 
-function ArticleDataTable({ table }: { table: InfoArticleTable }) {
-  return (
-    <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200">
-      <table className="w-full table-fixed border-collapse text-left text-[13px] sm:text-sm">
-        <caption className="sr-only">{table.caption}</caption>
-        <thead className="bg-slate-50 text-[#1e3a5f]">
-          <tr>
-            {table.headers.map((header) => (
-              <th key={header} scope="col" className="px-3 sm:px-4 py-3 font-bold whitespace-nowrap">
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {table.rows.map((row, rowIndex) => (
-            <tr key={`${row[0]}-${rowIndex}`} className="bg-white">
-              {row.map((cell, cellIndex) => (
-                <td
-                  key={`${cell}-${cellIndex}`}
-                  className={`px-3 sm:px-4 py-3 ${cellIndex === 0 ? 'font-semibold text-gray-900' : 'text-gray-700'}`}
-                >
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// 과거 편집본에 표의 값을 `{ 조공 }`처럼 넣은 경우가 있어도, 이 글에서만
-// 단순 중괄호를 풀어 표시한다. 공통 리치텍스트 문법({주황:강조})은 건드리지 않는다.
-function normalizeLegacyWageMarkers(text: string): string {
-  return text.replace(/\{\s*([^{}\n:]+?)\s*\}/g, '$1');
-}
-
 export default function InfoDetail({ slug }: Props) {
   const CustomPage = CUSTOM_INFO_PAGES[slug];
   if (CustomPage) {
@@ -85,9 +46,37 @@ export default function InfoDetail({ slug }: Props) {
   return <InfoArticleDetail slug={slug} />;
 }
 
+// 2026-09-15: 목록 API(useMergedArticles)가 더 이상 body를 안 주므로, 상세 화면 본문은
+// /api/blog-articles/:slug(단건)로 따로 받는다. DB 글이면 이걸로 body가 채워지고,
+// 코드에 하드코딩된 정적 글(INFO_ARTICLES)은 이 API에 없어 404가 나므로 그땐
+// useMergedArticles가 이미 갖고 있는 정적 body를 그대로 쓴다(아래 fallbackBody).
+function useArticleBody(slug: string, fallbackBody: InfoArticle['body']) {
+  const [body, setBody] = useState<InfoArticle['body'] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setBody(null);
+    fetch(`/api/blog-articles/${encodeURIComponent(slug)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { body?: InfoArticle['body'] } | null) => {
+        if (cancelled) return;
+        setBody(data?.body && data.body.length > 0 ? data.body : fallbackBody);
+      })
+      .catch(() => {
+        if (!cancelled) setBody(fallbackBody);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // fallbackBody는 매 렌더마다 새 배열일 수 있어 의도적으로 의존성에서 뺀다(slug 바뀔 때만 재요청).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+  return body;
+}
+
 function InfoArticleDetail({ slug }: Props) {
   const { articles, loading } = useMergedArticles();
   const article = articles.find((a) => a.slug === slug);
+  const fetchedBody = useArticleBody(slug, article?.body ?? []);
 
   useEffect(() => {
     if (article) {
@@ -166,27 +155,26 @@ function InfoArticleDetail({ slug }: Props) {
             <p className="text-sm text-gray-400 mb-6 pb-5 border-b border-gray-100">{article.description}</p>
 
           <div className="space-y-5 text-[15px] text-gray-700 leading-relaxed">
-            {article.body.map((block, i) => (
-              <div key={i}>
-                {block.subtitle && (
-                  <h2 className="text-base font-bold text-[#1e3a5f] mb-1.5">{block.subtitle}</h2>
-                )}
-                {block.image && (
-                  <img
-                    src={block.image}
-                    alt={block.subtitle || article.title}
-                    loading="lazy"
-                    className="w-full rounded-xl border border-gray-200 mb-3"
-                  />
-                )}
-                {block.table && <ArticleDataTable table={block.table} />}
-                {block.text && renderRichText(
-                  article.slug === 'wage-gyeonggi-202608'
-                    ? normalizeLegacyWageMarkers(block.text)
-                    : block.text
-                )}
-              </div>
-            ))}
+            {fetchedBody === null ? (
+              <div className="text-gray-400 text-sm">본문 불러오는 중...</div>
+            ) : (
+              fetchedBody.map((block, i) => (
+                <div key={i}>
+                  {block.subtitle && (
+                    <h2 className="text-base font-bold text-[#1e3a5f] mb-1.5">{block.subtitle}</h2>
+                  )}
+                  {block.image && (
+                    <img
+                      src={block.image}
+                      alt={block.subtitle || article.title}
+                      loading="lazy"
+                      className="w-full rounded-xl border border-gray-200 mb-3"
+                    />
+                  )}
+                  {renderRichText(block.text)}
+                </div>
+              ))
+            )}
           </div>
 
           {/* 관련 계산기 위젯 — relatedCalculator가 지정된 글에서만 표시 (2026-09-10 신설) */}
