@@ -171,6 +171,7 @@ const SOURCE_STYLE: Record<string, { label: string; color: string; icon: string 
   twitter:   { label: 'X(트위터)',   color: '#e34948', icon: '✕' },
   youtube:   { label: 'YouTube',     color: '#ef4444', icon: '▶' },
   telegram:  { label: '텔레그램',     color: '#229ed9', icon: '✈' },
+  bot_crawler: { label: '봇/크롤러 (봇 추정)', color: '#94a3b8', icon: '🤖' },
   unknown:   { label: '출처 미확인',   color: '#898781', icon: '❔' },
   direct:    { label: '직접 방문',   color: '#898781', icon: '🔗' },
   other:     { label: '기타',        color: '#c3c2b7', icon: '❔' },

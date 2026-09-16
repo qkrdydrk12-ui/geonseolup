@@ -68,6 +68,7 @@ const SOURCE_LABELS: Record<string, string> = {
   twitter: "X(트위터)",
   youtube: "YouTube",
   telegram: "텔레그램",
+  bot_crawler: "봇/크롤러 (봇 추정)",
   unknown: "출처 미확인",
   direct: "직접 방문",
   other: "기타",
@@ -91,6 +92,13 @@ function detectInAppBrowser(userAgent: string | undefined): string | null {
   if (/NAVER\(inapp/i.test(ua) || /NAVER Whale/i.test(ua) || /; NAVER\)/i.test(ua)) return "naver_inapp";
   if (/FBAN|FBAV|FBIOS/i.test(ua)) return "facebook_inapp";
   return null;
+}
+
+// 검색엔진·자동 수집 도구 User-Agent 서명. referrer도 utm_source도 없는 "출처 미확인"
+// 방문에만 폴백으로 적용한다. User-Agent는 요청자가 바꿀 수 있으므로 확정값이 아닌 추정치다.
+function detectBotCrawler(userAgent: string | undefined): boolean {
+  if (!userAgent) return false;
+  return /bot\b|crawler|spider|slurp|yeti|daumoa|facebookexternalhit|facebookcatalog|google-inspectiontool|googleother|adsbot-google|mediapartners-google|bingpreview|yandex|baiduspider|bytespider|petalbot|ahrefs|semrush|mj12bot|dotbot|ccbot|gptbot|chatgpt-user|oai-searchbot|claudebot|anthropic-ai|amazonbot/i.test(userAgent);
 }
 
 // "출처 미확인" 방문을 최소한 기기 종류로라도 나눠보기 위한 보조 분류(2026-08-31 추가).
@@ -376,11 +384,14 @@ async function getVisitorStats() {
     total: string;
   }>(
     `SELECT
-      COUNT(*) FILTER (WHERE visit_date = $1) AS today,
-      COUNT(*) FILTER (WHERE visit_date = $2) AS yesterday,
-      COUNT(*) FILTER (WHERE visit_date >= $3) AS week,
+      COUNT(*) FILTER (WHERE vl.visit_date = $1) AS today,
+      COUNT(*) FILTER (WHERE vl.visit_date = $2) AS yesterday,
+      COUNT(*) FILTER (WHERE vl.visit_date >= $3) AS week,
       COUNT(*) AS total
-    FROM visitor_logs`,
+    FROM visitor_logs vl
+    LEFT JOIN visit_attributions va
+      ON va.visit_date = vl.visit_date AND va.ip_hash = vl.ip_hash
+    WHERE va.source IS DISTINCT FROM 'bot_crawler'`,
     [today, yesterday, weekAgo]
   );
 
@@ -414,11 +425,16 @@ router.post("/visit", async (req: Request, res: Response) => {
     const utmSource = safeTrackingValue(body.utmSource, 50);
     const userAgent = req.headers["user-agent"] as string | undefined;
     let source = categorizeSource(referrer, utmSource || undefined);
-    // referrer도 utm도 없어 "출처 미확인"으로 떨어진 경우에만, User-Agent로 인앱브라우저
-    // 추정을 시도한다(확정된 값은 절대 덮어쓰지 않음). 2026-08-30 추가.
-    if (source === "unknown") {
-      const inapp = detectInAppBrowser(userAgent);
-      if (inapp) source = inapp;
+    // referrer도 utm도 없어 "출처 미확인"으로 떨어진 경우에만 User-Agent 추정을 시도한다.
+    // 검색엔진 크롤러를 먼저 분리하고, 아니면 기존 인앱브라우저 서명을 확인한다.
+    // 확정된 referrer/UTM 값은 절대 덮어쓰지 않는다.
+    if (!referrer && !utmSource && (source === "unknown" || source === "direct")) {
+      if (detectBotCrawler(userAgent)) {
+        source = "bot_crawler";
+      } else {
+        const inapp = detectInAppBrowser(userAgent);
+        if (inapp) source = inapp;
+      }
     }
     const device = detectDevice(userAgent);
 
