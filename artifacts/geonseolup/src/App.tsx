@@ -148,10 +148,15 @@ function NotFound() {
   );
 }
 
+// 이 탭에서 앱이 로드된 뒤 실제로 페이지를 몇 번 이동했는지 (외부 링크로 바로 들어온 상세페이지에서
+// "뒤로"를 눌렀을 때 사이트 밖(카톡/카페 등)으로 나가버리는 것을 막기 위해 DetailHeader가 참고한다)
+let inAppNavCount = 0;
+
 // 페이지 이동 시 항상 맨 위부터 보이게 (목록에서 스크롤한 위치가 상세로 넘어가는 것 방지)
 function ScrollToTop() {
   const [pathname] = useLocation();
   useEffect(() => {
+    inAppNavCount++;
     window.scrollTo(0, 0);
   }, [pathname]);
   return null;
@@ -247,7 +252,15 @@ function DetailHeader() {
       <div className="max-w-[860px] mx-auto px-4 py-[13px] flex items-center gap-3">
         <button
           className="bg-white/15 border border-white/30 text-white px-3.5 py-[7px] rounded-lg text-[13px] font-semibold cursor-pointer hover:bg-white/28 transition-colors font-[inherit] whitespace-nowrap"
-          onClick={() => window.history.back()}
+          onClick={() => {
+            // 카카오톡/다음카페 등 외부 링크로 이 상세페이지에 바로 들어온 경우(이 탭에서 앱이 뜬 뒤
+            // 페이지 이동이 없었던 경우) history.back()은 사이트 밖으로 나가버린다 — 그럴 땐 홈으로 보낸다.
+            if (inAppNavCount > 1) {
+              window.history.back();
+            } else {
+              window.location.href = '/';
+            }
+          }}
         >
           ← 뒤로
         </button>
