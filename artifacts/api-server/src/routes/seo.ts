@@ -292,6 +292,75 @@ router.get(`/${INDEXNOW_KEY}.txt`, (_req: Request, res: Response) => {
   res.send(INDEXNOW_KEY);
 });
 
+// ── GET / ────────────────────────────────────────────────────────────────────
+// 초기 HTML에도 실제 활성 공고 링크를 포함해, React 실행 전이나 JS 미실행
+// 크롤러에서도 홈페이지의 최신 공고를 바로 확인할 수 있게 한다.
+router.get("/", async (_req: Request, res: Response) => {
+  try {
+    const [template, { jobs: cachedJobs }] = await Promise.all([
+      getIndexTemplate(),
+      getPublicJobs(),
+    ]);
+    const jobs = filterActiveJobs(cachedJobs)
+      .filter((job) => typeof job.id === "string" && job.id)
+      .slice(0, 24);
+
+    const listItems = jobs
+      .map((job) => {
+        const id = typeof job.id === "string" ? job.id : "";
+        const title = typeof job.title === "string" && job.title
+          ? job.title
+          : "건설 현장 구인 공고";
+        const region = typeof job.region === "string" ? job.region : "";
+        const jobType = typeof job.job === "string" ? job.job : "";
+        const salary = typeof job.salary === "string" ? job.salary : "";
+
+        return `<li style="margin-bottom:12px">
+          <a href="/detail/${encodeURIComponent(id)}" style="color:#1e3a5f;font-weight:700;text-decoration:underline">${escapeHtmlAttr(title)}</a>
+          <div style="margin-top:3px;color:#475569;font-size:14px">${[
+            region && `지역: ${escapeHtmlAttr(region)}`,
+            jobType && `직종: ${escapeHtmlAttr(jobType)}`,
+            salary && `급여: ${escapeHtmlAttr(salary)}`,
+          ].filter(Boolean).join(" · ")}</div>
+        </li>`;
+      })
+      .join("\n");
+
+    const fallbackBody = `
+    <div id="root">
+      <main style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">건설 현장 최신 구인 공고</h1>
+        <p style="margin:0 0 16px;color:#334155">현재 모집 중인 최신 공고를 확인하세요.</p>
+        ${jobs.length > 0
+          ? `<ul style="list-style:none;padding:0;margin:0 0 16px">${listItems}</ul>`
+          : `<p style="margin:0 0 16px;color:#64748b">현재 모집 중인 공고가 없습니다.</p>`}
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
+      </main>
+    </div>`;
+
+    const html = template.replace(
+      /<div id="root">[\s\S]*?<\/body>/,
+      `${fallbackBody}\n  </body>`
+    );
+
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", "public, max-age=60");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[home-seo] 렌더링 실패");
+    try {
+      const template = await getIndexTemplate();
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(template);
+    } catch {
+      res.status(500).send("Internal Server Error");
+    }
+  }
+});
+
 // ── GET /sitemap.xml ─────────────────────────────────────────────────────────
 // 정적 sitemap.xml(홈 + /post 2개)을 대체. 공개된 모든 공고 상세페이지 +
 // 실제 공고가 있는 지역×직종 랜딩페이지를 포함한다.
