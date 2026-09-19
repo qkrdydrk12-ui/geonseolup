@@ -616,6 +616,20 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
   const infeedCode = localStorage.getItem('cj_ad_main_infeed') || '';
   const infeedImgAd = getImgAd('main_infeed');
 
+  // 2026-09-19 애드센스 재심사 대책 — 결과가 부족한(얇은) 목록 페이지에서는 광고 SDK 자체를
+  // 로드하지 않는다. index.html의 고정 스크립트 태그를 제거하고, 콘텐츠가 충분할 때만 여기서
+  // 동적으로 주입한다(공고 1개짜리 지역·직종 조합 페이지 등에 자동광고가 얹히는 것을 막기 위함).
+  useEffect(() => {
+    const MIN_JOBS_FOR_ADS = 3;
+    if (state.filtered.length < MIN_JOBS_FOR_ADS) return;
+    if (document.querySelector('script[src*="adsbygoogle.js"]')) return;
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4564839197459262';
+    script.crossOrigin = 'anonymous';
+    document.head.appendChild(script);
+  }, [state.filtered.length]);
+
   function buildGridItems() {
     const items: React.ReactNode[] = [];
     pageItems.forEach((job, idx) => {

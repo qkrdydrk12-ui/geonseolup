@@ -64,9 +64,12 @@
     }
     </script>
 
-    <!-- ===== Google AdSense ===== -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4564839197459262"
-     crossorigin="anonymous"></script>
+    <!-- ===== Google AdSense =====
+         2026-09-19 애드센스 재심사 대책: 이 스크립트를 모든 페이지 공통 셸(index.html)에
+         고정으로 심어두면, 공고 1개짜리 지역·직종 조합 페이지처럼 콘텐츠가 얇은 페이지에도
+         자동광고가 얹힐 위험이 있다는 지적이 있었다. 정적 로드를 제거하고, 콘텐츠가
+         충분한 경우에만 Home.tsx에서 동적으로 로드하도록 바꿨다(index.html은 모든 라우트가
+         공유하는 셸이라 여기서는 라우트별 조건을 걸 수 없다). ===== -->
   </head>
   <body>
     <!--
