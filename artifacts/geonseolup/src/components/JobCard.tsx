@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbAddReport, fbGetJobContact } from '@/lib/firebase';
+import { fbAddReport, fbGetJobContact, formatSalary } from '@/lib/firebase';
 import { maskPhonesInText } from '@/lib/phone';
 import { isMyPost } from '@/lib/myPosts';
 import {
@@ -168,7 +168,7 @@ export default function JobCard({ job, isDupOld, isAdmin = false, onDelete }: Pr
           </div>
           <div className="text-[12px] text-gray-500 flex items-center gap-1 flex-wrap">
             <span>📍 {job.region}</span>
-            {job.salary && <><span className="text-gray-300">|</span><span className="font-semibold text-[#1e3a5f]">💰 {job.salary}</span></>}
+            {job.salary && <><span className="text-gray-300">|</span><span className="font-semibold text-[#1e3a5f]">💰 {formatSalary(job.salary, job.payPeriod)}</span></>}
           </div>
         </div>
       </div>

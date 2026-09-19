@@ -129,6 +129,38 @@ function extractSalaryNumFromText(salary: string): number | undefined {
   return undefined;
 }
 
+type PayPeriod = "HOUR" | "DAY" | "WEEK" | "MONTH" | "YEAR";
+
+const PAY_PERIOD_LABEL: Record<PayPeriod, string> = {
+  HOUR: "시급",
+  DAY: "일당",
+  WEEK: "주급",
+  MONTH: "월급",
+  YEAR: "연봉",
+};
+
+function getPayPeriod(value: unknown): PayPeriod {
+  return value === "HOUR" ||
+    value === "DAY" ||
+    value === "WEEK" ||
+    value === "MONTH" ||
+    value === "YEAR"
+    ? value
+    : "DAY";
+}
+
+function formatSalary(salary: string, payPeriod: PayPeriod): string {
+  const prefixPatterns: Record<PayPeriod, RegExp> = {
+    HOUR: /^(?:시급|시간당)\s*/,
+    DAY: /^(?:일당|일급)\s*/,
+    WEEK: /^주급\s*/,
+    MONTH: /^(?:월급|월)\s*/,
+    YEAR: /^(?:연봉|연)\s*/,
+  };
+  const amount = salary.replace(prefixPatterns[payPeriod], "").trim() || salary;
+  return `${PAY_PERIOD_LABEL[payPeriod]} ${amount}`;
+}
+
 // 실제 주소가 확인된 대형 현장만 streetAddress/postalCode를 채운다(2026-09-08 추가 — 서치콘솔
 // "새로운 채용 정보 구조화된 데이터 문제" 이메일 알림, streetAddress/postalCode 누락 125건).
 // 공고 region이 그냥 "평택"/"용인"이라고 무조건 이 주소를 붙이면 실제로는 다른 현장인 공고에
@@ -152,6 +184,8 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const region = typeof job.region === "string" ? job.region : "";
   const jobType = typeof job.job === "string" ? job.job : "";
   const salary = typeof job.salary === "string" ? job.salary : "";
+  const payPeriod = getPayPeriod(job.payPeriod);
+  const payPeriodLabel = PAY_PERIOD_LABEL[payPeriod];
   const salaryNum = typeof job.salaryNum === "number" ? job.salaryNum : undefined;
   const detail = typeof job.detail === "string" ? job.detail : "";
   const rawTitle = typeof job.title === "string" ? job.title : "";
@@ -167,7 +201,7 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const lodging = typeof job.lodging === "string" ? job.lodging : "";
   const descriptionParts = [
     `[${region}] ${jobType} 모집`,
-    salary && `일당 ${salary}`,
+    salary && formatSalary(salary, payPeriod),
     meal && `식사 ${meal}`,
     lodging && `숙박 ${lodging}`,
     detail,
@@ -220,18 +254,13 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const effectiveSalaryNum =
     salaryNum && salaryNum > 0 ? salaryNum : extractSalaryNumFromText(salary);
   if (effectiveSalaryNum && effectiveSalaryNum > 0) {
-    const salaryUnitText = salary.includes("월")
-      ? "MONTH"
-      : salary.includes("주급")
-        ? "WEEK"
-        : "DAY";
     ld.baseSalary = {
       "@type": "MonetaryAmount",
       currency: "KRW",
       value: {
         "@type": "QuantitativeValue",
         value: effectiveSalaryNum,
-        unitText: salaryUnitText,
+        unitText: payPeriod,
       },
     };
   }
@@ -314,13 +343,14 @@ router.get("/", async (_req: Request, res: Response) => {
         const region = typeof job.region === "string" ? job.region : "";
         const jobType = typeof job.job === "string" ? job.job : "";
         const salary = typeof job.salary === "string" ? job.salary : "";
+        const payPeriodLabel = PAY_PERIOD_LABEL[getPayPeriod(job.payPeriod)];
 
         return `<li style="margin-bottom:12px">
           <a href="/detail/${encodeURIComponent(id)}" style="color:#1e3a5f;font-weight:700;text-decoration:underline">${escapeHtmlAttr(title)}</a>
           <div style="margin-top:3px;color:#475569;font-size:14px">${[
             region && `지역: ${escapeHtmlAttr(region)}`,
             jobType && `직종: ${escapeHtmlAttr(jobType)}`,
-            salary && `급여: ${escapeHtmlAttr(salary)}`,
+            salary && escapeHtmlAttr(formatSalary(salary, getPayPeriod(job.payPeriod))),
           ].filter(Boolean).join(" · ")}</div>
         </li>`;
       })
@@ -506,6 +536,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     const region = typeof job.region === "string" ? job.region : "";
     const jobType = typeof job.job === "string" ? job.job : "";
     const salary = typeof job.salary === "string" ? job.salary : "";
+    const payPeriodLabel = PAY_PERIOD_LABEL[getPayPeriod(job.payPeriod)];
     const detail = typeof job.detail === "string" ? job.detail : "";
     const rawTitle = typeof job.title === "string" ? job.title : "";
     const meal = typeof job.meal === "string" ? job.meal : "";
@@ -522,7 +553,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
 
     // 브라우저 제목 — 지역·직종·급여·숙식이 모두 들어간 공고별 고유 제목.
     const titleCore =
-      [region && `[${region}]`, jobType, salary && `일당 ${salary}`, stay]
+      [region && `[${region}]`, jobType, salary && formatSalary(salary, getPayPeriod(job.payPeriod)), stay]
         .filter(Boolean)
         .join(" ") || rawTitle || "건설 구인 공고";
     const closedPrefix = closed ? "[모집마감] " : "";

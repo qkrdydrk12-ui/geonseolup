@@ -68,6 +68,35 @@ export interface ReservationLog {
   shortcutUsed?: boolean;
 }
 
+export type PayPeriod = 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+
+const PAY_PERIOD_LABEL: Record<PayPeriod, string> = {
+  HOUR: '시급',
+  DAY: '일당',
+  WEEK: '주급',
+  MONTH: '월급',
+  YEAR: '연봉',
+};
+
+export function getPayPeriodLabel(payPeriod?: PayPeriod): string {
+  return PAY_PERIOD_LABEL[payPeriod ?? 'DAY'];
+}
+
+export function getSalaryAmount(salary: string, payPeriod?: PayPeriod): string {
+  const prefixPatterns: Record<PayPeriod, RegExp> = {
+    HOUR: /^(?:시급|시간당)\s*/,
+    DAY: /^(?:일당|일급)\s*/,
+    WEEK: /^주급\s*/,
+    MONTH: /^(?:월급|월)\s*/,
+    YEAR: /^(?:연봉|연)\s*/,
+  };
+  return salary.replace(prefixPatterns[payPeriod ?? 'DAY'], '').trim() || salary;
+}
+
+export function formatSalary(salary: string, payPeriod?: PayPeriod): string {
+  return `${getPayPeriodLabel(payPeriod)} ${getSalaryAmount(salary, payPeriod)}`;
+}
+
 export interface Job {
   id: string;
   title: string;
@@ -77,6 +106,7 @@ export interface Job {
   weldTest?: string;
   salary: string;
   salaryNum?: number;
+  payPeriod?: PayPeriod;
   meal?: string;
   lodging?: string;
   contact?: string;

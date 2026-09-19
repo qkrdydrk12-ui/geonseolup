@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
-import { fbGetPublicJob, fbLoadPublicJobs, fbGetJobContact, isJobActive } from '@/lib/firebase';
+import { fbGetPublicJob, fbLoadPublicJobs, fbGetJobContact, formatSalary, getPayPeriodLabel, getSalaryAmount, isJobActive } from '@/lib/firebase';
 import { SAMPLE_JOBS as RAW_SAMPLE_JOBS } from '@/data/sampleJobs';
 
 // 공개 화면에는 샘플 데이터의 전화번호도 노출하지 않는다 (연락처 보기 버튼 경유만).
@@ -152,7 +152,7 @@ export default function Detail({ id }: Props) {
       ? '숙식 제공'
       : [lodgYes && '숙소 제공', mealYes && '식사 제공'].filter(Boolean).join(' · ');
     const core =
-      [job.region && `[${job.region}]`, job.job, job.salary && `일당 ${job.salary}`, stay]
+      [job.region && `[${job.region}]`, job.job, job.salary && formatSalary(job.salary, job.payPeriod), stay]
         .filter(Boolean)
         .join(' ') || job.title;
     const closedNow =
@@ -197,30 +197,22 @@ export default function Detail({ id }: Props) {
     window.location.href = `mailto:qkrdydrk@naver.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
-  // 안전담당자 등 일부 직종은 "일급"(14~18만원대)과 "월급"(250~420만원대) 공고가 같은 직종명에
-  // 섞여 올라온다(원문 급여 문구는 정확한데, salaryNum엔 주기 구분이 없어 그대로 들어감).
-  // 100만원을 기준으로 월급/일급을 나눠, 급여 라벨 표시와 평균 비교 둘 다 같은 주기끼리만 묶는다
-  // (2026-08-31, 실사고 발견: 일급 17만원 공고가 월급 포함 평균 157만원과 비교되던 문제).
-  const MONTHLY_WAGE_THRESHOLD = 1_000_000;
-  const isMonthlyWage = (n: number) => n >= MONTHLY_WAGE_THRESHOLD;
-
-  // 이 공고와 같은 직종+같은 급여 주기(일급/월급)의 다른 활성 공고 평균 단가 — 자사 실시간 데이터로만
+  // 이 공고와 같은 직종+같은 급여 주기의 다른 활성 공고 평균 단가 — 자사 실시간 데이터로만
   // 계산(별도 시세표 미사용, 관리자가 수동 갱신 안 해도 항상 최신). 비교 대상이 너무 적으면(2건 이하)
   // 억지 비교문을 만들지 않는다.
   const jobAverage = useMemo(() => {
     if (!job?.job || typeof job.salaryNum !== 'number' || job.salaryNum <= 0) return null;
-    const monthly = isMonthlyWage(job.salaryNum);
     const matched = jobPool.filter(
       (j) =>
         j.job === job.job &&
         j.id !== job.id &&
         typeof j.salaryNum === 'number' &&
         j.salaryNum! > 0 &&
-        isMonthlyWage(j.salaryNum!) === monthly,
+        j.payPeriod === job.payPeriod,
     );
     if (matched.length < 3) return null;
     const sum = matched.reduce((acc, j) => acc + (j.salaryNum || 0), 0);
-    return { avg: Math.round(sum / matched.length), count: matched.length, monthly };
+    return { avg: Math.round(sum / matched.length), count: matched.length, payPeriod: job.payPeriod };
   }, [job, jobPool]);
 
   if (loading) {
@@ -299,7 +291,7 @@ export default function Detail({ id }: Props) {
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[11px] text-gray-500">
                   <span>📍 {rel.region}</span>
                   <span className="font-semibold text-gray-600">{rel.job}</span>
-                  <span className="text-[#f97316] font-extrabold text-[12px]">{rel.salary || '급여 협의'}</span>
+                  <span className="text-[#f97316] font-extrabold text-[12px]">{rel.salary ? formatSalary(rel.salary, rel.payPeriod) : '급여 협의'}</span>
                   {(lodgingOn || mealOn) && (
                     <span className="text-emerald-600 font-semibold">
                       {[lodgingOn && '숙박', mealOn && '식사'].filter(Boolean).join('·')} 제공
@@ -417,10 +409,10 @@ export default function Detail({ id }: Props) {
               style={{ background: 'linear-gradient(135deg,#fff7ed,#fed7aa)' }}>
               <span className="text-xl sm:text-2xl shrink-0">💰</span>
               <span className="text-xs sm:text-[13px] text-orange-900 font-semibold shrink-0">
-                {typeof job.salaryNum === 'number' && isMonthlyWage(job.salaryNum) ? '월급' : '일급'}
+                {getPayPeriodLabel(job.payPeriod)}
               </span>
               <span className="text-[20px] sm:text-[26px] font-black text-[#f97316] min-w-0 break-all">
-                {job.salary || '협의'}
+                {job.salary ? getSalaryAmount(job.salary, job.payPeriod) : '협의'}
               </span>
             </div>
 
@@ -431,7 +423,7 @@ export default function Detail({ id }: Props) {
             {jobAverage && typeof job.salaryNum === 'number' && job.salaryNum > 0 && (
               <div className="mt-2.5 text-[12.5px] sm:text-[13px] text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 leading-relaxed">
                 💡 이 공고 단가는 현재 건설UP에 등록된 <b className="text-gray-800">{job.job}</b>{' '}
-                {jobAverage.monthly ? '월급' : '일급'} 공고 {jobAverage.count}건 평균({jobAverage.avg.toLocaleString()}원)보다{' '}
+                {getPayPeriodLabel(jobAverage.payPeriod)} 공고 {jobAverage.count}건 평균({jobAverage.avg.toLocaleString()}원)보다{' '}
                 {job.salaryNum > jobAverage.avg ? (
                   <b style={{ color: '#f97316' }}>{(job.salaryNum - jobAverage.avg).toLocaleString()}원 높아요</b>
                 ) : job.salaryNum < jobAverage.avg ? (
