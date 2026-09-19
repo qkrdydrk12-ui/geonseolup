@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -21,6 +21,14 @@ const CALCULATOR_WIDGETS: Record<string, React.ComponentType> = {
 
 interface Props {
   slug: string;
+}
+
+interface InfoOverride {
+  slug: string;
+  title: string;
+  description: string;
+  emoji: string;
+  body: InfoArticle['body'];
 }
 
 // 조회수 집계용 — 같은 방문자가 새로고침해도 서버에서 하루 1회만 카운트되므로
@@ -50,10 +58,45 @@ export default function InfoDetail({ slug }: Props) {
 // /api/blog-articles/:slug(단건)로 따로 받는다. DB 글이면 이걸로 body가 채워지고,
 // 코드에 하드코딩된 정적 글(INFO_ARTICLES)은 이 API에 없어 404가 나므로 그땐
 // useMergedArticles가 이미 갖고 있는 정적 body를 그대로 쓴다(아래 fallbackBody).
-function useArticleBody(slug: string, fallbackBody: InfoArticle['body']) {
+function useInfoOverride(slug: string) {
+  const [override, setOverride] = useState<InfoOverride | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setOverride(null);
+    setLoading(true);
+    fetch('/api/info/overrides')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { overrides?: Record<string, InfoOverride> } | null) => {
+        if (!cancelled) setOverride(data?.overrides?.[slug] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setOverride(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+  return { override, loading };
+}
+
+function useArticleBody(
+  slug: string,
+  fallbackBody: InfoArticle['body'],
+  overrideBody?: InfoArticle['body'],
+) {
   const [body, setBody] = useState<InfoArticle['body'] | null>(null);
   useEffect(() => {
     let cancelled = false;
+    if (overrideBody) {
+      setBody(overrideBody);
+      return () => {
+        cancelled = true;
+      };
+    }
     setBody(null);
     fetch(`/api/blog-articles/${encodeURIComponent(slug)}`)
       .then((res) => (res.ok ? res.json() : null))
@@ -69,16 +112,33 @@ function useArticleBody(slug: string, fallbackBody: InfoArticle['body']) {
     };
     // fallbackBody는 매 렌더마다 새 배열일 수 있어 의도적으로 의존성에서 뺀다(slug 바뀔 때만 재요청).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  }, [slug, overrideBody]);
   return body;
 }
 
 function InfoArticleDetail({ slug }: Props) {
   const { articles, loading } = useMergedArticles();
-  const article = articles.find((a) => a.slug === slug);
-  const fetchedBody = useArticleBody(slug, article?.body ?? []);
+  const baseArticle = articles.find((a) => a.slug === slug);
+  const { override, loading: overrideLoading } = useInfoOverride(slug);
+  const article = useMemo(
+    () =>
+      !overrideLoading && baseArticle
+        ? override
+          ? {
+              ...baseArticle,
+              title: override.title,
+              description: override.description,
+              emoji: override.emoji,
+              body: override.body,
+            }
+          : baseArticle
+        : undefined,
+    [baseArticle, override, overrideLoading],
+  );
+  const fetchedBody = useArticleBody(slug, baseArticle?.body ?? [], override?.body);
 
   useEffect(() => {
+    if (overrideLoading) return;
     if (article) {
       document.title = `${article.title} — 건설UP`;
       let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
@@ -87,10 +147,10 @@ function InfoArticleDetail({ slug }: Props) {
     } else {
       document.title = '페이지를 찾을 수 없습니다 — 건설UP';
     }
-  }, [article]);
+  }, [article, overrideLoading]);
 
   if (!article) {
-    if (loading) {
+    if (loading || overrideLoading) {
       return (
         <div className="min-h-screen flex flex-col" style={{ background: '#f1f5f9' }}>
           <Header />

@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { getPublicJobs, getPublicJobById, filterActiveJobs } from "../lib/jobsCache.js";
 import { getClosesAt, getPostedAt, isJobClosed, isJobExpired, ACTIVE_HOURS } from "../lib/jobLifecycle.js";
 import { logger } from "../lib/logger.js";
-import { getAllInfoOverrides } from "../lib/infoOverrides.js";
+import { getAllInfoOverrides, type InfoOverride } from "../lib/infoOverrides.js";
 import { INDEXNOW_KEY } from "../lib/indexNow.js";
 import { getRelatedLinksMap } from "./relatedLinks.js";
 import { pgPool } from "../lib/db.js";
@@ -1088,13 +1088,17 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       getIndexTemplate(),
       getMergedInfoMeta(),
       // 관리자가 글 제목/설명을 수정했을 수 있으므로 덮어쓰기를 병합 (실패해도 원본으로 진행).
-      getAllInfoOverrides().catch(() => ({}) as Record<string, { title: string; description: string }>),
+      getAllInfoOverrides().catch(() => ({}) as Record<string, InfoOverride>),
     ]);
     const custom = CUSTOM_INFO_PAGES[slug];
     const base = custom ? { slug, title: custom.title, description: custom.description, imageUrl: custom.imageUrl } : metaList.find((a) => a.slug === slug);
     const ov = overrides[slug];
     const meta = base
-      ? { ...base, title: ov?.title || base.title, description: ov?.description || base.description }
+      ? {
+          ...base,
+          title: ov ? ov.title : base.title,
+          description: ov ? ov.description : base.description,
+        }
       : undefined;
     const pageUrl = `${SITE_URL}/info/${encodeURIComponent(slug)}`;
     // DB 글은 업로드된 이미지, 정적 글은 slug와 동일한 파일명 규칙 (프론트 getArticleImage와 동일).
@@ -1128,12 +1132,12 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
         ]);
       html = html.replace("</head>", `${ldTags}</head>`);
 
-      // 관리자 패널("건설 꿀팁" 코너)에서 DB로 발행한 글이면 실제 제목·본문을
+      // 관리자 패널("건설 꿀팁" 코너)에서 DB로 발행한 글이거나 정적 글에 override가 있으면 실제 제목·본문을
       // 크롤러가 JS 실행 없이도 읽을 수 있게 <div id="root"> 폴백에 직접 넣는다.
-      // (기존 19개 정적 글은 body를 여기서 파싱하지 않으므로 메타/구조화 데이터까지만 적용됨.)
       const full = await getBlogArticleFull(slug).catch(() => null);
-      if (full) {
-        const bodyHtml = full.body
+      const fallbackBlocks = ov?.body?.length ? ov.body : full?.body;
+      if (fallbackBlocks) {
+        const bodyHtml = fallbackBlocks
           .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(stripRichMarks(b.text))}</p>`)
           .join("\n");
         const relatedHtml = await buildRelatedLinksHtml(`info:${slug}`);
