@@ -847,7 +847,6 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
                 style={{ transform: jobOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
               >▼</span>
             </button>
-          ) : (
           <div
           style={{
             maxHeight: jobOpen ? '300px' : '0px',
