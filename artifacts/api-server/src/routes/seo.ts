@@ -301,11 +301,17 @@ function setRobotsMeta(html: string, content: string): string {
   return html.replace("</head>", `  <meta name="robots" content="${escapeHtmlAttr(content)}" />\n  </head>`);
 }
 
+function getJobRegion(job: Record<string, unknown>): string {
+  const canonical = typeof job.regionCanonical === "string" ? job.regionCanonical : "";
+  const original = typeof job.region === "string" ? job.region : "";
+  return canonical || original;
+}
+
 // 지역×직종 조합별 공고 수 집계 (공고가 있는 조합만) — sitemap과 랜딩페이지가 공유.
 function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string, number> {
   const counts = new Map<string, number>();
   for (const j of jobs) {
-    const region = typeof j.region === "string" ? j.region : "";
+    const region = getJobRegion(j);
     const jobType = typeof j.job === "string" ? j.job : "";
     if (!region || !jobType || region === "전체" || jobType === "전체") continue;
     const key = `${region}::${jobType}`;
@@ -699,7 +705,7 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     const jobs = filterActiveJobs(cachedJobs);
 
     const matched = jobs.filter(
-      (j) => (typeof j.region === "string" ? j.region : "") === region &&
+      (j) => getJobRegion(j) === region &&
              (typeof j.job === "string" ? j.job : "") === jobType
     );
 
