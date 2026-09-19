@@ -786,7 +786,6 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
 
           {/* ===== 지역 필터 ===== */}
           {/* 모바일: 아코디언 헤더 */}
-          {isMobile ? (
             <button
               className="w-full flex items-center justify-between py-[7px] px-3 mb-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-700 cursor-pointer font-[inherit] hover:border-[#f97316] transition-colors"
               onClick={() => { setRegionOpen((o) => !o); setJobOpen(false); }}
@@ -802,18 +801,14 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
                 style={{ transform: regionOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
               >▼</span>
             </button>
-          ) : (
-            <div className="text-[10px] font-extrabold text-gray-500 mb-1 flex items-center gap-1 uppercase tracking-wide">
-              📍 지역
-            </div>
-          )}
           {/* 지역 칩 목록 */}
           <div
-            style={isMobile ? {
-              maxHeight: regionOpen ? '160px' : '0px',
-              overflow: 'hidden',
-              transition: 'max-height 0.3s cubic-bezier(0.4,0,0.2,1)',
-            } : {}}
+          style={{
+            maxHeight: regionOpen ? '200px' : '0px',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            transition: 'max-height 0.3s cubic-bezier(0.4,0,0.2,1)',
+          }}
           >
             <div className="flex flex-wrap gap-1 mb-[7px]">
               {REGIONS.map((r) => (
@@ -826,7 +821,7 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
                   }`}
                   onClick={() => {
                     applyFilter({ region: state.region === r && r !== '전체' ? '전체' : r });
-                    if (isMobile) setRegionOpen(false);
+                    setRegionOpen(false);
                   }}
                 >
                   {r}
@@ -837,7 +832,6 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
 
           {/* ===== 직종 필터 ===== */}
           {/* 모바일: 아코디언 헤더 */}
-          {isMobile ? (
             <button
               className="w-full flex items-center justify-between py-[7px] px-3 mb-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-700 cursor-pointer font-[inherit] hover:border-[#f97316] transition-colors"
               onClick={() => { setJobOpen((o) => !o); setRegionOpen(false); }}
@@ -854,17 +848,13 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
               >▼</span>
             </button>
           ) : (
-            <div className="text-[10px] font-extrabold text-gray-500 mb-1 flex items-center gap-1 uppercase tracking-wide">
-              🔧 직종
-            </div>
-          )}
-          {/* 직종 칩 목록 + 용접 세부 */}
           <div
-            style={isMobile ? {
-              maxHeight: jobOpen ? '300px' : '0px',
-              overflow: 'hidden',
-              transition: 'max-height 0.35s cubic-bezier(0.4,0,0.2,1)',
-            } : {}}
+          style={{
+            maxHeight: jobOpen ? '300px' : '0px',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            transition: 'max-height 0.35s cubic-bezier(0.4,0,0.2,1)',
+          }}
           >
             <div className="flex flex-wrap gap-1 mb-[7px]">
               {JOBS.map((j) => (
