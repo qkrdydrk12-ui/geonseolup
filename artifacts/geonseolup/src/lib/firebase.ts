@@ -78,11 +78,12 @@ const PAY_PERIOD_LABEL: Record<PayPeriod, string> = {
   YEAR: '연봉',
 };
 
-export function getPayPeriodLabel(payPeriod?: PayPeriod): string {
-  return PAY_PERIOD_LABEL[payPeriod ?? 'DAY'];
+export function getPayPeriodLabel(payPeriod?: PayPeriod | null): string {
+  return payPeriod ? PAY_PERIOD_LABEL[payPeriod] : '';
 }
 
-export function getSalaryAmount(salary: string, payPeriod?: PayPeriod): string {
+export function getSalaryAmount(salary: string, payPeriod?: PayPeriod | null): string {
+  if (!payPeriod) return salary;
   const prefixPatterns: Record<PayPeriod, RegExp> = {
     HOUR: /^(?:시급|시간당)\s*/,
     DAY: /^(?:일당|일급)\s*/,
@@ -90,10 +91,11 @@ export function getSalaryAmount(salary: string, payPeriod?: PayPeriod): string {
     MONTH: /^(?:월급|월)\s*/,
     YEAR: /^(?:연봉|연)\s*/,
   };
-  return salary.replace(prefixPatterns[payPeriod ?? 'DAY'], '').trim() || salary;
+  return salary.replace(prefixPatterns[payPeriod], '').trim() || salary;
 }
 
-export function formatSalary(salary: string, payPeriod?: PayPeriod): string {
+export function formatSalary(salary: string, payPeriod?: PayPeriod | null): string {
+  if (!payPeriod) return salary;
   return `${getPayPeriodLabel(payPeriod)} ${getSalaryAmount(salary, payPeriod)}`;
 }
 
@@ -106,7 +108,7 @@ export interface Job {
   weldTest?: string;
   salary: string;
   salaryNum?: number;
-  payPeriod?: PayPeriod;
+  payPeriod?: PayPeriod | null;
   reviewStatus?: string;
   meal?: string;
   lodging?: string;
