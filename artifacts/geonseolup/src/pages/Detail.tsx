@@ -60,6 +60,7 @@ export default function Detail({ id }: Props) {
   const [revealedContact, setRevealedContact] = useState<string | null>(null);
   const [revealing, setRevealing] = useState(false);
   const [contactBlocked, setContactBlocked] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   async function revealContact() {
     if (!job || revealing) return;
@@ -503,12 +504,22 @@ export default function Detail({ id }: Props) {
           {job.originalText && (
             <div className="px-3 sm:px-[22px] py-4 sm:py-5">
               <div className="text-[13px] font-bold text-gray-500 mb-2.5">📄 원문 내용</div>
-              <pre
-                className="bg-[#f8fafc] border border-gray-200 rounded-lg p-3 sm:p-[14px] text-[12px] sm:text-[13px] text-gray-500 leading-6 max-h-56 overflow-y-auto"
-                style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
-              >
-                {maskPhonesInText(job.originalText)}
-              </pre>
+              {showOriginal ? (
+                <pre
+                  className="bg-[#f8fafc] border border-gray-200 rounded-lg p-3 sm:p-[14px] text-[12px] sm:text-[13px] text-gray-500 leading-6 max-h-56 overflow-y-auto"
+                  style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                >
+                  {maskPhonesInText(job.originalText)}
+                </pre>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowOriginal(true)}
+                  className="w-full text-left bg-[#f8fafc] border border-gray-200 rounded-lg p-3 sm:p-[14px] text-[12px] sm:text-[13px] text-gray-400"
+                >
+                  원문 보기 (탭하여 펼치기)
+                </button>
+              )}
             </div>
           )}
         </div>
