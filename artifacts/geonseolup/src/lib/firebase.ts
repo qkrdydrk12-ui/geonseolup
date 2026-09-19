@@ -107,6 +107,7 @@ export interface Job {
   salary: string;
   salaryNum?: number;
   payPeriod?: PayPeriod;
+  reviewStatus?: string;
   meal?: string;
   lodging?: string;
   contact?: string;

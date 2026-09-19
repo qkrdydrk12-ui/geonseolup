@@ -1791,6 +1791,7 @@ export default function Admin() {
                           </span>
                         )}
                         {job.hidden && <span className="text-amber-600 font-bold">🙈 숨김</span>}
+                        {job.reviewStatus === 'needs-review' && <span className="text-orange-600 font-bold">🔍 검토필요</span>}
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0 w-full sm:w-auto justify-end flex-wrap">
