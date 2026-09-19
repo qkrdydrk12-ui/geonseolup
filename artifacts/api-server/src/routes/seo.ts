@@ -155,7 +155,7 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const salaryNum = typeof job.salaryNum === "number" ? job.salaryNum : undefined;
   const detail = typeof job.detail === "string" ? job.detail : "";
   const rawTitle = typeof job.title === "string" ? job.title : "";
-  const company = typeof job.company === "string" && job.company ? job.company : "건설UP";
+  const company = typeof job.company === "string" ? job.company.trim() : "";
   const dateVal = typeof job.date === "string" ? job.date : undefined;
 
   const posted = dateVal && !isNaN(new Date(dateVal).getTime()) ? new Date(dateVal) : new Date();
@@ -189,11 +189,15 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
     datePosted: posted.toISOString(),
     validThrough: validThrough.toISOString(),
     employmentType: "CONTRACTOR",
-    hiringOrganization: {
-      "@type": "Organization",
-      name: company,
-      sameAs: SITE_URL,
-    },
+    ...(company
+      ? {
+          hiringOrganization: {
+            "@type": "Organization",
+            name: company,
+            sameAs: SITE_URL,
+          },
+        }
+      : {}),
     jobLocation: {
       "@type": "Place",
       address: {
@@ -216,13 +220,18 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const effectiveSalaryNum =
     salaryNum && salaryNum > 0 ? salaryNum : extractSalaryNumFromText(salary);
   if (effectiveSalaryNum && effectiveSalaryNum > 0) {
+    const salaryUnitText = salary.includes("월")
+      ? "MONTH"
+      : salary.includes("주급")
+        ? "WEEK"
+        : "DAY";
     ld.baseSalary = {
       "@type": "MonetaryAmount",
       currency: "KRW",
       value: {
         "@type": "QuantitativeValue",
         value: effectiveSalaryNum,
-        unitText: "DAY",
+        unitText: salaryUnitText,
       },
     };
   }
@@ -507,6 +516,9 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     // JobPosting 구조화 데이터 삽입 (Google 채용정보 검색 노출 자격 부여).
     // 등록일이 없거나 깨진 공고는 datePosted/validThrough를 지어낼 수 없으므로 생략한다.
     const jobPostingLd = getPostedAt(job) ? buildJobPostingLd(job, id) : "";
+    const robotsMeta = closed
+      ? '<meta name="robots" content="noindex, follow">'
+      : "";
     // BreadcrumbList: 홈 > (지역 직종 랜딩페이지) > 공고 상세
     const breadcrumbLd = buildBreadcrumbLd([
       { name: "건설UP", url: SITE_URL },
@@ -515,7 +527,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
         : []),
       { name: pageTitle.replace(/ - 건설UP$/, ""), url: pageUrl },
     ]);
-    html = html.replace("</head>", `  ${jobPostingLd}\n  ${breadcrumbLd}\n  </head>`);
+    html = html.replace("</head>", `  ${robotsMeta}\n  ${jobPostingLd}\n  ${breadcrumbLd}\n  </head>`);
 
     // <div id="root"> 안의 정적 폴백 본문(크롤러/JS 미실행 환경용)을
     // 이 공고 전용 내용으로 교체 — React가 mount되면 어차피 덮어써지므로
