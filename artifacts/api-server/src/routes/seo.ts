@@ -139,17 +139,27 @@ const PAY_PERIOD_LABEL: Record<PayPeriod, string> = {
   YEAR: "연봉",
 };
 
-function getPayPeriod(value: unknown): PayPeriod {
+// 2026-09-19: 급여 단위가 불명확한 공고에서 "일당"을 임의로 붙이지 않기 위한
+// null-안전 라벨 조회. getPayPeriod()가 null을 반환하면 빈 문자열을 준다.
+function getPayPeriodLabel(pp: PayPeriod | null): string {
+  return pp ? PAY_PERIOD_LABEL[pp] : "";
+}
+
+function getPayPeriod(value: unknown): PayPeriod | null {
+  // 2026-09-19 수정: 급여 단위가 불명확하면 DAY로 단정하지 않는다(애드센스 재진단
+  // "월급 공고가 DAY로 표시됨" 지적 근본 수정 — 호출부가 "일당"을 임의로 붙이지
+  // 않도록 null을 반환한다).
   return value === "HOUR" ||
     value === "DAY" ||
     value === "WEEK" ||
     value === "MONTH" ||
     value === "YEAR"
     ? value
-    : "DAY";
+    : null;
 }
 
-function formatSalary(salary: string, payPeriod: PayPeriod): string {
+function formatSalary(salary: string, payPeriod: PayPeriod | null): string {
+  if (!payPeriod) return salary; // 단위 불명 시 원문 그대로(일당으로 단정하지 않음)
   const prefixPatterns: Record<PayPeriod, RegExp> = {
     HOUR: /^(?:시급|시간당)\s*/,
     DAY: /^(?:일당|일급)\s*/,
@@ -185,7 +195,7 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const jobType = typeof job.job === "string" ? job.job : "";
   const salary = typeof job.salary === "string" ? job.salary : "";
   const payPeriod = getPayPeriod(job.payPeriod);
-  const payPeriodLabel = PAY_PERIOD_LABEL[payPeriod];
+  const payPeriodLabel = getPayPeriodLabel(payPeriod);
   const salaryNum = typeof job.salaryNum === "number" ? job.salaryNum : undefined;
   const detail = typeof job.detail === "string" ? job.detail : "";
   const rawTitle = typeof job.title === "string" ? job.title : "";
@@ -252,7 +262,9 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
 
   const effectiveSalaryNum =
     salaryNum && salaryNum > 0 ? salaryNum : extractSalaryNumFromText(salary);
-  if (effectiveSalaryNum && effectiveSalaryNum > 0) {
+  // 2026-09-19: 급여 단위(payPeriod)를 모르면 baseSalary 자체를 생략한다 —
+  // 구조화 데이터에 잘못된 unitText를 넣는 것보다 아예 안 넣는 게 낫다.
+  if (payPeriod && effectiveSalaryNum && effectiveSalaryNum > 0) {
     ld.baseSalary = {
       "@type": "MonetaryAmount",
       currency: "KRW",
@@ -348,7 +360,7 @@ router.get("/", async (_req: Request, res: Response) => {
         const region = typeof job.region === "string" ? job.region : "";
         const jobType = typeof job.job === "string" ? job.job : "";
         const salary = typeof job.salary === "string" ? job.salary : "";
-        const payPeriodLabel = PAY_PERIOD_LABEL[getPayPeriod(job.payPeriod)];
+        const payPeriodLabel = getPayPeriodLabel(getPayPeriod(job.payPeriod));
 
         return `<li style="margin-bottom:12px">
           <a href="/detail/${encodeURIComponent(id)}" style="color:#1e3a5f;font-weight:700;text-decoration:underline">${escapeHtmlAttr(title)}</a>
@@ -541,7 +553,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     const region = typeof job.region === "string" ? job.region : "";
     const jobType = typeof job.job === "string" ? job.job : "";
     const salary = typeof job.salary === "string" ? job.salary : "";
-    const payPeriodLabel = PAY_PERIOD_LABEL[getPayPeriod(job.payPeriod)];
+    const payPeriodLabel = getPayPeriodLabel(getPayPeriod(job.payPeriod));
     const detail = typeof job.detail === "string" ? job.detail : "";
     const rawTitle = typeof job.title === "string" ? job.title : "";
     const meal = typeof job.meal === "string" ? job.meal : "";
