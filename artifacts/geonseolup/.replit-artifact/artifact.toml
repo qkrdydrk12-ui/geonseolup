@@ -17,14 +17,17 @@ localPort = 19759
 [services.development]
 run = "pnpm --filter @workspace/geonseolup run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/geonseolup", "run", "build" ]
-publicDir = "artifacts/geonseolup/dist/public"
-serve = "static"
+[services.production.build]
+args = ["pnpm", "--filter", "@workspace/geonseolup", "run", "build"]
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.build.env]
+NODE_ENV = "production"
+
+[services.production.run]
+args = ["pnpm", "--filter", "@workspace/geonseolup", "run", "serve"]
+
+[services.production.run.env]
+NODE_ENV = "production"
 
 [services.env]
 PORT = "19759"

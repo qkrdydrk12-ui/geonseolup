@@ -10,6 +10,13 @@ const port = rawPort ? Number(rawPort) : 3000;
 
 const basePath = process.env.BASE_PATH ?? "/";
 
+const homeSsrProxy = {
+  "^/$": {
+    target: "http://127.0.0.1:8080",
+    changeOrigin: false,
+  },
+};
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -53,6 +60,7 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: homeSsrProxy,
     fs: {
       strict: true,
       deny: ["**/.*"],
@@ -67,6 +75,7 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: homeSsrProxy,
     headers: {
       "Cache-Control": "no-cache, no-store, must-revalidate",
       "Pragma": "no-cache",

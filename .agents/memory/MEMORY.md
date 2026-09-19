@@ -7,3 +7,4 @@
 - [Geonseolup 전화번호 마스킹](geonseolup-contact-privacy.md) — 공개 응답은 전부 sanitizePublicJob/maskDeep 경유; jobsCache 우회 라우트(rss 등)가 누출 함정. 실번호는 /contact 엔드포인트로만.
 - [Coupang Partners API quirks](coupang-partners-api.md) — deeplink 200+rCode 400 quirk; search limit≤10, curated feed; coupa.ng↔link.coupang.com/a 매핑; partner-link-or-fail 원칙.
 - [Node TypeScript regression scripts](node-typescript-regression-scripts.md) — geonseolup에는 tsx 실행 파일이 없어, 의존성 없는 테스트는 Node 타입 제거 실행과 명시적 .ts 경로를 쓴다.
+- [Geonseolup homepage SSR routing](geonseolup-home-ssr-routing.md) — 정적 artifact는 Express보다 먼저 루트를 처리하므로, 웹 서버가 정확한 `/`만 API SEO 라우트로 프록시해야 한다.

@@ -24,9 +24,9 @@ async function getIndexTemplate(): Promise<string> {
   if (_templateCache && now - _templateCache.fetchedAt < TEMPLATE_TTL_MS) {
     return _templateCache.html;
   }
-  // 개발 환경에서는 로컬 Vite 개발 서버의 index.html을 사용해야 미리보기가 정상 동작한다.
-  const templateOrigin =
-    process.env.NODE_ENV === "production" ? SITE_URL : "http://localhost:19759";
+  // 웹 artifact의 로컬 Vite 서버에서 현재 배포와 동일한 index.html을 읽는다.
+  // 공개 도메인을 다시 호출하면 배포 전환 중 이전 빌드의 해시 자산을 참조할 수 있다.
+  const templateOrigin = "http://127.0.0.1:19759";
   const res = await fetch(`${templateOrigin}/index.html`);
   if (!res.ok) {
     throw new Error(`index.html 조회 실패 [${res.status}]`);
