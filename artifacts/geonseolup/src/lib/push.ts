@@ -72,3 +72,52 @@ export async function unsubscribeFromPush(): Promise<void> {
 export function isPushMarkedSubscribed(): boolean {
   return localStorage.getItem('cj_push_subscribed') === '1';
 }
+
+// 콘텐츠(건설꿀팁/현장소식/노가다툰) 알림받기 - 구인공고 구독(subscribeToPush)과는 별개 API.
+export async function subscribeToTopic(topic: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isPushSupported()) return { ok: false, error: 'unsupported' };
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return { ok: false, error: 'permission_denied' };
+
+  const keyRes = await fetch('/api/push/vapid-public-key');
+  if (!keyRes.ok) return { ok: false, error: 'not_configured' };
+  const { publicKey } = (await keyRes.json()) as { publicKey: string };
+
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+    });
+  }
+
+  const res = await fetch('/api/push/topics/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subscription: sub.toJSON(), topic }),
+  });
+  if (!res.ok) return { ok: false, error: 'server_error' };
+
+  localStorage.setItem(`cj_push_topic_${topic}`, '1');
+  return { ok: true };
+}
+
+export async function unsubscribeFromTopic(topic: string): Promise<void> {
+  const sub = await getExistingSubscription();
+  if (sub) {
+    await fetch('/api/push/topics/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint, topic }),
+    }).catch(() => {});
+  }
+  localStorage.removeItem(`cj_push_topic_${topic}`);
+}
+
+export function isTopicMarkedSubscribed(topic: string): boolean {
+  return localStorage.getItem(`cj_push_topic_${topic}`) === '1';
+}

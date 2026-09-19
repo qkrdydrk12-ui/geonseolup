@@ -11,6 +11,7 @@ import { isAutoHidden, WELD_SUBS, isWeld, getJobIcon, JOB_ICON_BG, isNew } from 
 import { getToken, apiVerify } from '@/lib/adminAuth';
 import { CITY_TO_PROVINCE } from '@/lib/parseJob';
 import JobCard from '@/components/JobCard';
+import TopicSubscribeButton from '@/components/TopicSubscribeButton';
 
 const DEFAULT_AUTO_HIDE = 0;
 
@@ -175,12 +176,14 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             💡 건설꿀팁!
           </a>
+          <TopicSubscribeButton topic="tips" label="건설꿀팁" />
           <a
             href="/news"
             className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all no-underline"
           >
             🏗️ 현장 소식
           </a>
+          <TopicSubscribeButton topic="news" label="현장소식" />
           <div className="relative" data-calc-menu>
             <button
               type="button"
@@ -240,6 +243,7 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
           >
             😂 노가다툰
           </a>
+          <TopicSubscribeButton topic="toon" label="노가다툰" />
         </div>
       </div>
     </section>

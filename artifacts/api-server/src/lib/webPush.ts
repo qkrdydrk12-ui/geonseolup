@@ -8,6 +8,7 @@ import { pgPool } from "./db.js";
 import { logger } from "./logger.js";
 import { getMatchingSubscriptions, removeSubscription, type PushSubscriptionRow } from "./pushSubscriptions.js";
 import { scheduleAtSlots } from "./digestSlots.js";
+import { getContentSubscribers, type ContentPushSubscriptionRow } from "./contentPushSubscriptions.js";
 
 const VAPID_SUBJECT = "mailto:qkrdydrk12@gmail.com";
 
@@ -72,6 +73,9 @@ function ensureSlotScheduler(): void {
     flushPushBatch().catch((err) => {
       logger.warn({ err: String(err) }, "[push] 취합 발송 실패");
     });
+    checkAndNotifyNewContent().catch((err) => {
+      logger.warn({ err: String(err) }, "[push] 콘텐츠 알림 확인 실패");
+    });
   });
 }
 // 신규 공고 여부와 무관하게 서버가 뜨는 즉시 스케줄러를 켠다 — 재시작 후
@@ -89,7 +93,7 @@ export async function notifyPushSubscribers(payload: NewJobPayload): Promise<voi
   );
 }
 
-async function sendToSub(sub: PushSubscriptionRow, body: string): Promise<void> {
+async function sendToSub(sub: Pick<PushSubscriptionRow, "endpoint" | "p256dh" | "auth">, body: string): Promise<void> {
   try {
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -192,4 +196,98 @@ async function flushPushBatch(): Promise<void> {
 async function clearPendingJobs(jobIds: string[]): Promise<void> {
   if (jobIds.length === 0) return;
   await pgPool.query(`DELETE FROM push_pending_jobs WHERE job_id = ANY($1)`, [jobIds]);
+}
+
+// 콘텐츠(건설꿀팁/현장소식/노가다툰) 구독자에게 즉시 발송 - 공고와 달리 건수가 적어 묶음 없이 1건씩 보낸다.
+export async function notifyTopicSubscribers(
+  topic: "tips" | "news" | "toon",
+  payload: { title: string; url: string }
+): Promise<void> {
+  if (!ensureConfigured()) return;
+  const label = topic === "tips" ? "건설꿀팁" : topic === "news" ? "현장 소식" : "노가다툰";
+  const emoji = topic === "tips" ? "\uD83D\uDCA1" : topic === "news" ? "\uD83D\uDCF0" : "\uD83D\uDE02";
+  let subs: ContentPushSubscriptionRow[] = [];
+  try {
+    subs = await getContentSubscribers(topic);
+  } catch (err) {
+    logger.warn({ err: String(err) }, "[push] 콘텐츠 구독자 조회 실패");
+    return;
+  }
+  if (subs.length === 0) return;
+  const body = JSON.stringify({
+    title: `${emoji} 새 ${label}이(가) 올라왔어요!`,
+    body: payload.title,
+    url: payload.url,
+  });
+  await Promise.all(subs.map((sub) => sendToSub(sub, body)));
+}
+
+let _contentColumnsReady = false;
+async function ensureContentPushColumns(): Promise<void> {
+  if (_contentColumnsReady) return;
+  await pgPool.query(`ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS push_notified BOOLEAN NOT NULL DEFAULT false`);
+  await pgPool.query(`ALTER TABLE site_news ADD COLUMN IF NOT EXISTS push_notified BOOLEAN NOT NULL DEFAULT false`);
+  await pgPool.query(`ALTER TABLE toon_episodes ADD COLUMN IF NOT EXISTS push_notified BOOLEAN NOT NULL DEFAULT false`);
+  _contentColumnsReady = true;
+}
+
+interface UnsentContentRow {
+  id: number;
+  slug: string;
+  title: string;
+}
+
+async function notifyUnsentRows(
+  table: string,
+  topic: "tips" | "news" | "toon",
+  selectSql: string,
+  buildUrl: (slug: string) => string
+): Promise<void> {
+  const { rows } = await pgPool.query<UnsentContentRow>(selectSql);
+  if (rows.length === 0) return;
+  for (const row of rows) {
+    await notifyTopicSubscribers(topic, { title: row.title, url: buildUrl(row.slug) }).catch((err) => {
+      logger.warn({ err: String(err), table, id: row.id }, "[push] 콘텐츠 알림 발송 실패");
+    });
+  }
+  await pgPool.query(`UPDATE ${table} SET push_notified = true WHERE id = ANY($1)`, [rows.map((r) => r.id)]);
+}
+
+// 발행(예약 발행 포함)된 콘텐츠 중 아직 알림을 안 보낸 글을 찾아 발송한다. 공고 큐와 달리
+// 콘텐츠는 발행 시각이 예약(scheduled_at)일 수 있어 생성 시점이 아니라 슬롯마다 확인한다.
+export async function checkAndNotifyNewContent(): Promise<void> {
+  if (!ensureConfigured()) return;
+  try {
+    await ensureContentPushColumns();
+  } catch (err) {
+    logger.error({ err: String(err) }, "[push] 콘텐츠 알림 컬럼 초기화 실패");
+    return;
+  }
+
+  await notifyUnsentRows(
+    "blog_articles",
+    "tips",
+    `SELECT id, slug, title FROM blog_articles
+     WHERE published = true AND (scheduled_at IS NULL OR scheduled_at <= now()) AND push_notified = false
+     ORDER BY id ASC LIMIT 20`,
+    (slug) => `https://geonseolup.com/info/${slug}`
+  );
+
+  await notifyUnsentRows(
+    "site_news",
+    "news",
+    `SELECT id, slug, title FROM site_news
+     WHERE published_at IS NOT NULL AND published_at <= now() AND push_notified = false
+     ORDER BY id ASC LIMIT 20`,
+    (slug) => `https://geonseolup.com/news/${slug}`
+  );
+
+  await notifyUnsentRows(
+    "toon_episodes",
+    "toon",
+    `SELECT id, slug, title FROM toon_episodes
+     WHERE published = true AND (scheduled_at IS NULL OR scheduled_at <= now()) AND push_notified = false
+     ORDER BY id ASC LIMIT 20`,
+    (slug) => `https://geonseolup.com/toon/${slug}`
+  );
 }

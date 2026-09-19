@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { getVapidPublicKey } from "../lib/webPush.js";
 import { saveSubscription, removeSubscription } from "../lib/pushSubscriptions.js";
+import { saveContentSubscription, removeContentSubscription } from "../lib/contentPushSubscriptions.js";
 
 const router: IRouter = Router();
 
@@ -47,6 +48,46 @@ router.post("/push/unsubscribe", async (req: Request, res: Response) => {
       return;
     }
     await removeSubscription(endpoint);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// 콘텐츠(건설꿀팁/현장소식/노가다툰) 알림받기 - 구인공고 구독과 별개 테이블이라 endpoint+topic만 받는다.
+const CONTENT_TOPICS = ["tips", "news", "toon"];
+
+interface TopicSubscribeBody {
+  subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+  topic?: string;
+}
+
+router.post("/push/topics/subscribe", async (req: Request, res: Response) => {
+  try {
+    const body = req.body as TopicSubscribeBody;
+    const endpoint = body.subscription?.endpoint;
+    const p256dh = body.subscription?.keys?.p256dh;
+    const auth = body.subscription?.keys?.auth;
+    const topic = body.topic;
+    if (!endpoint || !p256dh || !auth || !topic || !CONTENT_TOPICS.includes(topic)) {
+      res.status(400).json({ ok: false, error: "invalid_subscription" });
+      return;
+    }
+    await saveContentSubscription(endpoint, p256dh, auth, topic);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+router.post("/push/topics/unsubscribe", async (req: Request, res: Response) => {
+  try {
+    const body = req.body as { endpoint?: string; topic?: string };
+    if (!body.endpoint || !body.topic) {
+      res.status(400).json({ ok: false, error: "missing_params" });
+      return;
+    }
+    await removeContentSubscription(body.endpoint, body.topic);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
