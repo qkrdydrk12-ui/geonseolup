@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { getPublicJobs, getPublicJobById, filterActiveJobs } from "../lib/jobsCache.js";
 import { getClosesAt, getPostedAt, isJobClosed, isJobExpired, ACTIVE_HOURS } from "../lib/jobLifecycle.js";
 import { logger } from "../lib/logger.js";
-import { getAllInfoOverrides } from "../lib/infoOverrides.js";
+import { getAllInfoOverrides, type InfoOverride } from "../lib/infoOverrides.js";
 import { INDEXNOW_KEY } from "../lib/indexNow.js";
 import { getRelatedLinksMap } from "./relatedLinks.js";
 import { pgPool } from "../lib/db.js";
@@ -24,9 +24,9 @@ async function getIndexTemplate(): Promise<string> {
   if (_templateCache && now - _templateCache.fetchedAt < TEMPLATE_TTL_MS) {
     return _templateCache.html;
   }
-  // 개발 환경에서는 로컬 Vite 개발 서버의 index.html을 사용해야 미리보기가 정상 동작한다.
-  const templateOrigin =
-    process.env.NODE_ENV === "production" ? SITE_URL : "http://localhost:19759";
+  // 웹 artifact의 로컬 Vite 서버에서 현재 배포와 동일한 index.html을 읽는다.
+  // 공개 도메인을 다시 호출하면 배포 전환 중 이전 빌드의 해시 자산을 참조할 수 있다.
+  const templateOrigin = "http://127.0.0.1:19759";
   const res = await fetch(`${templateOrigin}/index.html`);
   if (!res.ok) {
     throw new Error(`index.html 조회 실패 [${res.status}]`);
@@ -129,6 +129,48 @@ function extractSalaryNumFromText(salary: string): number | undefined {
   return undefined;
 }
 
+type PayPeriod = "HOUR" | "DAY" | "WEEK" | "MONTH" | "YEAR";
+
+const PAY_PERIOD_LABEL: Record<PayPeriod, string> = {
+  HOUR: "시급",
+  DAY: "일당",
+  WEEK: "주급",
+  MONTH: "월급",
+  YEAR: "연봉",
+};
+
+// 2026-09-19: 급여 단위가 불명확한 공고에서 "일당"을 임의로 붙이지 않기 위한
+// null-안전 라벨 조회. getPayPeriod()가 null을 반환하면 빈 문자열을 준다.
+function getPayPeriodLabel(pp: PayPeriod | null): string {
+  return pp ? PAY_PERIOD_LABEL[pp] : "";
+}
+
+function getPayPeriod(value: unknown): PayPeriod | null {
+  // 2026-09-19 수정: 급여 단위가 불명확하면 DAY로 단정하지 않는다(애드센스 재진단
+  // "월급 공고가 DAY로 표시됨" 지적 근본 수정 — 호출부가 "일당"을 임의로 붙이지
+  // 않도록 null을 반환한다).
+  return value === "HOUR" ||
+    value === "DAY" ||
+    value === "WEEK" ||
+    value === "MONTH" ||
+    value === "YEAR"
+    ? value
+    : null;
+}
+
+function formatSalary(salary: string, payPeriod: PayPeriod | null): string {
+  if (!payPeriod) return salary; // 단위 불명 시 원문 그대로(일당으로 단정하지 않음)
+  const prefixPatterns: Record<PayPeriod, RegExp> = {
+    HOUR: /^(?:시급|시간당)\s*/,
+    DAY: /^(?:일당|일급)\s*/,
+    WEEK: /^주급\s*/,
+    MONTH: /^(?:월급|월)\s*/,
+    YEAR: /^(?:연봉|연)\s*/,
+  };
+  const amount = salary.replace(prefixPatterns[payPeriod], "").trim() || salary;
+  return `${PAY_PERIOD_LABEL[payPeriod]} ${amount}`;
+}
+
 // 실제 주소가 확인된 대형 현장만 streetAddress/postalCode를 채운다(2026-09-08 추가 — 서치콘솔
 // "새로운 채용 정보 구조화된 데이터 문제" 이메일 알림, streetAddress/postalCode 누락 125건).
 // 공고 region이 그냥 "평택"/"용인"이라고 무조건 이 주소를 붙이면 실제로는 다른 현장인 공고에
@@ -152,10 +194,12 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const region = typeof job.region === "string" ? job.region : "";
   const jobType = typeof job.job === "string" ? job.job : "";
   const salary = typeof job.salary === "string" ? job.salary : "";
+  const payPeriod = getPayPeriod(job.payPeriod);
+  const payPeriodLabel = getPayPeriodLabel(payPeriod);
   const salaryNum = typeof job.salaryNum === "number" ? job.salaryNum : undefined;
   const detail = typeof job.detail === "string" ? job.detail : "";
   const rawTitle = typeof job.title === "string" ? job.title : "";
-  const company = typeof job.company === "string" && job.company ? job.company : "건설UP";
+  const company = typeof job.company === "string" ? job.company.trim() : "";
   const dateVal = typeof job.date === "string" ? job.date : undefined;
 
   const posted = dateVal && !isNaN(new Date(dateVal).getTime()) ? new Date(dateVal) : new Date();
@@ -167,7 +211,7 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
   const lodging = typeof job.lodging === "string" ? job.lodging : "";
   const descriptionParts = [
     `[${region}] ${jobType} 모집`,
-    salary && `일당 ${salary}`,
+    salary && formatSalary(salary, payPeriod),
     meal && `식사 ${meal}`,
     lodging && `숙박 ${lodging}`,
     detail,
@@ -189,11 +233,14 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
     datePosted: posted.toISOString(),
     validThrough: validThrough.toISOString(),
     employmentType: "CONTRACTOR",
-    hiringOrganization: {
-      "@type": "Organization",
-      name: company,
-      sameAs: SITE_URL,
-    },
+    ...(company
+      ? {
+          hiringOrganization: {
+            "@type": "Organization",
+            name: company,
+          },
+        }
+      : {}),
     jobLocation: {
       "@type": "Place",
       address: {
@@ -215,14 +262,16 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
 
   const effectiveSalaryNum =
     salaryNum && salaryNum > 0 ? salaryNum : extractSalaryNumFromText(salary);
-  if (effectiveSalaryNum && effectiveSalaryNum > 0) {
+  // 2026-09-19: 급여 단위(payPeriod)를 모르면 baseSalary 자체를 생략한다 —
+  // 구조화 데이터에 잘못된 unitText를 넣는 것보다 아예 안 넣는 게 낫다.
+  if (payPeriod && effectiveSalaryNum && effectiveSalaryNum > 0) {
     ld.baseSalary = {
       "@type": "MonetaryAmount",
       currency: "KRW",
       value: {
         "@type": "QuantitativeValue",
         value: effectiveSalaryNum,
-        unitText: "DAY",
+        unitText: payPeriod,
       },
     };
   }
@@ -264,11 +313,17 @@ function setRobotsMeta(html: string, content: string): string {
   return html.replace("</head>", `  <meta name="robots" content="${escapeHtmlAttr(content)}" />\n  </head>`);
 }
 
+function getJobRegion(job: Record<string, unknown>): string {
+  const canonical = typeof job.regionCanonical === "string" ? job.regionCanonical : "";
+  const original = typeof job.region === "string" ? job.region : "";
+  return canonical || original;
+}
+
 // 지역×직종 조합별 공고 수 집계 (공고가 있는 조합만) — sitemap과 랜딩페이지가 공유.
 function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string, number> {
   const counts = new Map<string, number>();
   for (const j of jobs) {
-    const region = typeof j.region === "string" ? j.region : "";
+    const region = getJobRegion(j);
     const jobType = typeof j.job === "string" ? j.job : "";
     if (!region || !jobType || region === "전체" || jobType === "전체") continue;
     const key = `${region}::${jobType}`;
@@ -281,6 +336,76 @@ function countRegionJobCombos(jobs: Array<Record<string, unknown>>): Map<string,
 router.get(`/${INDEXNOW_KEY}.txt`, (_req: Request, res: Response) => {
   res.set("Content-Type", "text/plain; charset=utf-8");
   res.send(INDEXNOW_KEY);
+});
+
+// ── GET / ────────────────────────────────────────────────────────────────────
+// 초기 HTML에도 실제 활성 공고 링크를 포함해, React 실행 전이나 JS 미실행
+// 크롤러에서도 홈페이지의 최신 공고를 바로 확인할 수 있게 한다.
+router.get("/", async (_req: Request, res: Response) => {
+  try {
+    const [template, { jobs: cachedJobs }] = await Promise.all([
+      getIndexTemplate(),
+      getPublicJobs(),
+    ]);
+    const jobs = filterActiveJobs(cachedJobs)
+      .filter((job) => typeof job.id === "string" && job.id)
+      .slice(0, 24);
+
+    const listItems = jobs
+      .map((job) => {
+        const id = typeof job.id === "string" ? job.id : "";
+        const title = typeof job.title === "string" && job.title
+          ? job.title
+          : "건설 현장 구인 공고";
+        const region = typeof job.region === "string" ? job.region : "";
+        const jobType = typeof job.job === "string" ? job.job : "";
+        const salary = typeof job.salary === "string" ? job.salary : "";
+        const payPeriodLabel = getPayPeriodLabel(getPayPeriod(job.payPeriod));
+
+        return `<li style="margin-bottom:12px">
+          <a href="/detail/${encodeURIComponent(id)}" style="color:#1e3a5f;font-weight:700;text-decoration:underline">${escapeHtmlAttr(title)}</a>
+          <div style="margin-top:3px;color:#475569;font-size:14px">${[
+            region && `지역: ${escapeHtmlAttr(region)}`,
+            jobType && `직종: ${escapeHtmlAttr(jobType)}`,
+            salary && escapeHtmlAttr(formatSalary(salary, getPayPeriod(job.payPeriod))),
+          ].filter(Boolean).join(" · ")}</div>
+        </li>`;
+      })
+      .join("\n");
+
+    const fallbackBody = `
+    <div id="root">
+      <main style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">건설 현장 최신 구인 공고</h1>
+        <p style="margin:0 0 16px;color:#334155">현재 모집 중인 최신 공고를 확인하세요.</p>
+        ${jobs.length > 0
+          ? `<ul style="list-style:none;padding:0;margin:0 0 16px">${listItems}</ul>`
+          : `<p style="margin:0 0 16px;color:#64748b">현재 모집 중인 공고가 없습니다.</p>`}
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
+      </main>
+    </div>`;
+
+    const html = template.replace(
+      /<div id="root">[\s\S]*?<\/body>/,
+      `${fallbackBody}\n  </body>`
+    );
+
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", "public, max-age=60");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[home-seo] 렌더링 실패");
+    try {
+      const template = await getIndexTemplate();
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(template);
+    } catch {
+      res.status(500).send("Internal Server Error");
+    }
+  }
 });
 
 // ── GET /sitemap.xml ─────────────────────────────────────────────────────────
@@ -428,6 +553,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     const region = typeof job.region === "string" ? job.region : "";
     const jobType = typeof job.job === "string" ? job.job : "";
     const salary = typeof job.salary === "string" ? job.salary : "";
+    const payPeriodLabel = getPayPeriodLabel(getPayPeriod(job.payPeriod));
     const detail = typeof job.detail === "string" ? job.detail : "";
     const rawTitle = typeof job.title === "string" ? job.title : "";
     const meal = typeof job.meal === "string" ? job.meal : "";
@@ -444,7 +570,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
 
     // 브라우저 제목 — 지역·직종·급여·숙식이 모두 들어간 공고별 고유 제목.
     const titleCore =
-      [region && `[${region}]`, jobType, salary && `일당 ${salary}`, stay]
+      [region && `[${region}]`, jobType, salary && formatSalary(salary, getPayPeriod(job.payPeriod)), stay]
         .filter(Boolean)
         .join(" ") || rawTitle || "건설 구인 공고";
     const closedPrefix = closed ? "[모집마감] " : "";
@@ -507,6 +633,9 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
     // JobPosting 구조화 데이터 삽입 (Google 채용정보 검색 노출 자격 부여).
     // 등록일이 없거나 깨진 공고는 datePosted/validThrough를 지어낼 수 없으므로 생략한다.
     const jobPostingLd = getPostedAt(job) ? buildJobPostingLd(job, id) : "";
+    const robotsMeta = closed
+      ? '<meta name="robots" content="noindex, follow">'
+      : "";
     // BreadcrumbList: 홈 > (지역 직종 랜딩페이지) > 공고 상세
     const breadcrumbLd = buildBreadcrumbLd([
       { name: "건설UP", url: SITE_URL },
@@ -515,7 +644,7 @@ router.get("/detail/:id", async (req: Request, res: Response) => {
         : []),
       { name: pageTitle.replace(/ - 건설UP$/, ""), url: pageUrl },
     ]);
-    html = html.replace("</head>", `  ${jobPostingLd}\n  ${breadcrumbLd}\n  </head>`);
+    html = html.replace("</head>", `  ${robotsMeta}\n  ${jobPostingLd}\n  ${breadcrumbLd}\n  </head>`);
 
     // <div id="root"> 안의 정적 폴백 본문(크롤러/JS 미실행 환경용)을
     // 이 공고 전용 내용으로 교체 — React가 mount되면 어차피 덮어써지므로
@@ -588,7 +717,7 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     const jobs = filterActiveJobs(cachedJobs);
 
     const matched = jobs.filter(
-      (j) => (typeof j.region === "string" ? j.region : "") === region &&
+      (j) => getJobRegion(j) === region &&
              (typeof j.job === "string" ? j.job : "") === jobType
     );
 
@@ -971,13 +1100,17 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       getIndexTemplate(),
       getMergedInfoMeta(),
       // 관리자가 글 제목/설명을 수정했을 수 있으므로 덮어쓰기를 병합 (실패해도 원본으로 진행).
-      getAllInfoOverrides().catch(() => ({}) as Record<string, { title: string; description: string }>),
+      getAllInfoOverrides().catch(() => ({}) as Record<string, InfoOverride>),
     ]);
     const custom = CUSTOM_INFO_PAGES[slug];
     const base = custom ? { slug, title: custom.title, description: custom.description, imageUrl: custom.imageUrl } : metaList.find((a) => a.slug === slug);
     const ov = overrides[slug];
     const meta = base
-      ? { ...base, title: ov?.title || base.title, description: ov?.description || base.description }
+      ? {
+          ...base,
+          title: ov ? ov.title : base.title,
+          description: ov ? ov.description : base.description,
+        }
       : undefined;
     const pageUrl = `${SITE_URL}/info/${encodeURIComponent(slug)}`;
     // DB 글은 업로드된 이미지, 정적 글은 slug와 동일한 파일명 규칙 (프론트 getArticleImage와 동일).
@@ -1011,12 +1144,12 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
         ]);
       html = html.replace("</head>", `${ldTags}</head>`);
 
-      // 관리자 패널("건설 꿀팁" 코너)에서 DB로 발행한 글이면 실제 제목·본문을
+      // 관리자 패널("건설 꿀팁" 코너)에서 DB로 발행한 글이거나 정적 글에 override가 있으면 실제 제목·본문을
       // 크롤러가 JS 실행 없이도 읽을 수 있게 <div id="root"> 폴백에 직접 넣는다.
-      // (기존 19개 정적 글은 body를 여기서 파싱하지 않으므로 메타/구조화 데이터까지만 적용됨.)
       const full = await getBlogArticleFull(slug).catch(() => null);
-      if (full) {
-        const bodyHtml = full.body
+      const fallbackBlocks = ov?.body?.length ? ov.body : full?.body;
+      if (fallbackBlocks) {
+        const bodyHtml = fallbackBlocks
           .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(stripRichMarks(b.text))}</p>`)
           .join("\n");
         const relatedHtml = await buildRelatedLinksHtml(`info:${slug}`);

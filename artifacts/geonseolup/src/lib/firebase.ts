@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { sanitizeClientJob } from '@/lib/phone';
+import { requirePersistedReport } from '@/lib/reportSubmission';
 import {
   getFirestore,
   collection,
@@ -67,6 +68,37 @@ export interface ReservationLog {
   shortcutUsed?: boolean;
 }
 
+export type PayPeriod = 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+
+const PAY_PERIOD_LABEL: Record<PayPeriod, string> = {
+  HOUR: '시급',
+  DAY: '일당',
+  WEEK: '주급',
+  MONTH: '월급',
+  YEAR: '연봉',
+};
+
+export function getPayPeriodLabel(payPeriod?: PayPeriod | null): string {
+  return payPeriod ? PAY_PERIOD_LABEL[payPeriod] : '';
+}
+
+export function getSalaryAmount(salary: string, payPeriod?: PayPeriod | null): string {
+  if (!payPeriod) return salary;
+  const prefixPatterns: Record<PayPeriod, RegExp> = {
+    HOUR: /^(?:시급|시간당)\s*/,
+    DAY: /^(?:일당|일급)\s*/,
+    WEEK: /^주급\s*/,
+    MONTH: /^(?:월급|월)\s*/,
+    YEAR: /^(?:연봉|연)\s*/,
+  };
+  return salary.replace(prefixPatterns[payPeriod], '').trim() || salary;
+}
+
+export function formatSalary(salary: string, payPeriod?: PayPeriod | null): string {
+  if (!payPeriod) return salary;
+  return `${getPayPeriodLabel(payPeriod)} ${getSalaryAmount(salary, payPeriod)}`;
+}
+
 export interface Job {
   id: string;
   title: string;
@@ -76,6 +108,8 @@ export interface Job {
   weldTest?: string;
   salary: string;
   salaryNum?: number;
+  payPeriod?: PayPeriod | null;
+  reviewStatus?: string;
   meal?: string;
   lodging?: string;
   contact?: string;
@@ -595,31 +629,20 @@ function localLoadReports(): JobReport[] {
   }
 }
 
-function localSaveReport(r: JobReport): void {
-  const list = localLoadReports();
-  list.unshift(r);
-  localStorage.setItem('cj_reports', JSON.stringify(list.slice(0, 200)));
-}
-
 function localDeleteReport(id: string): void {
   const list = localLoadReports().filter((r) => r.id !== id);
   localStorage.setItem('cj_reports', JSON.stringify(list));
 }
 
 export async function fbAddReport(entry: Omit<JobReport, 'id' | '_createdAt'>): Promise<string> {
-  // Firestore 우선 시도
   try {
-    const ref = await addDoc(REPORTS_COL, {
+    return await requirePersistedReport(() => addDoc(REPORTS_COL, {
       ...entry,
       _createdAt: serverTimestamp(),
-    });
-    return ref.id;
+    }));
   } catch (e) {
-    console.warn('[Firebase] fbAddReport failed, falling back to local:', e);
-    // 로컬 폴백 — Firestore 권한 오류 시에도 신고 접수 성공으로 처리
-    const id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    localSaveReport({ id, ...entry } as JobReport);
-    return id;
+    console.warn('[Firebase] fbAddReport failed; report was not accepted:', e);
+    throw e;
   }
 }
 

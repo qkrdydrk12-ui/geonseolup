@@ -255,6 +255,7 @@ interface AppState {
   page: number;
   allJobs: Job[];
   filtered: Job[];
+  salaryTopOnly: boolean;
 }
 
 const DEFAULT_REGIONS = ['전체', '서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '해외'];
@@ -374,7 +375,9 @@ function filterAndSort(jobs: Job[], state: AppState): Job[] {
     list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
-  return list;
+  return state.salaryTopOnly
+    ? list.filter((job) => job.payPeriod === 'DAY').slice(0, 5)
+    : list;
 }
 
 interface HomeProps {
@@ -395,6 +398,7 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
       page: 1,
       allJobs: SAMPLE_JOBS,
       filtered: [] as Job[],
+      salaryTopOnly: false,
     };
     initial.filtered = filterAndSort(SAMPLE_JOBS, initial);
     return initial;
@@ -523,7 +527,7 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
 
   function applyFilter(newState: Partial<AppState>) {
     setState((prev) => {
-      const merged = { ...prev, ...newState, page: 1 };
+      const merged = { ...prev, salaryTopOnly: false, ...newState, page: 1 };
       const filtered = filterAndSort(merged.allJobs, merged);
       return { ...merged, filtered };
     });
@@ -536,8 +540,8 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
   function handlePreset(preset: string) {
     setSearchInput('');
     if (preset === 'salary_top') {
-      applyFilter({ keyword: '', region: '전체', job: '전체', weldSub: '전체', sort: 'salary_desc' });
-      showToast('💰 급여 높은 순으로 정렬했습니다');
+      applyFilter({ keyword: '', region: '전체', job: '전체', weldSub: '전체', sort: 'salary_desc', salaryTopOnly: true });
+      showToast('💰 일당 높은 TOP 5를 표시합니다');
     } else if (preset === 'weld') {
       applyFilter({ keyword: '', region: '전체', job: '용접', weldSub: '전체', sort: 'newest' });
       showToast('🔩 용접 일자리를 필터했습니다');
