@@ -228,7 +228,6 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
           hiringOrganization: {
             "@type": "Organization",
             name: company,
-            sameAs: SITE_URL,
           },
         }
       : {}),
