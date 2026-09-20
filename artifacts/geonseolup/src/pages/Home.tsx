@@ -392,6 +392,19 @@ interface HomeProps {
 }
 
 export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
+  const [footerUser, setFooterUser] = useState<{ id: number; nickname: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => setFooterUser(data.user ?? null))
+      .catch(() => setFooterUser(null));
+  }, []);
+
+  async function handleFooterLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    window.location.href = '/';
+  }
   const [state, setState] = useState<AppState>(() => {
     const initial = {
       keyword: '',
@@ -1032,6 +1045,18 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
           <a href="/contact" className="text-white/80 hover:text-white no-underline transition-colors">
             문의하기
           </a>
+              {footerUser && (
+                <>
+                  <span className="text-white/30">|</span>
+                  <button
+                    type="button"
+                    onClick={handleFooterLogout}
+                    className="text-white/80 hover:text-white no-underline transition-colors bg-transparent border-none cursor-pointer font-inherit text-sm"
+                  >
+                    로그아웃
+                  </button>
+                </>
+              )}
         </div>
         <p className="text-sm font-bold mb-1">
           {localStorage.getItem('cj_footer_title') || '건설UP — 전국 건설 현장 일자리 정보'}

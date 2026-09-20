@@ -128,6 +128,11 @@ export default function Header() {
         style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5282 100%)' }}
       >
         <div className="max-w-[1100px] mx-auto px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        {user && (
+          <span className="fixed top-2 right-3 z-[250] text-white text-xs font-bold bg-black/25 px-2.5 py-1 rounded-full whitespace-nowrap">
+            {user.nickname}님
+          </span>
+        )}
           {/* 상단: 로고 (모바일 첫 줄) */}
           <Link href="/" className="flex items-center gap-[7px] no-underline text-white shrink-0">
             <div
@@ -217,18 +222,6 @@ export default function Header() {
                 </div>
               )}
             </div>
-            {user && (
-              <div className="flex items-center gap-2 text-white text-xs font-bold ml-1">
-                <span className="whitespace-nowrap">{user.nickname}님</span>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="text-white/70 hover:text-white bg-transparent border-none cursor-pointer font-inherit text-xs"
-                >
-                  로그아웃
-                </button>
-              </div>
-            )}
 
           </div>
         </div>
