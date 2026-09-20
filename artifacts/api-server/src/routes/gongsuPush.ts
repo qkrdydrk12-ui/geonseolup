@@ -127,10 +127,26 @@ router.post("/gongsu-push/test", requireUser, async (req: Request, res: Response
     }
     isPushConfigured();
     const payload = buildReminderPayload();
+    let successCount = 0;
+    let expiredCount = 0;
     for (const row of result.rows) {
-      await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload);
+      try {
+        await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload);
+        successCount++;
+      } catch (sendErr) {
+        const d = (sendErr as { statusCode?: number; body?: string }) ?? {};
+        if (d.statusCode === 404 || d.statusCode === 410) {
+          expiredCount++;
+          await pgPool.query(`DELETE FROM gongsu_push_subscriptions WHERE endpoint = $1`, [row.endpoint]);
+        }
+        logger.error({ err: String(sendErr), statusCode: d.statusCode, body: d.body }, "[gongsu-push] 테스트 발송 실패 (개별)");
+      }
     }
-    res.json({ ok: true, count: result.rows.length, endpoints: result.rows.map(r => r.endpoint.slice(-24)) });
+    if (successCount === 0 && expiredCount > 0) {
+      res.status(410).json({ ok: false, error: "subscription_expired", expiredCount });
+      return;
+    }
+    res.json({ ok: successCount > 0, count: successCount, expiredCount, endpoints: result.rows.map(r => r.endpoint.slice(-24)) });
   } catch (err) {
     const detail = (err as { statusCode?: number; body?: string }) ?? {};
     logger.error({ err: String(err), statusCode: detail.statusCode, body: detail.body }, "[gongsu-push] 테스트 발송 실패");

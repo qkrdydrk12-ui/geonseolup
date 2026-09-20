@@ -56,9 +56,14 @@ export default function GongsuReminderSettings() {
 
   async function handleTest() {
     setBusy(true);
-    const ok = await sendTestGongsuPush();
+    const result = await sendTestGongsuPush();
     setBusy(false);
-    setMessage(ok ? '테스트 알림을 보냈습니다.' : '테스트 알림 발송에 실패했습니다.');
+    if (result.expired) {
+      setSubscribed(false);
+      setMessage('알림 구독이 만료되었습니다. 다시 설정해주세요.');
+      return;
+    }
+    setMessage(result.ok ? '테스트 알림을 보냈습니다.' : '테스트 알림 발송에 실패했습니다.');
   }
 
   if (loading) return null;

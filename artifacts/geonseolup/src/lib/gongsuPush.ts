@@ -79,7 +79,13 @@ export async function unsubscribeFromGongsuReminder(): Promise<void> {
   }
 }
 
-export async function sendTestGongsuPush(): Promise<boolean> {
+export async function sendTestGongsuPush(): Promise<{ ok: boolean; expired?: boolean }> {
   const res = await fetch('/api/gongsu-push/test', { method: 'POST' });
-  return res.ok;
+  if (res.ok) return { ok: true };
+  try {
+    const data = await res.json();
+    return { ok: false, expired: data.error === 'subscription_expired' };
+  } catch {
+    return { ok: false };
+  }
 }

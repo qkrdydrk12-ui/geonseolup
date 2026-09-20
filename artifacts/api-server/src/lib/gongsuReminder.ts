@@ -60,6 +60,10 @@ async function sendDueReminders(): Promise<void> {
         dateStr,
       ]);
     } catch (err) {
+      const d = (err as { statusCode?: number }) ?? {};
+      if (d.statusCode === 404 || d.statusCode === 410) {
+        await pgPool.query(`DELETE FROM gongsu_push_subscriptions WHERE endpoint = $1`, [row.endpoint]);
+      }
       logger.warn({ err: String(err), endpoint: row.endpoint }, "[gongsu-reminder] 발송 실패");
     }
   }
