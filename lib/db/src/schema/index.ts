@@ -109,6 +109,7 @@ export const blogArticles = pgTable("blog_articles", {
 	// 글 본문 안에 인라인으로 삽입할 계산기 위젯(2026-09-10 신설, 체류시간 개선 목적).
 	// 'retirement-fund' | 'net-pay' | 'severance-pay' 중 하나 또는 미지정(null) — 미지정이면 위젯 없음.
 	relatedCalculator: varchar("related_calculator", { length: 30 }),
+  pushNotified: boolean("push_notified").default(false).notNull(),
 }, (table) => [
 	index("idx_blog_articles_created").using("btree", table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
 	unique("blog_articles_slug_key").on(table.slug),
@@ -173,6 +174,7 @@ export const toonEpisodes = pgTable("toon_episodes", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	createdBy: text("created_by"),
+  pushNotified: boolean("push_notified").default(false).notNull(),
 }, (table) => [
 	index("idx_toon_episodes_number").using("btree", table.episodeNumber.desc().nullsFirst().op("int4_ops")),
 	unique("toon_episodes_slug_key").on(table.slug),
@@ -256,6 +258,7 @@ export const siteNews = pgTable("site_news", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	slug: varchar({ length: 150 }),
+  pushNotified: boolean("push_notified").default(false).notNull(),
 }, (table) => [
 	index("idx_site_news_published").using("btree", table.publishedAt.desc().nullsFirst().op("timestamptz_ops")),
 	uniqueIndex("idx_site_news_slug").using("btree", table.slug.asc().nullsLast().op("text_ops")).where(sql`(slug IS NOT NULL)`),

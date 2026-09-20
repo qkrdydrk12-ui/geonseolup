@@ -1160,10 +1160,6 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
         <p style="margin:0 0 16px;color:#64748b;font-size:14px">${escapeHtmlAttr(meta.description)}</p>
         ${bodyHtml}
         ${relatedHtml}
-        <p style="margin:0;color:#64748b;font-size:14px">
-          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
-          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
-        </p>
       </div>
     </div>`;
         html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
