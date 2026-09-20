@@ -1,0 +1,124 @@
+import { useEffect, useMemo, useState } from 'react';
+
+interface WorkRecord {
+  id: number;
+  work_date: string;
+  gongsu_type: string;
+  site_id: number | null;
+  site_name: string | null;
+}
+
+const SITE_COLORS = ['#f97316', '#60a5fa', '#4ade80', '#f472b6', '#a78bfa', '#facc15'];
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+function pad(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+export default function GongsuCalendar({ refreshKey }: { refreshKey?: number }) {
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
+  const [records, setRecords] = useState<WorkRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const from = `${year}-${pad(month)}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const to = `${year}-${pad(month)}-${pad(lastDay)}`;
+    setLoading(true);
+    fetch(`/api/work-records?from=${from}&to=${to}`)
+      .then((res) => res.json())
+      .then((data) => setRecords(data.records ?? []))
+      .finally(() => setLoading(false));
+  }, [year, month, refreshKey]);
+
+  const siteColorMap = useMemo(() => {
+    const map = new Map<number, string>();
+    let idx = 0;
+    for (const r of records) {
+      if (r.site_id !== null && !map.has(r.site_id)) {
+        map.set(r.site_id, SITE_COLORS[idx % SITE_COLORS.length]);
+        idx++;
+      }
+    }
+    return map;
+  }, [records]);
+
+  const recordsByDate = useMemo(() => {
+    const map = new Map<string, WorkRecord[]>();
+    for (const r of records) {
+      const list = map.get(r.work_date) ?? [];
+      list.push(r);
+      map.set(r.work_date, list);
+    }
+    return map;
+  }, [records]);
+
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  function prevMonth() {
+    if (month === 1) {
+      setYear(year - 1);
+      setMonth(12);
+    } else {
+      setMonth(month - 1);
+    }
+  }
+  function nextMonth() {
+    if (month === 12) {
+      setYear(year + 1);
+      setMonth(1);
+    } else {
+      setMonth(month + 1);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mt-4">
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={prevMonth} className="text-gray-400 px-2">◀</button>
+        <div className="font-semibold text-[#1e3a5f]">{year}년 {month}월</div>
+        <button onClick={nextMonth} className="text-gray-400 px-2">▶</button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 mb-2">
+        {WEEKDAYS.map((d) => (
+          <div key={d}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const dateStr = `${year}-${pad(month)}-${pad(d)}`;
+          const dayRecords = recordsByDate.get(dateStr) ?? [];
+          return (
+            <div key={i} className="aspect-square border border-gray-100 rounded-lg p-1 flex flex-col items-center">
+              <div className="text-xs text-gray-500">{d}</div>
+              <div className="flex flex-wrap gap-0.5 mt-1 justify-center">
+                {dayRecords.map((r) => (
+                  <span
+                    key={r.id}
+                    title={`${r.site_name ?? '현장미상'} · ${r.gongsu_type}`}
+                    className="w-2 h-2 rounded-full"
+                    style={{
+                      background:
+                        r.gongsu_type === 'absent'
+                          ? '#d1d5db'
+                          : r.site_id !== null
+                            ? siteColorMap.get(r.site_id)
+                            : '#9ca3af',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {loading && <div className="text-center text-gray-300 text-xs mt-2">불러오는 중...</div>}
+    </div>
+  );
+}

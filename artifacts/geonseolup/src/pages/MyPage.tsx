@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import GongsuInput from '@/components/GongsuInput';
+import GongsuCalendar from '@/components/GongsuCalendar';
 
 interface MeUser {
   id: number;
@@ -10,6 +12,7 @@ interface MeUser {
 export default function MyPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<MeUser | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -27,11 +30,12 @@ export default function MyPage() {
           <div className="text-center text-gray-400 py-20">불러오는 중...</div>
         ) : user ? (
           <>
-            <h1 className="text-2xl font-bold text-[#1e3a5f] mb-6">마이페이지</h1>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 text-sm text-gray-700">
-              <p><b className="text-[#1e3a5f]">{user.nickname}</b>님, 환영합니다.</p>
-              <p className="mt-2 text-gray-500">공수표 기능은 준비 중입니다.</p>
-            </div>
+            <h1 className="text-2xl font-bold text-[#1e3a5f] mb-2">마이페이지</h1>
+            <p className="text-sm text-gray-500 mb-6">
+              <b className="text-[#1e3a5f]">{user.nickname}</b>님, 환영합니다.
+            </p>
+            <GongsuInput onSaved={() => setRefreshKey((k) => k + 1)} />
+            <GongsuCalendar refreshKey={refreshKey} />
           </>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
