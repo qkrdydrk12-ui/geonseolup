@@ -131,8 +131,9 @@ router.post("/gongsu-push/test", requireUser, async (req: Request, res: Response
     }
     res.json({ ok: true });
   } catch (err) {
-    logger.error({ err: String(err) }, "[gongsu-push] 테스트 발송 실패");
-    res.status(500).json({ ok: false, error: String(err) });
+    const detail = (err as { statusCode?: number; body?: string }) ?? {};
+    logger.error({ err: String(err), statusCode: detail.statusCode, body: detail.body }, "[gongsu-push] 테스트 발송 실패");
+    res.status(500).json({ ok: false, error: String(err), statusCode: detail.statusCode, body: detail.body });
   }
 });
 
