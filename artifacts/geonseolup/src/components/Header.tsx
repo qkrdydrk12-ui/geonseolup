@@ -12,7 +12,6 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pushOn, setPushOn] = useState(isPushMarkedSubscribed());
   const [pushBusy, setPushBusy] = useState(false);
-  const [notifyMenuOpen, setNotifyMenuOpen] = useState(false);
   const siteName = localStorage.getItem('cj_site_name') || '건설UP';
   const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
   const [user, setUser] = useState<{ id: number; nickname: string } | null>(null);
@@ -124,16 +123,6 @@ export default function Header() {
     return () => window.removeEventListener('click', onClick);
   }, [menuOpen]);
 
-  useEffect(() => {
-    if (!notifyMenuOpen) return;
-    function onClickOutsideNotify(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-notify-menu]')) setNotifyMenuOpen(false);
-    }
-    window.addEventListener('click', onClickOutsideNotify);
-    return () => window.removeEventListener('click', onClickOutsideNotify);
-  }, [notifyMenuOpen]);
-
   return (
     <>
       <header
@@ -182,54 +171,6 @@ export default function Header() {
               <span className="whitespace-nowrap">구인등록</span>
             </Link>
 
-              <div className="relative" data-notify-menu>
-                <button
-                  className="w-full flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-bold border-none cursor-pointer transition-all hover:-translate-y-px whitespace-nowrap leading-tight text-white bg-[#f97316]"
-                  onClick={(e) => { e.stopPropagation(); setNotifyMenuOpen((o) => !o); }}
-                >
-                  <span>🔔</span>
-                  <span className="whitespace-nowrap">로그인 알림</span>
-                </button>
-                {notifyMenuOpen && (
-                  <div
-                    className="absolute right-0 sm:right-0 left-0 sm:left-auto top-[calc(100%+4px)] z-[300] min-w-full sm:min-w-[260px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1 p-3"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="text-xs font-bold text-gray-500 mb-2">아침 공수 알림</div>
-                    {user ? (
-                      <GongsuReminderSettings />
-                    ) : (
-                      <p className="text-xs text-gray-400 mb-2">로그인하면 공수 알림을 설정할 수 있어요.</p>
-                    )}
-                    <div className="h-px bg-gray-100 my-3" />
-                    <div className="text-xs font-bold text-gray-500 mb-2">콘텐츠 알림</div>
-                    <div className="flex flex-col gap-1.5 mb-1">
-                      <div className="flex items-center justify-between text-xs text-gray-700">
-                        <span>건설꿀팁</span>
-                        <TopicSubscribeButton topic="tips" label="건설꿀팁" />
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-700">
-                        <span>현장소식</span>
-                        <TopicSubscribeButton topic="news" label="현장소식" />
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-700">
-                        <span>노가다톤</span>
-                        <TopicSubscribeButton topic="toon" label="노가다톤" />
-                      </div>
-                    </div>
-                    <div className="h-px bg-gray-100 my-3" />
-                    <div className="text-xs font-bold text-gray-500 mb-2">구인공고 알림</div>
-                    <button
-                      type="button"
-                      onClick={handlePushToggle}
-                      disabled={pushBusy}
-                      className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-300 text-gray-700 disabled:opacity-50"
-                    >
-                      {pushOn ? '알림 끄기' : '전체 알림 받기'}
-                    </button>
-                  </div>
-                )}
-              </div>
 
             <div className="relative" data-openchat-menu>
               <button
@@ -247,7 +188,7 @@ export default function Header() {
               </button>
               {menuOpen && (
                 <div
-                  className="absolute right-0 sm:right-0 left-0 sm:left-auto top-[calc(100%+4px)] z-[300] min-w-full sm:min-w-[140px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[300px] max-w-[calc(100vw-24px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -269,6 +210,42 @@ export default function Header() {
                     </svg>
                     <span>링크 공유</span>
                   </button>
+              <div className="p-3">
+                <div className="text-xs font-bold text-gray-500 mb-2">아침 공수 알림</div>
+                {user ? (
+                  <GongsuReminderSettings />
+                ) : (
+                  <p className="text-xs text-gray-400 mb-2">로그인하면 공수 알림을 설정할 수 있어요.</p>
+                )}
+                <div className="h-px bg-gray-100 my-3" />
+                <div className="text-xs font-bold text-gray-500 mb-2">콘텐츠 알림</div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs text-gray-700">
+                    <span>건설꿀팁</span>
+                    <TopicSubscribeButton topic="tips" label="건설꿀팁" />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-700">
+                    <span>현장소식</span>
+                    <TopicSubscribeButton topic="news" label="현장소식" />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-700">
+                    <span>노가다톤</span>
+                    <TopicSubscribeButton topic="toon" label="노가다톤" />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-700">
+                    <span>구인공고</span>
+                    <button
+                      type="button"
+                      onClick={handlePushToggle}
+                      disabled={pushBusy}
+                      title="구인공고 알림받기"
+                      className={`px-1.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${pushOn ? 'text-white border-[#f97316] bg-[#f97316]' : 'border-[#1e3a5f]/40 text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white'} ${pushBusy ? 'opacity-60 pointer-events-none' : ''}`}
+                    >
+                      {pushOn ? '🔔' : '🚫'}
+                    </button>
+                  </div>
+                </div>
+              </div>
                 </div>
               )}
             </div>
