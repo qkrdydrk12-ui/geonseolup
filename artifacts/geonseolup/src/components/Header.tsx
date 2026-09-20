@@ -12,6 +12,19 @@ export default function Header() {
   const [pushBusy, setPushBusy] = useState(false);
   const siteName = localStorage.getItem('cj_site_name') || '건설UP';
   const siteSubtitle = localStorage.getItem('cj_site_subtitle') || '건설 현장 일자리 정보';
+  const [user, setUser] = useState<{ id: number; nickname: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => setUser(data.user ?? null))
+      .catch(() => setUser(null));
+  }, []);
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    window.location.href = '/';
+  }
 
   // 2026-08-29: 홈 화면 필터 알림받기 줄에 있던 "브라우저 알림" 버튼을 상단 헤더로 이동.
   // 헤더는 모든 페이지에 공통으로 뜨고 특정 지역/직종 필터 상태가 없으므로, 전체 공고 기준으로 구독한다.
@@ -204,6 +217,18 @@ export default function Header() {
                 </div>
               )}
             </div>
+            {user && (
+              <div className="flex items-center gap-2 text-white text-xs font-bold ml-1">
+                <span className="whitespace-nowrap">{user.nickname}님</span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="text-white/70 hover:text-white bg-transparent border-none cursor-pointer font-inherit text-xs"
+                >
+                  로그아웃
+                </button>
+              </div>
+            )}
 
           </div>
         </div>
