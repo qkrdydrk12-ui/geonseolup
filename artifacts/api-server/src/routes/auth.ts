@@ -89,7 +89,7 @@ router.get("/auth/kakao/callback", async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000,
       path: "/",
     });
-    res.redirect("/mypage");
+    res.redirect("/");
   } catch (err) {
     logger.error({ err: String(err) }, "[auth-kakao] 콜백 처리 실패");
     res.redirect("/?login=fail");

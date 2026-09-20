@@ -1,6 +1,20 @@
 import { Link } from 'wouter';
+import { useEffect, useState } from 'react';
 
 export default function Footer() {
+  const [user, setUser] = useState<{ id: number } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => setUser(data.user ?? null))
+      .catch(() => setUser(null));
+  }, []);
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    window.location.href = '/';
+  }
   return (
     <footer className="mt-auto border-t border-gray-200 bg-white">
       <div className="max-w-[860px] mx-auto px-4 py-6 flex flex-col items-center gap-3 text-sm text-gray-500">
@@ -32,6 +46,15 @@ export default function Footer() {
             <Link href="/contact" className="hover:text-[#f97316] transition-colors">
               문의하기
             </Link>
+            {user && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="hover:text-[#f97316] transition-colors bg-transparent border-none p-0 text-sm font-inherit cursor-pointer"
+              >
+                로그아웃
+              </button>
+            )}
           </nav>
           <span className="text-xs text-gray-400">© {new Date().getFullYear()} 건설UP</span>
         </div>

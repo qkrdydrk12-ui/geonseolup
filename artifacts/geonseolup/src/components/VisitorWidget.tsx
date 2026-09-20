@@ -116,7 +116,7 @@ export default function VisitorWidget() {
   if (!isAdmin) return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-[9000] font-[inherit]">
+    <div className="fixed bottom-24 right-5 z-[9000] font-[inherit]">
       {!open ? (
         <button
           onClick={() => { setOpen(true); refreshStats(); }}
