@@ -83,7 +83,7 @@ router.get("/work-records", requireUser, async (req: Request, res: Response) => 
   }
   try {
     const result = await pgPool.query<WorkRecordRow>(
-      `SELECT wr.id, wr.work_date, wr.gongsu_type, wr.site_id, s.name AS site_name
+      `SELECT wr.id, to_char(wr.work_date, 'YYYY-MM-DD') AS work_date, wr.gongsu_type, wr.site_id, s.name AS site_name
        FROM work_records wr
        LEFT JOIN sites s ON s.id = wr.site_id
        WHERE wr.user_id = $1 AND wr.work_date BETWEEN $2 AND $3
