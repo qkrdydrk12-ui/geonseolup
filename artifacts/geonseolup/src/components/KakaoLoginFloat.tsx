@@ -22,7 +22,7 @@ export default function KakaoLoginFloat() {
   return (
     <a
       href="/api/auth/kakao/login"
-      className="fixed bottom-24 right-5 z-[9000] flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-lg text-sm font-bold cursor-pointer no-underline"
+      className="fixed bottom-16 right-5 z-[9000] flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-lg text-sm font-bold cursor-pointer no-underline"
       style={{ background: '#FEE500', color: '#181600' }}
     >
       💬 카카오 로그인
