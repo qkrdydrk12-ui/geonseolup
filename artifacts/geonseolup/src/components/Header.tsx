@@ -186,7 +186,7 @@ export default function Header() {
               </button>
               {menuOpen && (
                 <div
-                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[300px] max-w-[calc(100vw-24px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                    className="fixed left-1/2 -translate-x-1/2 top-32 sm:top-14 z-[300] w-[300px] max-w-[calc(100vw-24px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
