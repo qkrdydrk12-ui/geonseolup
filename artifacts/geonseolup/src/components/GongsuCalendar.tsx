@@ -6,6 +6,7 @@ interface WorkRecord {
   gongsu_type: string;
   site_id: number | null;
   site_name: string | null;
+  site_daily_wage: number | null;
 }
 
 const SITE_COLORS = ['#f97316', '#60a5fa', '#4ade80', '#f472b6', '#a78bfa', '#facc15'];
@@ -94,6 +95,11 @@ export default function GongsuCalendar({ refreshKey }: { refreshKey?: number }) 
           if (d === null) return <div key={i} />;
           const dateStr = `${year}-${pad(month)}-${pad(d)}`;
           const dayRecords = recordsByDate.get(dateStr) ?? [];
+          const dayTotal = dayRecords.reduce((sum, r) => {
+            if (r.gongsu_type === 'absent') return sum;
+            const wage = r.site_daily_wage ?? 0;
+            return sum + wage * Number(r.gongsu_type);
+          }, 0);
           return (
             <div key={i} className="aspect-square border border-gray-100 rounded-lg p-1 flex flex-col items-center">
               <div className="text-xs text-gray-500">{d}</div>
@@ -114,6 +120,11 @@ export default function GongsuCalendar({ refreshKey }: { refreshKey?: number }) 
                   />
                 ))}
               </div>
+              {dayTotal > 0 && (
+                <div className="text-[9px] sm:text-[10px] font-bold mt-0.5 leading-none" style={{ color: '#1e3a5f' }}>
+                  {dayTotal >= 10000 ? `${Math.round(dayTotal / 1000) / 10}만` : dayTotal.toLocaleString()}
+                </div>
+              )}
             </div>
           );
         })}

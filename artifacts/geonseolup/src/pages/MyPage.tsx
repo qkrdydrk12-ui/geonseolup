@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import GongsuInput from '@/components/GongsuInput';
+import GongsuMonthSummary from '@/components/GongsuMonthSummary';
 import GongsuCalendar from '@/components/GongsuCalendar';
 import GongsuWageSummary from '@/components/GongsuWageSummary';
 import GongsuRetirementFund from '@/components/GongsuRetirementFund';
@@ -38,9 +39,10 @@ export default function MyPage() {
               <b className="text-[#1e3a5f]">{user.nickname}</b>님, 환영합니다.
             </p>
             <GongsuInput onSaved={() => setRefreshKey((k) => k + 1)} />
-            <GongsuCalendar refreshKey={refreshKey} />
-            <GongsuWageSummary refreshKey={refreshKey} />
+            <GongsuMonthSummary refreshKey={refreshKey} />
             <GongsuRetirementFund refreshKey={refreshKey} />
+            <GongsuCalendar refreshKey={refreshKey} />
+            <GongsuWageSummary refreshKey={refreshKey} onChanged={() => setRefreshKey((k) => k + 1)} />
             <GongsuReminderSettings />
           </>
         ) : (

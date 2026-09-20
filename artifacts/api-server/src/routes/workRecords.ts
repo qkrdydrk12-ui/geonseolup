@@ -24,9 +24,10 @@ interface WorkRecordRow {
   gongsu_type: string;
   site_id: number | null;
   site_name: string | null;
+  site_daily_wage: number | null;
 }
 
-async function resolveSiteId(userId: number, siteName: string | undefined | null): Promise<number | null> {
+async function resolveSiteId(userId: number, siteName: string | undefined | null, dailyWage?: number | null): Promise<number | null> {
   const name = (siteName || "").trim();
   if (!name) return null;
   const existing = await pgPool.query<{ id: number }>(
@@ -34,9 +35,10 @@ async function resolveSiteId(userId: number, siteName: string | undefined | null
     [userId, name]
   );
   if (existing.rows.length > 0) return existing.rows[0].id;
+  const wage = typeof dailyWage === "number" && dailyWage > 0 ? Math.round(dailyWage) : null;
   const inserted = await pgPool.query<{ id: number }>(
-    `INSERT INTO sites (user_id, name) VALUES ($1, $2) RETURNING id`,
-    [userId, name]
+    `INSERT INTO sites (user_id, name, daily_wage) VALUES ($1, $2, $3) RETURNING id`,
+    [userId, name, wage]
   );
   return inserted.rows[0].id;
 }
@@ -44,10 +46,11 @@ async function resolveSiteId(userId: number, siteName: string | undefined | null
 // POST /api/work-records — 공수 기록 등록(하루에 여러 현장 기록 가능).
 router.post("/work-records", requireUser, async (req: Request, res: Response) => {
   const userId = (req as Request & { userId: number }).userId;
-  const { workDate, gongsuType, siteName } = req.body as {
+  const { workDate, gongsuType, siteName, dailyWage } = req.body as {
     workDate?: string;
     gongsuType?: string;
     siteName?: string;
+    dailyWage?: number;
   };
   if (!workDate || !DATE_RE.test(workDate)) {
     res.status(400).json({ ok: false, message: "workDate(YYYY-MM-DD)가 필요합니다" });
@@ -58,7 +61,7 @@ router.post("/work-records", requireUser, async (req: Request, res: Response) =>
     return;
   }
   try {
-    const siteId = await resolveSiteId(userId, siteName);
+    const siteId = await resolveSiteId(userId, siteName, dailyWage);
     const result = await pgPool.query<{ id: number }>(
       `INSERT INTO work_records (user_id, site_id, work_date, gongsu_type)
        VALUES ($1, $2, $3, $4)
@@ -83,7 +86,7 @@ router.get("/work-records", requireUser, async (req: Request, res: Response) => 
   }
   try {
     const result = await pgPool.query<WorkRecordRow>(
-      `SELECT wr.id, to_char(wr.work_date, 'YYYY-MM-DD') AS work_date, wr.gongsu_type, wr.site_id, s.name AS site_name
+      `SELECT wr.id, to_char(wr.work_date, 'YYYY-MM-DD') AS work_date, wr.gongsu_type, wr.site_id, s.name AS site_name, s.daily_wage AS site_daily_wage
        FROM work_records wr
        LEFT JOIN sites s ON s.id = wr.site_id
        WHERE wr.user_id = $1 AND wr.work_date BETWEEN $2 AND $3
@@ -196,6 +199,50 @@ router.delete("/work-records/:id", requireUser, async (req: Request, res: Respon
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err: String(err) }, "[work-records] 삭제 실패");
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// GET /api/sites — 현장 목록 + 일당 조회.
+router.get("/sites", requireUser, async (req: Request, res: Response) => {
+  const userId = (req as Request & { userId: number }).userId;
+  try {
+    const result = await pgPool.query<{ id: number; name: string; daily_wage: number | null }>(
+      `SELECT id, name, daily_wage FROM sites WHERE user_id = $1 ORDER BY name ASC`,
+      [userId]
+    );
+    res.json({ ok: true, sites: result.rows });
+  } catch (err) {
+    logger.error({ err: String(err) }, "[sites] 조회 실패");
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// PATCH /api/sites/:id — 현장 일당 수정.
+router.patch("/sites/:id", requireUser, async (req: Request, res: Response) => {
+  const userId = (req as Request & { userId: number }).userId;
+  const id = Number(req.params.id);
+  const { dailyWage } = req.body as { dailyWage?: number };
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ ok: false, message: "잘못된 id" });
+    return;
+  }
+  if (typeof dailyWage !== "number" || dailyWage <= 0) {
+    res.status(400).json({ ok: false, message: "dailyWage는 0보다 큰 숫자여야 합니다" });
+    return;
+  }
+  try {
+    const result = await pgPool.query(
+      `UPDATE sites SET daily_wage = $3 WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, userId, Math.round(dailyWage)]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ ok: false, message: "현장을 찾을 수 없습니다" });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err: String(err) }, "[sites] 일당 수정 실패");
     res.status(500).json({ ok: false, error: String(err) });
   }
 });
