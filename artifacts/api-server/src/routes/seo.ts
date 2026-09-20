@@ -233,14 +233,15 @@ function buildJobPostingLd(job: Record<string, unknown>, id: string): string {
     datePosted: posted.toISOString(),
     validThrough: validThrough.toISOString(),
     employmentType: "CONTRACTOR",
-    ...(company
-      ? {
-          hiringOrganization: {
-            "@type": "Organization",
-            name: company,
-          },
-        }
-      : {}),
+    // hiringOrganization은 Google 채용정보 구조화 데이터의 필수(심각) 항목이라
+    // 생략하면 리치 결과 노출 자체가 막힌다 (2026-09-20 서치콘솔 "hiringOrganization 필드
+    // 누락" 알림으로 확인 — 등록 공고 중 회사명(company)을 안 적은 글이 더 많아 대부분
+    // 이 문제에 걸려 있었음). company가 없으면 이 공고를 게시하는 건설UP 자체를 채용
+    // 주체로 표기한다(실제로 건설UP이 이 공고를 공개 게시하는 주체이므로 없는 회사명을
+    // 지어내는 것과는 다르다).
+    hiringOrganization: company
+      ? { "@type": "Organization", name: company }
+      : { "@type": "Organization", name: "건설UP", url: SITE_URL },
     jobLocation: {
       "@type": "Place",
       address: {
@@ -1160,6 +1161,10 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
         <p style="margin:0 0 16px;color:#64748b;font-size:14px">${escapeHtmlAttr(meta.description)}</p>
         ${bodyHtml}
         ${relatedHtml}
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
       </div>
     </div>`;
         html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
