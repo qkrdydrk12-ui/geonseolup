@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { fbGetSetting } from '@/lib/firebase';
 import { subscribeToPush, unsubscribeFromPush, isPushMarkedSubscribed } from '@/lib/push';
-import GongsuReminderSettings from './GongsuReminderSettings';
-import TopicSubscribeButton from './TopicSubscribeButton';
 
 // 2026-08-29: 상단 헤더의 "문의" 팝업 버튼은 제거됨 — 푸터의 "문의하기"(/contact 페이지)와
 // 중복이라 정리했다. 관련 팝업 UI(ContactModal)도 트리거가 사라져 함께 제거.
@@ -210,42 +208,14 @@ export default function Header() {
                     </svg>
                     <span>링크 공유</span>
                   </button>
-              <div className="p-3">
-                <div className="text-xs font-bold text-gray-500 mb-2">아침 공수 알림</div>
-                {user ? (
-                  <GongsuReminderSettings />
-                ) : (
-                  <p className="text-xs text-gray-400 mb-2">로그인하면 공수 알림을 설정할 수 있어요.</p>
-                )}
-                <div className="h-px bg-gray-100 my-3" />
-                <div className="text-xs font-bold text-gray-500 mb-2">콘텐츠 알림</div>
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-xs text-gray-700">
-                    <span>건설꿀팁</span>
-                    <TopicSubscribeButton topic="tips" label="건설꿀팁" />
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-700">
-                    <span>현장소식</span>
-                    <TopicSubscribeButton topic="news" label="현장소식" />
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-700">
-                    <span>노가다톤</span>
-                    <TopicSubscribeButton topic="toon" label="노가다톤" />
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-700">
-                    <span>구인공고</span>
-                    <button
-                      type="button"
-                      onClick={handlePushToggle}
-                      disabled={pushBusy}
-                      title="구인공고 알림받기"
-                      className={`px-1.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] transition-all ${pushOn ? 'text-white border-[#f97316] bg-[#f97316]' : 'border-[#1e3a5f]/40 text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white'} ${pushBusy ? 'opacity-60 pointer-events-none' : ''}`}
-                    >
-                      {pushOn ? '🔔' : '🚫'}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <Link
+                href="/alerts"
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left no-underline"
+                onClick={() => setMenuOpen(false)}
+              >
+                <span>🔔</span>
+                <span>알림 설정</span>
+              </Link>
                 </div>
               )}
             </div>

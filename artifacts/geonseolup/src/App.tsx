@@ -22,6 +22,7 @@ import LaborContractGenerator from '@/pages/LaborContractGenerator';
 import VisitorWidget from '@/components/VisitorWidget';
 import KakaoLoginFloat from '@/components/KakaoLoginFloat';
 import MyPage from '@/pages/MyPage';
+import AlertSettings from '@/pages/AlertSettings';
 import PageFlowTracker from '@/components/PageFlowTracker';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 
@@ -236,6 +237,9 @@ function Router() {
       </Route>
       <Route path="/privacy">
         <Privacy />
+      </Route>
+      <Route path="/alerts">
+        <AlertSettings />
       </Route>
       <Route path="/mypage">
         <MyPage />
