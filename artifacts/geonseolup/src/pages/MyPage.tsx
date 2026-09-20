@@ -4,6 +4,7 @@ import Footer from '@/components/Footer';
 import GongsuInput from '@/components/GongsuInput';
 import GongsuCalendar from '@/components/GongsuCalendar';
 import GongsuWageSummary from '@/components/GongsuWageSummary';
+import GongsuRetirementFund from '@/components/GongsuRetirementFund';
 
 interface MeUser {
   id: number;
@@ -38,6 +39,7 @@ export default function MyPage() {
             <GongsuInput onSaved={() => setRefreshKey((k) => k + 1)} />
             <GongsuCalendar refreshKey={refreshKey} />
             <GongsuWageSummary refreshKey={refreshKey} />
+            <GongsuRetirementFund refreshKey={refreshKey} />
           </>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
