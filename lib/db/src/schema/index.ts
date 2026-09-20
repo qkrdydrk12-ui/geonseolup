@@ -382,3 +382,19 @@ export const workRecords = pgTable(
     ),
   ]
 );
+
+// 공수표 4단계 — 회원별 아침 알림 구독(신규).
+export const gongsuPushSubscriptions = pgTable("gongsu_push_subscriptions", {
+  endpoint: text().primaryKey().notNull(),
+  userId: integer("user_id").notNull(),
+  p256dh: text().notNull(),
+  auth: text().notNull(),
+  reminderTime: text("reminder_time").default('06:55').notNull(),
+  enabled: boolean().default(true).notNull(),
+  lastSentDate: date("last_sent_date"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_gongsu_push_subs_user").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
+  foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: "gongsu_push_subs_user_id_fkey" }).onDelete("cascade"),
+]);

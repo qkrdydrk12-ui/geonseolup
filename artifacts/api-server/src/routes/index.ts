@@ -18,6 +18,7 @@ import toonRouter from "./toon";
 import contentEngagementRouter from "./contentEngagement";
 import authRouter from "./auth";
 import workRecordsRouter from "./workRecords";
+import gongsuPushRouter from "./gongsuPush";
 
 const router: IRouter = Router();
 
@@ -32,6 +33,7 @@ router.use(indexingRouter);
 router.use(pushRouter);
 router.use(authRouter);
 router.use(workRecordsRouter);
+router.use(gongsuPushRouter);
 router.use(subscribeRouter);
 router.use(infoRouter);
 router.use(threadsImageRouter);
