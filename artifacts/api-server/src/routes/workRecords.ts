@@ -97,6 +97,48 @@ router.get("/work-records", requireUser, async (req: Request, res: Response) => 
   }
 });
 
+interface SiteSummaryRow {
+  site_id: number;
+  site_name: string;
+  work_days: string;
+}
+
+// GET /api/work-records/site-summary?year=YYYY&month=MM — 현장별 이번 달 누적 근무일수(고용보험 8일 기준 판단용).
+router.get("/work-records/site-summary", requireUser, async (req: Request, res: Response) => {
+  const userId = (req as Request & { userId: number }).userId;
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    res.status(400).json({ ok: false, message: "year, month가 필요합니다" });
+    return;
+  }
+  try {
+    const result = await pgPool.query<SiteSummaryRow>(
+      `SELECT wr.site_id, s.name AS site_name, COUNT(DISTINCT wr.work_date) AS work_days
+       FROM work_records wr
+       JOIN sites s ON s.id = wr.site_id
+       WHERE wr.user_id = $1
+         AND wr.site_id IS NOT NULL
+         AND wr.gongsu_type <> 'absent'
+         AND EXTRACT(YEAR FROM wr.work_date) = $2
+         AND EXTRACT(MONTH FROM wr.work_date) = $3
+       GROUP BY wr.site_id, s.name
+       ORDER BY work_days DESC`,
+      [userId, year, month]
+    );
+    const sites = result.rows.map((r) => ({
+      siteId: r.site_id,
+      siteName: r.site_name,
+      workDays: Number(r.work_days),
+      employmentInsuranceApplies: Number(r.work_days) >= 8,
+    }));
+    res.json({ ok: true, sites });
+  } catch (err) {
+    logger.error({ err: String(err) }, "[work-records] 현장별 집계 실패");
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 // PATCH /api/work-records/:id — 기록 수정.
 router.patch("/work-records/:id", requireUser, async (req: Request, res: Response) => {
   const userId = (req as Request & { userId: number }).userId;
