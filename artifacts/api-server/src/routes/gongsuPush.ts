@@ -5,7 +5,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { pgPool } from "../lib/db.js";
 import { logger } from "../lib/logger.js";
 import { requireUser } from "../lib/userSession.js";
-import { getVapidPublicKey } from "../lib/webPush.js";
+import { getVapidPublicKey, isPushConfigured } from "../lib/webPush.js";
 import { buildReminderPayload, startGongsuReminderScheduler } from "../lib/gongsuReminder.js";
 
 startGongsuReminderScheduler();
@@ -125,6 +125,7 @@ router.post("/gongsu-push/test", requireUser, async (req: Request, res: Response
       res.status(404).json({ ok: false, error: "not_subscribed" });
       return;
     }
+    isPushConfigured();
     const payload = buildReminderPayload();
     for (const row of result.rows) {
       await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload);

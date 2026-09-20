@@ -6,6 +6,7 @@
 import webpush from "web-push";
 import { pgPool } from "./db.js";
 import { logger } from "./logger.js";
+import { isPushConfigured } from "./webPush.js";
 
 const KST_OFFSET_MS = 9 * 3600_000;
 const TICK_MS = 60_000;
@@ -49,6 +50,7 @@ async function sendDueReminders(): Promise<void> {
   }
   if (rows.length === 0) return;
 
+  isPushConfigured();
   const payload = buildReminderPayload();
   for (const row of rows) {
     try {
