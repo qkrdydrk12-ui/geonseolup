@@ -130,7 +130,7 @@ router.post("/gongsu-push/test", requireUser, async (req: Request, res: Response
     for (const row of result.rows) {
       await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload);
     }
-    res.json({ ok: true });
+    res.json({ ok: true, count: result.rows.length, endpoints: result.rows.map(r => r.endpoint.slice(-24)) });
   } catch (err) {
     const detail = (err as { statusCode?: number; body?: string }) ?? {};
     logger.error({ err: String(err), statusCode: detail.statusCode, body: detail.body }, "[gongsu-push] 테스트 발송 실패");
