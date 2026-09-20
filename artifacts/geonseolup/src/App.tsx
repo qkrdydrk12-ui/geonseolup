@@ -20,6 +20,7 @@ import NetPayCalculator from '@/pages/NetPayCalculator';
 import SeverancePayCalculator from '@/pages/SeverancePayCalculator';
 import LaborContractGenerator from '@/pages/LaborContractGenerator';
 import VisitorWidget from '@/components/VisitorWidget';
+import KakaoLoginFloat from '@/components/KakaoLoginFloat';
 import MyPage from '@/pages/MyPage';
 import PageFlowTracker from '@/components/PageFlowTracker';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
@@ -292,6 +293,7 @@ function App() {
       <PageFlowTracker />
       <Router />
       <VisitorWidget />
+      <KakaoLoginFloat />
     </WouterRouter>
   );
 }
