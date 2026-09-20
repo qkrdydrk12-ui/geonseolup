@@ -5,8 +5,10 @@ import router from "./routes";
 import rssRouter from "./routes/rss";
 import seoRouter from "./routes/seo";
 import { logger } from "./lib/logger";
+import cookieParser from "cookie-parser";
 
 const app: Express = express();
+app.use(cookieParser());
 
 app.use(
   pinoHttp({

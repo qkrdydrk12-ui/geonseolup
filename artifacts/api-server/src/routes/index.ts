@@ -16,6 +16,7 @@ import blogArticlesRouter from "./blogArticles";
 import relatedLinksRouter from "./relatedLinks";
 import toonRouter from "./toon";
 import contentEngagementRouter from "./contentEngagement";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
@@ -28,6 +29,7 @@ router.use(jobsRouter);
 router.use(coupangRouter);
 router.use(indexingRouter);
 router.use(pushRouter);
+router.use(authRouter);
 router.use(subscribeRouter);
 router.use(infoRouter);
 router.use(threadsImageRouter);

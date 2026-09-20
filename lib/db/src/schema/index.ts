@@ -317,3 +317,68 @@ export const contentCommentsTable = pgTable(
     index("idx_content_comments_created").on(table.createdAt),
   ]
 );
+
+
+// 공수표(일용직 출퇴근 기록) 기능 0단계 — 카카오 로그인 회원/현장/기록 테이블.
+// 기획문서: Desktop/건설UP 공수표/건설UP_공수표_실행단계.html 생성 2026-08-30, 0단계 시작 2026-09-20.
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    kakaoId: varchar("kakao_id", { length: 50 }).notNull(),
+    nickname: varchar("nickname", { length: 100 }).notNull(),
+    phone: varchar("phone", { length: 20 }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (table) => [unique("users_kakao_id_key").on(table.kakaoId)]
+);
+
+export const sites = pgTable(
+  "sites",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "sites_user_id_fkey",
+    }).onDelete("cascade"),
+    index("idx_sites_user").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
+  ]
+);
+
+export const workRecords = pgTable(
+  "work_records",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    siteId: integer("site_id"),
+    workDate: date("work_date").notNull(),
+    // "full" | "half" | "absent" — 1공수/0.5공수/결근.
+    gongsuType: varchar("gongsu_type", { length: 10 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "work_records_user_id_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.siteId],
+      foreignColumns: [sites.id],
+      name: "work_records_site_id_fkey",
+    }).onDelete("set null"),
+    index("idx_work_records_user_date").using(
+      "btree",
+      table.userId.asc().nullsLast().op("int4_ops"),
+      table.workDate.asc().nullsLast().op("date_ops")
+    ),
+  ]
+);
