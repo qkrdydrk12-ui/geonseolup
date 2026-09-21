@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 interface TodayRecord {
   id: number;
   gongsu_type: string;
-  site_name: string | null;
 }
 
 const STEP = 0.1;
@@ -22,12 +21,8 @@ function round1(n: number) {
   return Math.round(n * 10) / 10;
 }
 
-function formatGongsu(type: string) {
-  return type === 'absent' ? '결근' : `${type}공수`;
-}
-
 export default function GongsuInput({ onSaved }: { onSaved?: () => void }) {
-  const [siteName, setSiteName] = useState('');
+  const [wage, setWage] = useState('');
   const [gongsu, setGongsu] = useState(1);
   const [saving, setSaving] = useState(false);
   const [todayRecords, setTodayRecords] = useState<TodayRecord[]>([]);
@@ -41,20 +36,33 @@ export default function GongsuInput({ onSaved }: { onSaved?: () => void }) {
     setLoading(false);
   }
 
+  async function loadLastWage() {
+    const res = await fetch('/api/work-records/last-wage');
+    const data = await res.json();
+    if (data.dailyWage != null) {
+      setWage(String(data.dailyWage));
+    }
+  }
+
   useEffect(() => {
     loadToday();
+    loadLastWage();
   }, []);
 
   async function submit(gongsuType: string) {
     setSaving(true);
     try {
+      const dailyWage = Number(wage);
       const res = await fetch('/api/work-records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workDate: todayStr(), gongsuType, siteName: siteName || undefined }),
+        body: JSON.stringify({
+          workDate: todayStr(),
+          gongsuType,
+          ...(dailyWage > 0 ? { dailyWage } : {}),
+        }),
       });
       if (res.ok) {
-        setSiteName('');
         setGongsu(1);
         await loadToday();
         onSaved?.();
@@ -68,9 +76,10 @@ export default function GongsuInput({ onSaved }: { onSaved?: () => void }) {
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
       <input
         type="text"
-        value={siteName}
-        onChange={(e) => setSiteName(e.target.value)}
-        placeholder="현장명 (선택)"
+        inputMode="numeric"
+        value={wage}
+        onChange={(e) => setWage(e.target.value)}
+        placeholder="오늘 일당 (원)"
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
       />
       <div className="flex items-center justify-center gap-4 mb-4">
@@ -78,18 +87,18 @@ export default function GongsuInput({ onSaved }: { onSaved?: () => void }) {
           onClick={() => setGongsu((v) => Math.max(MIN, round1(v - STEP)))}
           disabled={saving}
           className="w-10 h-10 rounded-full text-lg font-bold text-white disabled:opacity-50"
-          style={{ background: '#9ca3af' }}
+          style={{ background: '#1e3a5f' }}
         >
-          －
+          -
         </button>
-        <div className="text-2xl font-bold text-[#1e3a5f] w-24 text-center">{gongsu.toFixed(1)}공수</div>
+        <div className="text-2xl font-bold text-[#1e3a5f] w-16 text-center">{gongsu.toFixed(1)}</div>
         <button
           onClick={() => setGongsu((v) => Math.min(MAX, round1(v + STEP)))}
           disabled={saving}
           className="w-10 h-10 rounded-full text-lg font-bold text-white disabled:opacity-50"
           style={{ background: '#1e3a5f' }}
         >
-          ＋
+          +
         </button>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -114,14 +123,7 @@ export default function GongsuInput({ onSaved }: { onSaved?: () => void }) {
         {loading ? null : todayRecords.length === 0 ? (
           <span className="text-gray-400">오늘 기록 없음</span>
         ) : (
-          <div className="space-y-1">
-            {todayRecords.map((r) => (
-              <div key={r.id} className="text-[#1e3a5f]">
-                ✓ 오늘 기록됨 — {formatGongsu(r.gongsu_type)}
-                {r.site_name ? ` · ${r.site_name}` : ''}
-              </div>
-            ))}
-          </div>
+          <span className="text-[#1e3a5f]">✓ 오늘 기록됨</span>
         )}
       </div>
     </div>

@@ -4,12 +4,9 @@ interface WorkRecord {
   id: number;
   work_date: string;
   gongsu_type: string;
-  site_id: number | null;
-  site_name: string | null;
-  site_daily_wage: number | null;
+  daily_wage: number | null;
 }
 
-const SITE_COLORS = ['#f97316', '#60a5fa', '#4ade80', '#f472b6', '#a78bfa', '#facc15'];
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 function pad(n: number) {
@@ -32,18 +29,6 @@ export default function GongsuCalendar({ refreshKey }: { refreshKey?: number }) 
       .then((data) => setRecords(data.records ?? []))
       .finally(() => setLoading(false));
   }, [year, month, refreshKey]);
-
-  const siteColorMap = useMemo(() => {
-    const map = new Map<number, string>();
-    let idx = 0;
-    for (const r of records) {
-      if (r.site_id !== null && !map.has(r.site_id)) {
-        map.set(r.site_id, SITE_COLORS[idx % SITE_COLORS.length]);
-        idx++;
-      }
-    }
-    return map;
-  }, [records]);
 
   const recordsByDate = useMemo(() => {
     const map = new Map<string, WorkRecord[]>();
@@ -97,29 +82,12 @@ export default function GongsuCalendar({ refreshKey }: { refreshKey?: number }) 
           const dayRecords = recordsByDate.get(dateStr) ?? [];
           const dayTotal = dayRecords.reduce((sum, r) => {
             if (r.gongsu_type === 'absent') return sum;
-            const wage = r.site_daily_wage ?? 0;
+            const wage = r.daily_wage ?? 0;
             return sum + wage * Number(r.gongsu_type);
           }, 0);
           return (
-            <div key={i} className="aspect-square border border-gray-100 rounded-lg p-1 flex flex-col items-center">
+            <div key={i} className="aspect-square border border-gray-100 rounded-lg p-1 flex flex-col items-center justify-center">
               <div className="text-xs text-gray-500">{d}</div>
-              <div className="flex flex-wrap gap-0.5 mt-1 justify-center">
-                {dayRecords.map((r) => (
-                  <span
-                    key={r.id}
-                    title={`${r.site_name ?? '현장미상'} · ${r.gongsu_type}`}
-                    className="w-2 h-2 rounded-full"
-                    style={{
-                      background:
-                        r.gongsu_type === 'absent'
-                          ? '#d1d5db'
-                          : r.site_id !== null
-                            ? siteColorMap.get(r.site_id)
-                            : '#9ca3af',
-                    }}
-                  />
-                ))}
-              </div>
               {dayTotal > 0 && (
                 <div className="text-[9px] sm:text-[10px] font-bold mt-0.5 leading-none" style={{ color: '#1e3a5f' }}>
                   {dayTotal >= 10000 ? `${Math.round(dayTotal / 1000) / 10}만` : dayTotal.toLocaleString()}

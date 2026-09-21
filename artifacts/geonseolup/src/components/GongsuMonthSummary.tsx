@@ -5,9 +5,7 @@ interface WorkRecord {
   id: number;
   work_date: string;
   gongsu_type: string;
-  site_id: number | null;
-  site_name: string | null;
-  site_daily_wage: number | null;
+  daily_wage: number | null;
 }
 
 export default function GongsuMonthSummary({ refreshKey }: { refreshKey?: number }) {
@@ -33,7 +31,7 @@ export default function GongsuMonthSummary({ refreshKey }: { refreshKey?: number
   let grossTotal = 0;
   let netTotal = 0;
   for (const r of workedRecords) {
-    const wage = r.site_daily_wage ?? 0;
+    const wage = r.daily_wage ?? 0;
     const amount = Math.round(wage * Number(r.gongsu_type));
     if (amount <= 0) continue;
     grossTotal += amount;

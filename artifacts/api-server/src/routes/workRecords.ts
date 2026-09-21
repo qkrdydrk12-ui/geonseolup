@@ -24,7 +24,7 @@ interface WorkRecordRow {
   gongsu_type: string;
   site_id: number | null;
   site_name: string | null;
-  site_daily_wage: number | null;
+  daily_wage: number | null;
 }
 
 async function resolveSiteId(userId: number, siteName: string | undefined | null, dailyWage?: number | null): Promise<number | null> {
@@ -61,12 +61,13 @@ router.post("/work-records", requireUser, async (req: Request, res: Response) =>
     return;
   }
   try {
-    const siteId = await resolveSiteId(userId, siteName, dailyWage);
+    const siteId = await resolveSiteId(userId, siteName);
+    const wage = typeof dailyWage === "number" && dailyWage > 0 ? Math.round(dailyWage) : null;
     const result = await pgPool.query<{ id: number }>(
-      `INSERT INTO work_records (user_id, site_id, work_date, gongsu_type)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO work_records (user_id, site_id, work_date, gongsu_type, daily_wage)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [userId, siteId, workDate, gongsuType]
+      [userId, siteId, workDate, gongsuType, wage]
     );
     res.json({ ok: true, id: result.rows[0].id });
   } catch (err) {
@@ -86,7 +87,7 @@ router.get("/work-records", requireUser, async (req: Request, res: Response) => 
   }
   try {
     const result = await pgPool.query<WorkRecordRow>(
-      `SELECT wr.id, to_char(wr.work_date, 'YYYY-MM-DD') AS work_date, wr.gongsu_type, wr.site_id, s.name AS site_name, s.daily_wage AS site_daily_wage
+      `SELECT wr.id, to_char(wr.work_date, 'YYYY-MM-DD') AS work_date, wr.gongsu_type, wr.site_id, s.name AS site_name, wr.daily_wage AS daily_wage
        FROM work_records wr
        LEFT JOIN sites s ON s.id = wr.site_id
        WHERE wr.user_id = $1 AND wr.work_date BETWEEN $2 AND $3
@@ -96,6 +97,21 @@ router.get("/work-records", requireUser, async (req: Request, res: Response) => 
     res.json({ ok: true, records: result.rows });
   } catch (err) {
     logger.error({ err: String(err) }, "[work-records] 조회 실패");
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// GET /api/work-records/last-wage — 스티키 일당 기본값(가장 최근 기록의 일당).
+router.get("/work-records/last-wage", requireUser, async (req: Request, res: Response) => {
+  const userId = (req as Request & { userId: number }).userId;
+  try {
+    const result = await pgPool.query<{ daily_wage: number | null }>(
+      `SELECT daily_wage FROM work_records WHERE user_id = $1 AND daily_wage IS NOT NULL ORDER BY work_date DESC, id DESC LIMIT 1`,
+      [userId]
+    );
+    res.json({ ok: true, dailyWage: result.rows[0]?.daily_wage ?? null });
+  } catch (err) {
+    logger.error({ err: String(err) }, "[work-records] 최근 일당 조회 실패");
     res.status(500).json({ ok: false, error: String(err) });
   }
 });
@@ -150,24 +166,18 @@ router.patch("/work-records/:id", requireUser, async (req: Request, res: Respons
     res.status(400).json({ ok: false, message: "잘못된 id" });
     return;
   }
-  const { gongsuType, siteName } = req.body as { gongsuType?: string; siteName?: string };
+  const { gongsuType, dailyWage } = req.body as { gongsuType?: string; dailyWage?: number };
   if (!gongsuType || !isValidGongsuType(gongsuType)) {
     res.status(400).json({ ok: false, message: "gongsuType은 absent 또는 0.1 단위 숫자(0.1~5)여야 합니다" });
     return;
   }
   try {
-    const result =
-      siteName !== undefined
-        ? await pgPool.query(
-            `UPDATE work_records SET gongsu_type = $3, site_id = $4, updated_at = now()
-             WHERE id = $1 AND user_id = $2 RETURNING id`,
-            [id, userId, gongsuType, await resolveSiteId(userId, siteName)]
-          )
-        : await pgPool.query(
-            `UPDATE work_records SET gongsu_type = $3, updated_at = now()
-             WHERE id = $1 AND user_id = $2 RETURNING id`,
-            [id, userId, gongsuType]
-          );
+    const wage = typeof dailyWage === "number" && dailyWage > 0 ? Math.round(dailyWage) : null;
+    const result = await pgPool.query(
+      `UPDATE work_records SET gongsu_type = $3, daily_wage = $4, updated_at = now()
+       WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, userId, gongsuType, wage]
+    );
     if (result.rows.length === 0) {
       res.status(404).json({ ok: false, message: "기록을 찾을 수 없습니다" });
       return;
