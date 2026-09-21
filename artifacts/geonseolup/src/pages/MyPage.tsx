@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchAuthUser } from '@/lib/authUser';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import GongsuInput from '@/components/GongsuInput';
@@ -19,11 +20,7 @@ export default function MyPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => setUser(data.user ?? null))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    fetchAuthUser().then(setUser).finally(() => setLoading(false));
   }, []);
 
   return (

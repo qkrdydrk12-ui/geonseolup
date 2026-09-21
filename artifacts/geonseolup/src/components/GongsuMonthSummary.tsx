@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchTaxSettings } from '@/lib/taxSettings';
 import { Wallet } from 'lucide-react';
 import { calcDailyNetPay } from '@/lib/dailyNetPay';
 import { calcRegularEmployeeMonthlyNetPay } from '@/lib/regularEmployeeTax';
@@ -28,13 +29,11 @@ export default function GongsuMonthSummary({ refreshKey }: { refreshKey?: number
       .then((res) => res.json())
       .then((data) => setRecords(data.records ?? []))
       .finally(() => setLoading(false));
-    fetch('/api/auth/tax-settings')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.taxMode === 'regular' || data.taxMode === 'daily') setTaxMode(data.taxMode);
-        if (typeof data.dependents === 'number') setDependents(data.dependents);
-      })
-      .catch(() => {});
+    fetchTaxSettings().then((data) => {
+      if (!data) return;
+      if (data.taxMode === "regular" || data.taxMode === "daily") setTaxMode(data.taxMode as "daily" | "regular");
+      if (typeof data.dependents === "number") setDependents(data.dependents);
+    });
   }, [refreshKey]);
 
   const workedRecords = records.filter((r) => r.gongsu_type !== 'absent');

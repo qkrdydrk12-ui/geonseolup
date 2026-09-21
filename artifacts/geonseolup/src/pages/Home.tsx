@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { fetchAuthUser } from '@/lib/authUser';
 import { useLocation } from 'wouter';
 import type { Job } from '@/lib/firebase';
 import { fbLoadPublicJobs, fbGetSetting } from '@/lib/firebase';
@@ -388,10 +389,7 @@ export default function Home({ initialRegion, initialJob }: HomeProps = {}) {
   const [footerUser, setFooterUser] = useState<{ id: number; nickname: string } | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => setFooterUser(data.user ?? null))
-      .catch(() => setFooterUser(null));
+    fetchAuthUser().then(setFooterUser);
   }, []);
 
   async function handleFooterLogout() {

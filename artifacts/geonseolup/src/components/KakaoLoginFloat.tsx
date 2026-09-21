@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchAuthUser } from '@/lib/authUser';
 
 interface MeUser {
   id: number;
@@ -10,11 +11,7 @@ export default function KakaoLoginFloat() {
   const [user, setUser] = useState<MeUser | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => setUser(data.user ?? null))
-      .catch(() => setUser(null))
-      .finally(() => setChecked(true));
+    fetchAuthUser().then(setUser).finally(() => setChecked(true));
   }, []);
 
   if (!checked || user) return null;

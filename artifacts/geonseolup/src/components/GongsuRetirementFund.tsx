@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchTaxSettings } from '@/lib/taxSettings';
 import { PiggyBank, Landmark } from 'lucide-react';
 import { estimateRetirementFundFromWorkDates } from '@/lib/retirementFundHistory';
 import { MIN_ELIGIBLE_DAYS } from '@/lib/retirementFund';
@@ -33,9 +34,7 @@ export default function GongsuRetirementFund({ refreshKey }: { refreshKey?: numb
     setLoading(true);
     Promise.all([
       fetch('/api/work-records?from=2000-01-01&to=2099-12-31').then((res) => res.json()),
-      fetch('/api/auth/tax-settings')
-        .then((res) => res.json())
-        .catch(() => null),
+      fetchTaxSettings(),
     ])
       .then(([workData, taxData]) => {
         if (taxData && (taxData.taxMode === 'regular' || taxData.taxMode === 'daily')) {

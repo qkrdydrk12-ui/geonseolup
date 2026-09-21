@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchAuthUser } from '@/lib/authUser';
 import { Link } from 'wouter';
 import { fbGetSetting } from '@/lib/firebase';
 import { subscribeToPush, unsubscribeFromPush, isPushMarkedSubscribed } from '@/lib/push';
@@ -16,10 +17,7 @@ export default function Header() {
   const [user, setUser] = useState<{ id: number; nickname: string } | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => setUser(data.user ?? null))
-      .catch(() => setUser(null));
+    fetchAuthUser().then(setUser);
   }, []);
 
   async function handleLogout() {
@@ -124,9 +122,21 @@ export default function Header() {
 
   const [installVisible, setInstallVisible] = useState(false);
   const [installBusy, setInstallBusy] = useState(false);
+  const [iosMenuOpen, setIosMenuOpen] = useState(false);
+
+  function isIOSDevice() {
+    return /iPhone|iPad|iPod/.test(navigator.userAgent);
+  }
+  function isIOSStandalone() {
+    return (navigator as unknown as { standalone?: boolean }).standalone === true;
+  }
 
   useEffect(() => {
     if (window.matchMedia("(display-mode: standalone)").matches) return;
+    if (isIOSDevice()) {
+      setInstallVisible(!isIOSStandalone());
+      return;
+    }
     setInstallVisible(!!getDeferredInstallPrompt() || /Android/i.test(navigator.userAgent));
     function onAvailable() { setInstallVisible(true); }
     function onInstalled() { setInstallVisible(false); }
@@ -138,7 +148,21 @@ export default function Header() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!iosMenuOpen) return;
+    function onClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-install-menu]")) setIosMenuOpen(false);
+    }
+    window.addEventListener("click", onClick);
+    return () => window.removeEventListener("click", onClick);
+  }, [iosMenuOpen]);
+
   async function handleInstallClick() {
+    if (isIOSDevice()) {
+      setIosMenuOpen((o) => !o);
+      return;
+    }
     if (installBusy) return;
     const promptEvent = consumeDeferredInstallPrompt();
     if (promptEvent) {
@@ -257,20 +281,32 @@ export default function Header() {
                 </div>
               )}
             </div>
+                <div className="relative" data-install-menu>
               {installVisible && (
                 <button
                   type="button"
-                  className="w-full flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white border border-white/30 bg-white/15 cursor-pointer transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
+                  className="w-full flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-extrabold text-white border-none cursor-pointer transition-all hover:-translate-y-px whitespace-nowrap leading-tight"
+                  style={{ background: "#f97316", boxShadow: "0 2px 8px rgba(249,115,22,0.30)" }}
                   onClick={handleInstallClick}
-                  title="앱 설치 / 다운로드"
+                  title="앱 다운"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="shrink-0">
                     <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                  <span className="whitespace-nowrap">다운로드</span>
+                  <span className="whitespace-nowrap">앱 다운</span>
                 </button>
               )}
 
+                  {iosMenuOpen && (
+                    <div className="fixed left-1/2 -translate-x-1/2 top-32 sm:top-14 z-[300] w-[280px] max-w-[calc(100vw-24px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden p-4 text-gray-800 text-xs leading-relaxed animate-in fade-in slide-in-from-top-1">
+                      <p className="font-bold text-sm mb-2">홈 화면에 추가하기</p>
+                      <ol className="list-decimal list-inside space-y-1.5">
+                        <li>하단 공유 버튼(⬆️) 탭</li>
+                        <li>아래로 스크롤 후 '홈 화면에 추가' 선택</li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
 
           </div>
         </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Calculator, ListChecks } from 'lucide-react';
 import { calcDailyNetPay, sanitizeWage } from '@/lib/dailyNetPay';
 import { calcRegularEmployeeMonthlyNetPay, sanitizeMonthlyWage, sanitizeDependents } from '@/lib/regularEmployeeTax';
+import { fetchTaxSettings, invalidateTaxSettingsCache } from '@/lib/taxSettings';
 
 interface WorkRecord {
   id: number;
@@ -41,13 +42,11 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
   }
 
   function loadTaxSettings() {
-    fetch('/api/auth/tax-settings')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.taxMode === 'regular' || data.taxMode === 'daily') setTaxMode(data.taxMode);
-        if (typeof data.dependents === 'number') setDependentsInput(String(data.dependents));
-      })
-      .catch(() => {});
+    fetchTaxSettings().then((data) => {
+      if (!data) return;
+      if (data.taxMode === "regular" || data.taxMode === "daily") setTaxMode(data.taxMode as "daily" | "regular");
+      if (typeof data.dependents === "number") setDependentsInput(String(data.dependents));
+    });
   }
 
   useEffect(() => {
@@ -62,6 +61,7 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ taxMode: mode, dependents: deps }),
     }).catch(() => {});
+    invalidateTaxSettingsCache();
   }
 
   function selectTaxMode(mode: 'daily' | 'regular') {

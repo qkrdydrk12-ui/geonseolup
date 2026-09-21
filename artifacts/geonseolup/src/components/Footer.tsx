@@ -1,14 +1,12 @@
 import { Link } from 'wouter';
+import { fetchAuthUser } from '@/lib/authUser';
 import { useEffect, useState } from 'react';
 
 export default function Footer() {
   const [user, setUser] = useState<{ id: number } | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => setUser(data.user ?? null))
-      .catch(() => setUser(null));
+    fetchAuthUser().then(setUser);
   }, []);
 
   async function handleLogout() {

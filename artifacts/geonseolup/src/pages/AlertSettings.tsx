@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchAuthUser } from '@/lib/authUser';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import GongsuReminderSettings from '@/components/GongsuReminderSettings';
@@ -16,10 +17,7 @@ export default function AlertSettings() {
   const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => setUser(data.user ?? null))
-      .catch(() => setUser(null));
+    fetchAuthUser().then(setUser);
     setPushOn(isPushMarkedSubscribed());
   }, []);
 
