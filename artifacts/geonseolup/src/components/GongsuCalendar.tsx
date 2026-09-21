@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays } from 'lucide-react';
 
 interface WorkRecord {
   id: number;
@@ -64,13 +65,31 @@ export default function GongsuCalendar({ refreshKey }: { refreshKey?: number }) 
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mt-4">
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={prevMonth} className="text-gray-400 px-2">◀</button>
-        <div className="font-semibold text-[#1e3a5f]">{year}년 {month}월</div>
-        <button onClick={nextMonth} className="text-gray-400 px-2">▶</button>
+    <div className="bg-white rounded-3xl shadow-[0_4px_24px_-6px_rgba(30,58,95,0.15)] p-4 sm:p-6 mt-4">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-xl bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
+          <CalendarDays className="w-4 h-4 text-[#1e3a5f]" />
+        </div>
+        <h2 className="font-bold text-[#1e3a5f]">근무 캘린더</h2>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 mb-2">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={prevMonth}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition"
+        >
+          ‹
+        </button>
+        <div className="font-bold text-[#1e3a5f]">
+          {year}년 {month}월
+        </div>
+        <button
+          onClick={nextMonth}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition"
+        >
+          ›
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 font-semibold mb-2">
         {WEEKDAYS.map((d) => (
           <div key={d}>{d}</div>
         ))}
@@ -86,10 +105,16 @@ export default function GongsuCalendar({ refreshKey }: { refreshKey?: number }) 
             return sum + wage * Number(r.gongsu_type);
           }, 0);
           return (
-            <div key={i} className="aspect-square border border-gray-100 rounded-lg p-1 flex flex-col items-center justify-center">
+            <div
+              key={i}
+              className="aspect-square rounded-xl p-1 flex flex-col items-center justify-center hover:bg-gray-50 transition"
+            >
               <div className="text-xs text-gray-500">{d}</div>
               {dayTotal > 0 && (
-                <div className="text-[9px] sm:text-[10px] font-bold mt-0.5 leading-none" style={{ color: '#1e3a5f' }}>
+                <div
+                  className="text-[9px] sm:text-[10px] font-bold mt-0.5 leading-none"
+                  style={{ color: '#f97316' }}
+                >
                   {dayTotal >= 10000 ? `${Math.round(dayTotal / 1000) / 10}만` : dayTotal.toLocaleString()}
                 </div>
               )}

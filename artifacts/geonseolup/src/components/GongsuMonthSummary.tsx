@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Wallet } from 'lucide-react';
 import { calcDailyNetPay } from '@/lib/dailyNetPay';
 import { calcRegularEmployeeMonthlyNetPay } from '@/lib/regularEmployeeTax';
 
@@ -60,21 +61,24 @@ export default function GongsuMonthSummary({ refreshKey }: { refreshKey?: number
 
   return (
     <div
-      className="rounded-2xl overflow-hidden mt-4 p-5 sm:p-6 text-center"
+      className="rounded-3xl overflow-hidden mt-4 p-6 sm:p-7 text-center shadow-[0_8px_30px_-8px_rgba(30,58,95,0.45)]"
       style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}
     >
-      <div className="text-white/70 text-xs font-bold mb-1">이번 달 실수령 추정</div>
-      <div className="text-white font-black text-3xl sm:text-[38px] tabular-nums tracking-tight">
+      <div className="flex items-center justify-center gap-1.5 text-white/70 text-xs font-bold mb-1.5">
+        <Wallet className="w-3.5 h-3.5" />
+        이번 달 실수령 추정
+      </div>
+      <div className="text-white font-black text-4xl sm:text-[42px] tabular-nums tracking-tight">
         {loading ? '–' : `${netTotal.toLocaleString()}원`}
       </div>
       {!loading && grossTotal > 0 && (
-        <span className="inline-block mt-2 px-3 py-1 rounded-full bg-white/15 text-white text-[11px]">
+        <span className="inline-block mt-2.5 px-3 py-1 rounded-full bg-white/15 text-white text-[11px] font-semibold">
           세전 총액 {grossTotal.toLocaleString()}원
         </span>
       )}
-      <div className="mt-4 pt-4 border-t border-white/15">
+      <div className="mt-5 pt-5 border-t border-white/15">
         <div className="text-white/60 text-[11px] font-bold">이번 달 근무일수</div>
-        <div className="text-white font-bold text-lg">{loading ? '–' : `${workDays}일`}</div>
+        <div className="text-white font-bold text-lg mt-0.5">{loading ? '–' : `${workDays}일`}</div>
       </div>
     </div>
   );

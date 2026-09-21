@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { HardHat } from 'lucide-react';
 
 interface TodayRecord {
   id: number;
@@ -73,39 +74,45 @@ export default function GongsuInput({ onSaved }: { onSaved?: () => void }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-3xl shadow-[0_4px_24px_-6px_rgba(30,58,95,0.15)] p-5 sm:p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-xl bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
+          <HardHat className="w-4 h-4 text-[#1e3a5f]" />
+        </div>
+        <h2 className="font-bold text-[#1e3a5f]">오늘 출근 기록</h2>
+      </div>
       <input
         type="text"
         inputMode="numeric"
         value={wage}
         onChange={(e) => setWage(e.target.value)}
         placeholder="오늘 일당 (원)"
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
+        className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-3 text-sm mb-5 outline-none transition-all focus:bg-white focus:border-[#1e3a5f] focus:ring-4 focus:ring-[#1e3a5f]/10"
       />
-      <div className="flex items-center justify-center gap-4 mb-4">
+      <div className="flex items-center justify-center gap-5 mb-5">
         <button
           onClick={() => setGongsu((v) => Math.max(MIN, round1(v - STEP)))}
           disabled={saving}
-          className="w-10 h-10 rounded-full text-lg font-bold text-white disabled:opacity-50"
+          className="w-11 h-11 rounded-full text-lg font-bold text-white shadow-md shadow-[#1e3a5f]/25 active:scale-95 transition disabled:opacity-50"
           style={{ background: '#1e3a5f' }}
         >
           -
         </button>
-        <div className="text-2xl font-bold text-[#1e3a5f] w-16 text-center">{gongsu.toFixed(1)}</div>
+        <div className="text-3xl font-black text-[#1e3a5f] w-16 text-center tabular-nums">{gongsu.toFixed(1)}</div>
         <button
           onClick={() => setGongsu((v) => Math.min(MAX, round1(v + STEP)))}
           disabled={saving}
-          className="w-10 h-10 rounded-full text-lg font-bold text-white disabled:opacity-50"
+          className="w-11 h-11 rounded-full text-lg font-bold text-white shadow-md shadow-[#1e3a5f]/25 active:scale-95 transition disabled:opacity-50"
           style={{ background: '#1e3a5f' }}
         >
           +
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => submit(gongsu.toFixed(1))}
           disabled={saving}
-          className="py-3 rounded-lg font-semibold text-sm text-white disabled:opacity-50"
+          className="py-3.5 rounded-xl font-bold text-sm text-white shadow-md shadow-orange-500/30 active:scale-[0.98] transition disabled:opacity-50"
           style={{ background: '#f97316' }}
         >
           기록하기
@@ -113,17 +120,19 @@ export default function GongsuInput({ onSaved }: { onSaved?: () => void }) {
         <button
           onClick={() => submit('absent')}
           disabled={saving}
-          className="py-3 rounded-lg font-semibold text-sm text-white disabled:opacity-50"
-          style={{ background: '#9ca3af' }}
+          className="py-3.5 rounded-xl font-bold text-sm text-gray-500 bg-gray-100 active:scale-[0.98] transition disabled:opacity-50"
         >
           결근
         </button>
       </div>
-      <div className="mt-4 text-sm text-gray-600 min-h-[20px]">
+      <div className="mt-4 text-sm text-gray-500 min-h-[20px] text-center">
         {loading ? null : todayRecords.length === 0 ? (
           <span className="text-gray-400">오늘 기록 없음</span>
         ) : (
-          <span className="text-[#1e3a5f]">✓ 오늘 기록됨</span>
+          <span className="inline-flex items-center gap-1.5 font-semibold text-[#1e3a5f]">
+            <span className="w-4 h-4 rounded-full bg-[#1e3a5f] text-white flex items-center justify-center text-[10px]">✓</span>
+            오늘 기록됨
+          </span>
         )}
       </div>
     </div>

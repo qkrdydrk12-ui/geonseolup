@@ -6,6 +6,7 @@ import {
   updateGongsuReminderTime,
   sendTestGongsuPush,
 } from '@/lib/gongsuPush';
+import { Bell } from 'lucide-react';
 
 const DEFAULT_TIME = '06:55';
 
@@ -69,15 +70,20 @@ export default function GongsuReminderSettings() {
   if (loading) return null;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mt-4">
-      <h2 className="font-semibold text-[#1e3a5f] mb-3">아침 알림</h2>
-      <div className="flex items-center gap-3 mb-3">
-        <label className="text-sm text-gray-500">알림 시간</label>
+    <div className="bg-white rounded-3xl shadow-[0_4px_24px_-6px_rgba(30,58,95,0.15)] p-5 sm:p-6 mt-4">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-xl bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
+          <Bell className="w-4 h-4 text-[#1e3a5f]" />
+        </div>
+        <h2 className="font-bold text-[#1e3a5f]">아침 알림</h2>
+      </div>
+      <div className="flex items-center gap-3 mb-4 bg-gray-50 rounded-xl px-4 py-3">
+        <label className="text-sm text-gray-500 font-medium">알림 시간</label>
         <input
           type="time"
           value={reminderTime}
           onChange={(e) => handleTimeChange(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900"
+          className="border-0 bg-transparent rounded-lg text-sm text-gray-900 font-semibold ml-auto outline-none"
         />
       </div>
       {subscribed ? (
@@ -85,14 +91,14 @@ export default function GongsuReminderSettings() {
           <button
             onClick={handleTest}
             disabled={busy}
-            className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-300 text-gray-700 disabled:opacity-50"
+            className="flex-1 text-sm font-bold px-4 py-3 rounded-xl bg-gray-100 text-gray-600 active:scale-[0.98] transition disabled:opacity-50"
           >
             테스트 알림 보내기
           </button>
           <button
             onClick={handleUnsubscribe}
             disabled={busy}
-            className="text-sm font-semibold px-4 py-2 rounded-lg border border-gray-300 text-gray-700 disabled:opacity-50"
+            className="flex-1 text-sm font-bold px-4 py-3 rounded-xl bg-gray-100 text-gray-600 active:scale-[0.98] transition disabled:opacity-50"
           >
             알림 끄기
           </button>
@@ -101,13 +107,13 @@ export default function GongsuReminderSettings() {
         <button
           onClick={handleSubscribe}
           disabled={busy}
-          className="text-sm font-semibold px-4 py-2 rounded-lg text-white disabled:opacity-50"
+          className="w-full text-sm font-bold px-4 py-3.5 rounded-xl text-white shadow-md shadow-[#1e3a5f]/25 active:scale-[0.98] transition disabled:opacity-50"
           style={{ background: '#1e3a5f' }}
         >
           매일 아침 알림 받기
         </button>
       )}
-      {message && <p className="text-xs text-gray-400 mt-2">{message}</p>}
+      {message && <p className="text-xs text-gray-400 mt-3 text-center">{message}</p>}
     </div>
   );
 }
