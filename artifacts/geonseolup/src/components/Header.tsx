@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { fbGetSetting } from '@/lib/firebase';
 import { subscribeToPush, unsubscribeFromPush, isPushMarkedSubscribed } from '@/lib/push';
+import { getDeferredInstallPrompt, consumeDeferredInstallPrompt } from '@/lib/pwaInstall';
 
 // 2026-08-29: 상단 헤더의 "문의" 팝업 버튼은 제거됨 — 푸터의 "문의하기"(/contact 페이지)와
 // 중복이라 정리했다. 관련 팝업 UI(ContactModal)도 트리거가 사라져 함께 제거.
@@ -121,6 +122,43 @@ export default function Header() {
     return () => window.removeEventListener('click', onClick);
   }, [menuOpen]);
 
+  const [installVisible, setInstallVisible] = useState(false);
+  const [installBusy, setInstallBusy] = useState(false);
+
+  useEffect(() => {
+    if (window.matchMedia("(display-mode: standalone)").matches) return;
+    setInstallVisible(!!getDeferredInstallPrompt() || /Android/i.test(navigator.userAgent));
+    function onAvailable() { setInstallVisible(true); }
+    function onInstalled() { setInstallVisible(false); }
+    window.addEventListener("pwa-install-available", onAvailable);
+    window.addEventListener("pwa-app-installed", onInstalled);
+    return () => {
+      window.removeEventListener("pwa-install-available", onAvailable);
+      window.removeEventListener("pwa-app-installed", onInstalled);
+    };
+  }, []);
+
+  async function handleInstallClick() {
+    if (installBusy) return;
+    const promptEvent = consumeDeferredInstallPrompt();
+    if (promptEvent) {
+      setInstallBusy(true);
+      try {
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        if (choice.outcome === "accepted") setInstallVisible(false);
+      } catch {
+      } finally {
+        setInstallBusy(false);
+      }
+      return;
+    }
+    if (/Android/i.test(navigator.userAgent)) {
+      const target = window.location.host + window.location.pathname + window.location.search;
+      window.location.href = `intent://${target}#Intent;scheme=https;package=com.android.chrome;end`;
+    }
+  }
+
   return (
     <>
       <header
@@ -219,6 +257,20 @@ export default function Header() {
                 </div>
               )}
             </div>
+              {installVisible && (
+                <button
+                  type="button"
+                  className="w-full flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-semibold text-white border border-white/30 bg-white/15 cursor-pointer transition-colors hover:bg-white/28 whitespace-nowrap leading-tight"
+                  onClick={handleInstallClick}
+                  title="앱 설치 / 다운로드"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="shrink-0">
+                    <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="whitespace-nowrap">다운로드</span>
+                </button>
+              )}
+
 
           </div>
         </div>

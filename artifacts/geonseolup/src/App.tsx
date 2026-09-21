@@ -25,6 +25,7 @@ import MyPage from '@/pages/MyPage';
 import AlertSettings from '@/pages/AlertSettings';
 import PageFlowTracker from '@/components/PageFlowTracker';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
+import { initPwaInstallListener } from '@/lib/pwaInstall';
 
 // ── 관리자가 저장한 head 코드를 <head>에 동적으로 주입 ──────────────────────
 function injectHeadCode(raw: string) {
@@ -288,9 +289,16 @@ function DetailHeader() {
   );
 }
 
+function usePwaInstallPrompt() {
+  useEffect(() => {
+    initPwaInstallListener();
+  }, []);
+}
+
 function App() {
   useHeadInjection();
   useReservationScheduler();
+  usePwaInstallPrompt();
   return (
     <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <ScrollToTop />
