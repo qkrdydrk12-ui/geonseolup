@@ -270,6 +270,15 @@ export default function Header() {
                     </svg>
                     <span>링크 공유</span>
                   </button>
+              <div className="h-px bg-gray-100" />
+              <Link
+                href="/job-alerts"
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left no-underline"
+                onClick={() => setMenuOpen(false)}
+              >
+                <span>💬</span>
+                <span>무료알림톡</span>
+              </Link>
               <Link
                 href="/alerts"
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left no-underline"
