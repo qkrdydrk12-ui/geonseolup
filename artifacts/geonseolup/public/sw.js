@@ -22,6 +22,7 @@ self.addEventListener('push', (event) => {
       icon: '/favicon.png',
       badge: '/favicon.png',
       data: { url: data.url },
+        vibrate: [300, 100, 300, 100, 300],
     })
   );
 });

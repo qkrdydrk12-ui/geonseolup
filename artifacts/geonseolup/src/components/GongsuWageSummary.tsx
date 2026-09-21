@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { calcDailyNetPay, sanitizeWage } from '@/lib/dailyNetPay';
+import { calcRegularEmployeeMonthlyNetPay, sanitizeMonthlyWage, sanitizeDependents } from '@/lib/regularEmployeeTax';
 
 interface WorkRecord {
   id: number;
@@ -20,6 +21,9 @@ function todayMonthRange() {
 
 export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKey?: number; onChanged?: () => void }) {
   const [wageInput, setWageInput] = useState('');
+  const [monthlyWageInput, setMonthlyWageInput] = useState('');
+  const [dependentsInput, setDependentsInput] = useState('1');
+  const [taxMode, setTaxMode] = useState<'daily' | 'regular'>('daily');
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editGongsu, setEditGongsu] = useState('');
@@ -35,13 +39,48 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
       .finally(() => setLoading(false));
   }
 
+  function loadTaxSettings() {
+    fetch('/api/auth/tax-settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.taxMode === 'regular' || data.taxMode === 'daily') setTaxMode(data.taxMode);
+        if (typeof data.dependents === 'number') setDependentsInput(String(data.dependents));
+      })
+      .catch(() => {});
+  }
+
   useEffect(() => {
     loadRecords();
+    loadTaxSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
+  async function saveTaxSettings(mode: 'daily' | 'regular', deps: number) {
+    await fetch('/api/auth/tax-settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taxMode: mode, dependents: deps }),
+    }).catch(() => {});
+  }
+
+  function selectTaxMode(mode: 'daily' | 'regular') {
+    setTaxMode(mode);
+    saveTaxSettings(mode, sanitizeDependents(dependentsInput));
+  }
+
+  function changeDependents(value: string) {
+    setDependentsInput(value);
+    const deps = sanitizeDependents(value);
+    saveTaxSettings(taxMode, deps);
+  }
+
   const wage = sanitizeWage(wageInput);
-  const result = wage > 0 ? calcDailyNetPay({ dailyWage: wage, includePensionHealth: false }) : null;
+  const dailyResult = wage > 0 ? calcDailyNetPay({ dailyWage: wage, includePensionHealth: false }) : null;
+
+  const monthlyWage = sanitizeMonthlyWage(monthlyWageInput);
+  const dependents = sanitizeDependents(dependentsInput);
+  const regularResult =
+    monthlyWage > 0 ? calcRegularEmployeeMonthlyNetPay({ monthlyWage, dependents }) : null;
 
   function startEdit(r: WorkRecord) {
     setEditingId(r.id);
@@ -74,33 +113,107 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mt-4">
       <h2 className="font-semibold text-[#1e3a5f] mb-3">실수령액 계산기</h2>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={wageInput}
-        onChange={(e) => setWageInput(e.target.value)}
-        placeholder="오늘 일당 (원)"
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
-      />
-      {result && (
-        <div className="text-sm text-gray-700 space-y-1 mb-4">
-          <div className="flex justify-between">
-            <span className="text-gray-500">세전 일당</span>
-            <span>{result.dailyWage.toLocaleString()}원</span>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => selectTaxMode('daily')}
+          className={`flex-1 py-2 rounded-lg text-sm font-bold border-[1.5px] ${
+            taxMode === 'daily' ? 'text-white border-[#1e3a5f] bg-[#1e3a5f]' : 'border-gray-300 text-gray-500 bg-white'
+          }`}
+        >
+          일용직
+        </button>
+        <button
+          type="button"
+          onClick={() => selectTaxMode('regular')}
+          className={`flex-1 py-2 rounded-lg text-sm font-bold border-[1.5px] ${
+            taxMode === 'regular' ? 'text-white border-[#1e3a5f] bg-[#1e3a5f]' : 'border-gray-300 text-gray-500 bg-white'
+          }`}
+        >
+          상용직
+        </button>
+      </div>
+
+      {taxMode === 'daily' ? (
+        <>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={wageInput}
+            onChange={(e) => setWageInput(e.target.value)}
+            placeholder="오늘 일당 (원)"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3"
+          />
+          {dailyResult && (
+            <div className="text-sm text-gray-700 space-y-1 mb-4">
+              <div className="flex justify-between">
+                <span className="text-gray-500">세전 일당</span>
+                <span>{dailyResult.dailyWage.toLocaleString()}원</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">소득세+지방세</span>
+                <span>{(dailyResult.incomeTax + dailyResult.localTax).toLocaleString()}원</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">고용보험료</span>
+                <span>{dailyResult.employmentInsurance.toLocaleString()}원</span>
+              </div>
+              <div className="flex justify-between font-semibold text-[#1e3a5f] pt-1 border-t border-gray-100">
+                <span>실수령액</span>
+                <span>{dailyResult.netPay.toLocaleString()}원</span>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={monthlyWageInput}
+            onChange={(e) => setMonthlyWageInput(e.target.value)}
+            placeholder="월 급여액 (원)"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+          />
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm text-gray-500 shrink-0">부양가족 수(본인 포함)</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={dependentsInput}
+              onChange={(e) => changeDependents(e.target.value)}
+              className="w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900"
+            />
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">소득세+지방세</span>
-            <span>{(result.incomeTax + result.localTax).toLocaleString()}원</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">고용보험료</span>
-            <span>{result.employmentInsurance.toLocaleString()}원</span>
-          </div>
-          <div className="flex justify-between font-semibold text-[#1e3a5f] pt-1 border-t border-gray-100">
-            <span>실수령액</span>
-            <span>{result.netPay.toLocaleString()}원</span>
-          </div>
-        </div>
+          {regularResult && (
+            <div className="text-sm text-gray-700 space-y-1 mb-2">
+              <div className="flex justify-between">
+                <span className="text-gray-500">소득세+지방세</span>
+                <span>{(regularResult.incomeTax + regularResult.localTax).toLocaleString()}원</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">4대보험(국민연금·건강·요양·고용)</span>
+                <span>
+                  {(
+                    regularResult.nationalPension +
+                    regularResult.healthInsurance +
+                    regularResult.longTermCare +
+                    regularResult.employmentInsurance
+                  ).toLocaleString()}
+                  원
+                </span>
+              </div>
+              <div className="flex justify-between font-semibold text-[#1e3a5f] pt-1 border-t border-gray-100">
+                <span>월 실수령액(추정)</span>
+                <span>{regularResult.netPay.toLocaleString()}원</span>
+              </div>
+            </div>
+          )}
+          <p className="text-[11px] text-gray-400 mb-4">
+            * 국세청 근로소득 간이세액표를 근사 계산한 추정치입니다. 실제 원천징수액과 다소 차이 날 수 있습니다.
+          </p>
+        </>
       )}
 
       <div className="mt-6 pt-5 border-t border-gray-200">

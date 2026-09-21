@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { calcDailyNetPay } from '@/lib/dailyNetPay';
+import { calcRegularEmployeeMonthlyNetPay } from '@/lib/regularEmployeeTax';
 
 interface WorkRecord {
   id: number;
@@ -11,6 +12,8 @@ interface WorkRecord {
 export default function GongsuMonthSummary({ refreshKey }: { refreshKey?: number }) {
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [taxMode, setTaxMode] = useState<'daily' | 'regular'>('daily');
+  const [dependents, setDependents] = useState(1);
 
   useEffect(() => {
     const now = new Date();
@@ -24,18 +27,35 @@ export default function GongsuMonthSummary({ refreshKey }: { refreshKey?: number
       .then((res) => res.json())
       .then((data) => setRecords(data.records ?? []))
       .finally(() => setLoading(false));
+    fetch('/api/auth/tax-settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.taxMode === 'regular' || data.taxMode === 'daily') setTaxMode(data.taxMode);
+        if (typeof data.dependents === 'number') setDependents(data.dependents);
+      })
+      .catch(() => {});
   }, [refreshKey]);
 
   const workedRecords = records.filter((r) => r.gongsu_type !== 'absent');
   const workDays = workedRecords.length;
   let grossTotal = 0;
-  let netTotal = 0;
   for (const r of workedRecords) {
     const wage = r.daily_wage ?? 0;
     const amount = Math.round(wage * Number(r.gongsu_type));
     if (amount <= 0) continue;
     grossTotal += amount;
-    netTotal += calcDailyNetPay({ dailyWage: amount, includePensionHealth: false }).netPay;
+  }
+
+  let netTotal = 0;
+  if (taxMode === 'regular') {
+    netTotal = calcRegularEmployeeMonthlyNetPay({ monthlyWage: grossTotal, dependents }).netPay;
+  } else {
+    for (const r of workedRecords) {
+      const wage = r.daily_wage ?? 0;
+      const amount = Math.round(wage * Number(r.gongsu_type));
+      if (amount <= 0) continue;
+      netTotal += calcDailyNetPay({ dailyWage: amount, includePensionHealth: false }).netPay;
+    }
   }
 
   return (

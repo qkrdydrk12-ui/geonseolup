@@ -125,4 +125,57 @@ router.get("/auth/me", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/auth/tax-settings — 일용직/상용직 세금 계산 모드 설정 조회.
+router.get("/auth/tax-settings", async (req: Request, res: Response) => {
+  const userId = getUserIdFromReq(req);
+  if (!userId) {
+    res.status(401).json({ ok: false, error: "로그인이 필요합니다" });
+    return;
+  }
+  try {
+    const result = await pgPool.query<{ tax_mode: string; tax_dependents: number }>(
+      `SELECT tax_mode, tax_dependents FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ ok: false, error: "사용자를 찾을 수 없습니다" });
+      return;
+    }
+    res.json({
+      ok: true,
+      taxMode: result.rows[0].tax_mode ?? "daily",
+      dependents: result.rows[0].tax_dependents ?? 1,
+    });
+  } catch (err) {
+    logger.error({ err: String(err) }, "[auth] 세금 설정 조회 실패");
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// PATCH /api/auth/tax-settings — 일용직/상용직 세금 계산 모드 설정 저장.
+router.patch("/auth/tax-settings", async (req: Request, res: Response) => {
+  const userId = getUserIdFromReq(req);
+  if (!userId) {
+    res.status(401).json({ ok: false, error: "로그인이 필요합니다" });
+    return;
+  }
+  const { taxMode, dependents } = req.body as { taxMode?: string; dependents?: number };
+  if (taxMode !== undefined && taxMode !== "daily" && taxMode !== "regular") {
+    res.status(400).json({ ok: false, error: "taxMode는 daily 또는 regular여야 합니다" });
+    return;
+  }
+  try {
+    const mode = taxMode ?? "daily";
+    const deps = typeof dependents === "number" && dependents >= 1 ? Math.floor(dependents) : 1;
+    await pgPool.query(
+      `UPDATE users SET tax_mode = $2, tax_dependents = $3, updated_at = now() WHERE id = $1`,
+      [userId, mode, deps]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err: String(err) }, "[auth] 세금 설정 저장 실패");
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 export default router;
