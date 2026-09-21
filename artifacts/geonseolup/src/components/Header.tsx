@@ -237,13 +237,13 @@ export default function Header() {
                 className="w-full flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-bold border-none cursor-pointer transition-all hover:opacity-90 hover:-translate-y-px whitespace-nowrap leading-tight"
                 style={{ background: '#fee500', color: '#3c1e1e' }}
                 onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
-                title="오픈채팅 / 공유 메뉴"
+                title="오픈채팅 · 무료알림톡 · 공유 메뉴"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="#3c1e1e">
                   <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.632 5.08 4.1 6.52l-1.05 3.9 4.52-2.97A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z" />
                 </svg>
                 <span className="whitespace-nowrap flex items-center gap-0.5">
-                  오픈채팅<span className="text-[8px] opacity-70">▼</span>
+                  오픈채팅&gt;&gt;무료알림톡<span className="text-[8px] opacity-70">▼</span>
                 </span>
               </button>
               {menuOpen && (
@@ -270,6 +270,15 @@ export default function Header() {
                     </svg>
                     <span>링크 공유</span>
                   </button>
+              <div className="h-px bg-gray-100" />
+              <Link
+                href="/job-alerts"
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left no-underline"
+                onClick={() => setMenuOpen(false)}
+              >
+                <span>💬</span>
+                <span>무료알림톡</span>
+              </Link>
               <Link
                 href="/alerts"
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-800 hover:bg-yellow-50 border-none bg-transparent cursor-pointer text-left no-underline"

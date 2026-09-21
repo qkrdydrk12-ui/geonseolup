@@ -398,3 +398,15 @@ export const gongsuPushSubscriptions = pgTable("gongsu_push_subscriptions", {
   index("idx_gongsu_push_subs_user").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
   foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: "gongsu_push_subs_user_id_fkey" }).onDelete("cascade"),
 ]);
+
+export const jobAlertSubscriptions = pgTable("job_alert_subscriptions", {
+id: serial().primaryKey().notNull(),
+phone: text().notNull(),
+region: text(),
+jobType: text("job_type"),
+consentedAt: timestamp("consented_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+enabled: boolean().default(true).notNull(),
+}, (table) => [
+index("idx_job_alert_subs_region_job").using("btree", table.region.asc().nullsLast().op("text_ops"), table.jobType.asc().nullsLast().op("text_ops")),
+]);

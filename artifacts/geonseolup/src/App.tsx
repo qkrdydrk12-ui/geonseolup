@@ -23,6 +23,7 @@ import VisitorWidget from '@/components/VisitorWidget';
 import KakaoLoginFloat from '@/components/KakaoLoginFloat';
 import MyPage from '@/pages/MyPage';
 import AlertSettings from '@/pages/AlertSettings';
+import JobAlerts from '@/pages/JobAlerts';
 import PageFlowTracker from '@/components/PageFlowTracker';
 import { fbOnJobs, fbCheckAndPublishReserved, type Job } from '@/lib/firebase';
 import { initPwaInstallListener } from '@/lib/pwaInstall';
@@ -242,6 +243,9 @@ function Router() {
       <Route path="/alerts">
         <AlertSettings />
       </Route>
+        <Route path="/job-alerts">
+          <JobAlerts />
+        </Route>
       <Route path="/mypage">
         <MyPage />
       </Route>
