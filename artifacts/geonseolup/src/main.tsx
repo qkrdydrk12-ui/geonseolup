@@ -10,6 +10,4 @@ if ("serviceWorker" in navigator) {
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-requestAnimationFrame(() => {
-  document.getElementById("app-loading")?.remove();
-});
+document.getElementById("app-loading")?.remove();
