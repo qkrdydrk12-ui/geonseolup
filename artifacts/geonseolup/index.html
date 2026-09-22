@@ -82,6 +82,15 @@
       JavaScript가 실행되면 React가 이 내용을 실제 앱 화면으로 교체합니다.
       크롤러가 자바스크립트를 실행하지 않아도 사이트의 핵심 내용을 읽을 수 있도록 둡니다.
     -->
+    <div id="app-loading" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#fbbf24 0%,#f97316 45%,#ea580c 75%,#1e3a5f 140%);">
+      <img src="/icons/icon-512.png" width="152" height="152" alt="건설UP" style="border-radius:50%;box-shadow:0 10px 28px rgba(0,0,0,0.28);animation:appLoadingPulse 1.6s ease-in-out infinite;" />
+      <div style="margin-top:22px;color:#fff;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:14px;font-weight:700;letter-spacing:0.02em;opacity:0.92;text-shadow:0 1px 4px rgba(0,0,0,0.25);">불러오는 중...</div>
+      <div style="margin-top:16px;width:34px;height:34px;border:3px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:appLoadingSpin 0.8s linear infinite;"></div>
+    </div>
+    <style>
+      @keyframes appLoadingPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+      @keyframes appLoadingSpin { to { transform: rotate(360deg); } }
+    </style>
     <div id="root">
       <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
         <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">건설UP — 전국 건설 현장 일자리 정보</h1>
@@ -106,15 +115,6 @@
         </p>
       </div>
     </div>
-    <div id="app-loading" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#fbbf24 0%,#f97316 45%,#ea580c 75%,#1e3a5f 140%);">
-      <img src="/icons/icon-512.png" width="152" height="152" alt="건설UP" style="border-radius:50%;box-shadow:0 10px 28px rgba(0,0,0,0.28);animation:appLoadingPulse 1.6s ease-in-out infinite;" />
-      <div style="margin-top:22px;color:#fff;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:14px;font-weight:700;letter-spacing:0.02em;opacity:0.92;text-shadow:0 1px 4px rgba(0,0,0,0.25);">불러오는 중...</div>
-      <div style="margin-top:16px;width:34px;height:34px;border:3px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:appLoadingSpin 0.8s linear infinite;"></div>
-    </div>
-    <style>
-      @keyframes appLoadingPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-      @keyframes appLoadingSpin { to { transform: rotate(360deg); } }
-    </style>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
