@@ -123,9 +123,13 @@ export default function Header() {
   const [installVisible, setInstallVisible] = useState(false);
   const [installBusy, setInstallBusy] = useState(false);
   const [iosMenuOpen, setIosMenuOpen] = useState(false);
+  const [samsungMenuOpen, setSamsungMenuOpen] = useState(false);
 
   function isIOSDevice() {
     return /iPhone|iPad|iPod/.test(navigator.userAgent);
+  }
+  function isSamsungBrowser() {
+    return /SamsungBrowser/i.test(navigator.userAgent);
   }
   function isIOSStandalone() {
     return (navigator as unknown as { standalone?: boolean }).standalone === true;
@@ -175,6 +179,10 @@ export default function Header() {
       } finally {
         setInstallBusy(false);
       }
+      return;
+    }
+    if (isSamsungBrowser()) {
+      setSamsungMenuOpen((o) => !o);
       return;
     }
     if (/Android/i.test(navigator.userAgent)) {
@@ -316,6 +324,16 @@ export default function Header() {
                     </div>
                   )}
                 </div>
+
+              {samsungMenuOpen && (
+                <div className="fixed left-1/2 -translate-x-1/2 top-32 sm:top-14 z-[300] w-[280px] max-w-[calc(100vw-24px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden p-4 text-xs leading-relaxed animate-in fade-in slide-in-from-top-1">
+                  <p className="font-bold text-sm mb-2">홈 화면에 추가하기</p>
+                  <ol className="list-decimal list-inside space-y-1.5">
+                    <li>하단 메뉴(☰ 또는 ⋮) 탭</li>
+                    <li>'홈 화면에 추가' 선택 (또는 '페이지 추가' 하위 메뉴에서 선택)</li>
+                  </ol>
+                </div>
+              )}
 
           </div>
         </div>
