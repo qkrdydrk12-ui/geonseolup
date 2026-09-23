@@ -152,6 +152,11 @@ export default function Header() {
       (navigator as unknown as { standalone?: boolean }).standalone === true
     );
   }
+  function isInAppBrowser() {
+    return /KAKAOTALK|FBAN|FBAV|Instagram|NAVER\(|Line\/|; ?wv\)/i.test(
+      navigator.userAgent,
+    );
+  }
 
   useEffect(() => {
     if (window.matchMedia("(display-mode: standalone)").matches) return;
@@ -159,9 +164,7 @@ export default function Header() {
       setInstallVisible(!isIOSStandalone());
       return;
     }
-    setInstallVisible(
-      !!getDeferredInstallPrompt() || /Android/i.test(navigator.userAgent),
-    );
+    setInstallVisible(!!getDeferredInstallPrompt() || isInAppBrowser());
     function onAvailable() {
       setInstallVisible(true);
     }
@@ -209,7 +212,7 @@ export default function Header() {
       setSamsungMenuOpen((o) => !o);
       return;
     }
-    if (/Android/i.test(navigator.userAgent)) {
+    if (isInAppBrowser()) {
       const target =
         window.location.host +
         window.location.pathname +
@@ -279,7 +282,8 @@ export default function Header() {
                 href="/mypage"
                 className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-extrabold text-white no-underline transition-all hover:-translate-y-px whitespace-nowrap leading-tight bg-[#f97316] shadow-[0_2px_8px_rgba(249,115,22,0.30)]"
               >
-                <span>📋</span><span className="whitespace-nowrap">마이페이지</span>
+                <span>📋</span>
+                <span className="whitespace-nowrap">마이페이지</span>
               </Link>
             )}
             <div className="relative" data-openchat-menu>
