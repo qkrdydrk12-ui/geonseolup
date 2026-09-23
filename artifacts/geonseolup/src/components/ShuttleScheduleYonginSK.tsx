@@ -7,6 +7,12 @@ import { DEFAULT_STOPS, type ShuttleGroup, type ShuttleStop } from '@/lib/shuttl
 
 const RED = '#EE1C25';
 const RED_DARK = '#B3151B';
+function isPastTime(t: string): boolean {
+  const [h, m] = t.split(':').map(Number);
+  const now = new Date();
+  return h * 60 + m < now.getHours() * 60 + now.getMinutes();
+}
+
 
 function loadCache(): ShuttleGroup[] {
   try {
@@ -107,14 +113,17 @@ function StopCard({ stop }: { stop: ShuttleStop }) {
             </button>
           </div>
           {times.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {times.map((t, i) => (
-                <div key={`${t}-${i}`} className="rounded-xl border border-gray-200 py-2.5 text-center bg-gray-50">
-                  <p className="font-extrabold text-[14px] text-gray-900 tabular-nums">{t}</p>
-                  <p className="text-[9px] text-gray-400 mt-0.5">{dir === 'in' ? '출근' : '퇴근'}</p>
-                </div>
-              ))}
-            </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {times.map((t, i) => {
+                  const past = isPastTime(t);
+                  return (
+                    <div key={`${t}-${i}`} className={`rounded-xl border py-2.5 text-center ${past ? 'border-gray-100 bg-gray-50/60' : 'border-gray-200 bg-gray-50'}`}>
+                      <p className={`font-extrabold text-[14px] tabular-nums ${past ? 'text-gray-300' : 'text-gray-900'}`}>{t}</p>
+                      <p className={`text-[9px] mt-0.5 ${past ? 'text-gray-300' : 'text-gray-400'}`}>{dir === 'in' ? '출근' : '퇴근'}</p>
+                    </div>
+                  );
+                })}
+        </div>
           ) : (
             <p className="text-xs text-gray-400 py-3 text-center">정보가 없습니다.</p>
           )}
