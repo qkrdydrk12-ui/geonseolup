@@ -31,7 +31,7 @@ export default function Guide() {
           </select>
           <video
             key={current.file}
-            src={`/api/media/${current.file}`}
+            src={`/api/media/${current.file}?v=20260924`}
             controls
             playsInline
             className="w-full rounded-xl bg-black"
