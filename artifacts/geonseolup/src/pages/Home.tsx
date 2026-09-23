@@ -129,6 +129,7 @@ function loadShuttleLinksCache(): ShuttleLink[] {
 function SubscribeBar({ region, job }: { region: string; job: string }) {
   const [shuttleOpen, setShuttleOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [shuttleLinks, setShuttleLinks] = useState(loadShuttleLinksCache);
   const filterLabel = [region !== '전체' ? region : '', job !== '전체' ? job : ''].filter(Boolean).join(' ') || '전체';
 
@@ -164,6 +165,17 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
     return () => window.removeEventListener('click', onClick);
   }, [calcOpen]);
 
+  // 외부 클릭 시 사용법 영상 메뉴 닫기
+  useEffect(() => {
+    if (!guideOpen) return;
+    function onClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-guide-menu]')) setGuideOpen(false);
+    }
+    window.addEventListener('click', onClick);
+    return () => window.removeEventListener('click', onClick);
+  }, [guideOpen]);
+
   return (
     <section className="mb-2.5 bg-white rounded-[10px] border-[1.5px] border-gray-200 px-3 py-2.5">
       <div className="flex items-center gap-2 flex-wrap">
@@ -190,7 +202,7 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
             </button>
             {calcOpen && (
               <div
-                className="absolute right-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                className="absolute left-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
                 onClick={(e) => e.stopPropagation()}
               >
                 {CALCULATOR_LINKS.map((c) => (
@@ -216,7 +228,7 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
             </button>
             {shuttleOpen && (
               <div
-                className="absolute right-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                className="absolute left-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
                 onClick={(e) => e.stopPropagation()}
               >
                 {shuttleLinks.map((s) => (
@@ -233,7 +245,37 @@ function SubscribeBar({ region, job }: { region: string; job: string }) {
               </div>
             )}
           </div>
-          <a
+          <div className="relative" data-guide-menu>
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all flex items-center gap-1"
+              onClick={(e) => { e.stopPropagation(); setGuideOpen((o) => !o); }}
+            >
+              🎬 사용법 영상<span className="text-[8px] opacity-70">▼</span>
+            </button>
+            {guideOpen && (
+              <div
+                className="absolute left-0 top-[calc(100%+4px)] z-[300] min-w-[150px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <a
+                  href="/guide?v=app-install"
+                  className="block w-full px-3 py-2.5 text-xs font-bold hover:bg-orange-50 no-underline text-gray-700"
+                  onClick={() => setGuideOpen(false)}
+                >
+                  📱 앱 설치 방법
+                </a>
+                <a
+                  href="/guide?v=gongsu-alert"
+                  className="block w-full px-3 py-2.5 text-xs font-bold hover:bg-orange-50 no-underline text-gray-700"
+                  onClick={() => setGuideOpen(false)}
+                >
+                  🔔 공수표 알림 설정
+                </a>
+              </div>
+            )}
+          </div>
+<a
             href="/toon"
             className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-[1.5px] border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-all no-underline"
           >

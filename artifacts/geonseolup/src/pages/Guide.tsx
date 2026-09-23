@@ -8,7 +8,10 @@ const VIDEOS = [
 ];
 
 export default function Guide() {
-  const [selected, setSelected] = useState(VIDEOS[0].key);
+  const [selected, setSelected] = useState(() => {
+    const v = new URLSearchParams(window.location.search).get('v');
+    return VIDEOS.some((x) => x.key === v) ? (v as string) : VIDEOS[0].key;
+  });
   const current = VIDEOS.find((v) => v.key === selected) ?? VIDEOS[0];
 
   return (
