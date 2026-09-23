@@ -122,7 +122,7 @@ function InfoArticleDetail({ slug }: Props) {
   const { override, loading: overrideLoading } = useInfoOverride(slug);
   const article = useMemo(
     () =>
-      !overrideLoading && baseArticle
+            baseArticle
         ? override
           ? {
               ...baseArticle,
@@ -138,8 +138,8 @@ function InfoArticleDetail({ slug }: Props) {
   const fetchedBody = useArticleBody(slug, baseArticle?.body ?? [], override?.body);
 
   useEffect(() => {
-    if (overrideLoading) return;
-    if (article) {
+    if (!article && loading) return;
+        if (article) {
       document.title = `${article.title} — 건설UP`;
       let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
       if (meta) meta.content = article.description;
@@ -147,7 +147,7 @@ function InfoArticleDetail({ slug }: Props) {
     } else {
       document.title = '페이지를 찾을 수 없습니다 — 건설UP';
     }
-  }, [article, overrideLoading]);
+  }, [article, loading, overrideLoading]);
 
   if (!article) {
     if (loading || overrideLoading) {
