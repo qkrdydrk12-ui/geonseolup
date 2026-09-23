@@ -398,3 +398,25 @@ export const gongsuPushSubscriptions = pgTable("gongsu_push_subscriptions", {
   index("idx_gongsu_push_subs_user").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
   foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: "gongsu_push_subs_user_id_fkey" }).onDelete("cascade"),
 ]);
+
+// 지역/직종별 구인공고 알림톡 구독(2026-09-22 신설). 실제 쿼b리는 jobAlertSubscriptions.ts/jobAlertDigest.ts의 raw SQL(pgPool)이 담당하고,
+// 이 선언은 drizzle-kit의 드리프트 감지/DROP 오판을 막는 "정답지" 용도다.
+export const jobAlertSubscriptionsTable = pgTable("job_alert_subscriptions", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull(),
+  region: text("region"),
+  jobType: text("job_type"),
+  consentedAt: timestamp("consented_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  enabled: boolean("enabled").notNull().default(true),
+});
+
+export const jobAlertNotifyStateTable = pgTable("job_alert_notify_state", {
+  subscriptionId: integer("subscription_id").primaryKey(),
+  lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),
+});
+
+export const jobAlertDigestRunsTable = pgTable("job_alert_digest_runs", {
+  runDate: text("run_date").primaryKey(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+});
