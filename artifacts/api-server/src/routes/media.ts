@@ -14,7 +14,7 @@ router.get("/media/:filename", (req, res) => {
   }
   const stream = client.downloadAsStream(filename);
   res.setHeader("Content-Type", "video/mp4");
-  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.setHeader("Cache-Control", "public, max-age=300");
   stream.on("error", () => {
     if (!res.headersSent) res.status(404);
     res.end();
