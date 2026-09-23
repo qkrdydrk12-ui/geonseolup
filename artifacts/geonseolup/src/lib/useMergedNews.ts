@@ -92,7 +92,23 @@ function toDisplay(r: SiteNewsApiRow): DisplayNewsArticle {
  * 최종 목록은 (정적/DB 구분과 무관하게) date 내림차순으로 실제 정렬한다.
  */
 export function useMergedNews() {
-  const [articles, setArticles] = useState<DisplayNewsArticle[]>(() => cache ?? staticOnly());
+  const [articles, setArticles] = useState<DisplayNewsArticle[]>(() => {
+    const base = cache ?? staticOnly();
+    const ssr = typeof window !== 'undefined' ? (window as any).__NEWS_META__ : undefined;
+    if (ssr && !base.some((a) => a.slug === ssr.slug)) {
+      const ssrArticle: DisplayNewsArticle = {
+        slug: ssr.slug,
+        title: ssr.title,
+        description: ssr.description,
+        date: ssr.date ? new Date(ssr.date).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' }) : '',
+        body: parseMarkdownBody(ssr.rawBody || ''),
+        imageSrc: ssr.imageUrl || getNewsImage(ssr.slug),
+        isDbArticle: true,
+      };
+      return [ssrArticle, ...base];
+    }
+    return base;
+  });
   const [loading, setLoading] = useState(!cache);
 
   useEffect(() => {

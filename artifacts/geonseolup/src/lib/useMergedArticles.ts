@@ -31,7 +31,24 @@ function staticOnly(): DisplayArticle[] {
  * DB 발행 글은 git push/Replit 배포 없이 바로 반영된다.
  */
 export function useMergedArticles() {
-  const [articles, setArticles] = useState<DisplayArticle[]>(() => cache ?? staticOnly());
+    const [articles, setArticles] = useState<DisplayArticle[]>(() => {
+      const base = cache ?? staticOnly();
+      const ssr = typeof window !== 'undefined' ? (window as any).__ARTICLE_META__ : undefined;
+      if (ssr && !base.some((a) => a.slug === ssr.slug)) {
+        const ssrArticle: DisplayArticle = {
+          slug: ssr.slug,
+          title: ssr.title,
+          description: ssr.description,
+          emoji: '',
+          body: ssr.body || [],
+          imageSrc: ssr.imageUrl || getArticleImage(ssr.slug),
+          relatedJob: null,
+          relatedCalculator: null,
+        };
+        return [ssrArticle, ...base];
+      }
+      return base;
+    });
   const [loading, setLoading] = useState(!cache);
 
   useEffect(() => {

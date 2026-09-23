@@ -1149,6 +1149,10 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       // 크롤러가 JS 실행 없이도 읽을 수 있게 <div id="root"> 폴백에 직접 넣는다.
       const full = await getBlogArticleFull(slug).catch(() => null);
       const fallbackBlocks = ov?.body?.length ? ov.body : full?.body;
+      // 클라이언트 사이드 글목록 fetch가 느리거나 실패하면 InfoDetail.tsx가 정상 글을 "찾을 수 없음"으로 오판단하는 버그(2026-09-24 Google Soft404 원인 파악) —
+      // 서버가 이미 가지고 있는 및을 window.__ARTICLE_META__로 미리 주어서 클라이언트 fetch를 기다리지 않고도 글이 있다고 판단하게 한다.
+      const articleMetaJson = JSON.stringify({ slug, title: meta.title, description: meta.description, imageUrl, body: fallbackBlocks || [] }).replace(/</g, "\\u003c");
+      html = html.replace("</head>", `<script>window.__ARTICLE_META__=${articleMetaJson};</script></head>`);
       if (fallbackBlocks) {
         const bodyHtml = fallbackBlocks
           .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(stripRichMarks(b.text))}</p>`)
@@ -1250,6 +1254,10 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
       // 관리자 패널("현장 소식" 코너)에서 DB로 발행한 글이면 실제 제목·본문을
       // 초기 HTML에 넣어 크롤러가 JS 실행 없이도 읽을 수 있게 한다.
       if (full) {
+        // 클라이언트 useMergedNews() fetch가 느리거나 30/100건 한도에 안 잡히면 NewsDetail.tsx가 "찾을 수 없음"으로 오판단하는 버그(2026-09-24 Google Soft404 원인 파악, 기존 limit 100 대응은 근본 해결 아님) —
+        // 서버가 이미 가지고 있는 글을 window.__NEWS_META__로 미리 주어서 클라이언트 fetch를 기다리지 않고도 글이 있다고 판단하게 한다.
+        const newsMetaJson = JSON.stringify({ slug, title: meta.title, description: meta.description, imageUrl, date: meta.date, rawBody: full.body }).replace(/</g, "\\u003c");
+        html = html.replace("</head>", `<script>window.__NEWS_META__=${newsMetaJson};</script></head>`);
         // full.body는 "## 소제목" 마크다운 스타일 문자열이다(business1-threads.txt 4번).
         // 헤딩을 실제 <h2>로, 그 아래 문단을 <p>로 변환해 크롤러가 진짜 구조를 읽게 한다
         // (예전엔 "## 배경"이 그대로 본문 텍스트처럼 노출됐음, 2026-08-09 발견).
