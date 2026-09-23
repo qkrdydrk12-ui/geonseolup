@@ -1,8 +1,15 @@
-import { useEffect, useState } from 'react';
-import { Calculator, ListChecks } from 'lucide-react';
-import { calcDailyNetPay, sanitizeWage } from '@/lib/dailyNetPay';
-import { calcRegularEmployeeMonthlyNetPay, sanitizeMonthlyWage, sanitizeDependents } from '@/lib/regularEmployeeTax';
-import { fetchTaxSettings, invalidateTaxSettingsCache } from '@/lib/taxSettings';
+import { useEffect, useState } from "react";
+import { Calculator, ListChecks } from "lucide-react";
+import { calcDailyNetPay, sanitizeWage } from "@/lib/dailyNetPay";
+import {
+  calcRegularEmployeeMonthlyNetPay,
+  sanitizeMonthlyWage,
+  sanitizeDependents,
+} from "@/lib/regularEmployeeTax";
+import {
+  fetchTaxSettings,
+  invalidateTaxSettingsCache,
+} from "@/lib/taxSettings";
 
 interface WorkRecord {
   id: number;
@@ -15,21 +22,27 @@ function todayMonthRange() {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth() + 1;
-  const from = `${y}-${String(m).padStart(2, '0')}-01`;
+  const from = `${y}-${String(m).padStart(2, "0")}-01`;
   const lastDay = new Date(y, m, 0).getDate();
-  const to = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  const to = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
   return { from, to };
 }
 
-export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKey?: number; onChanged?: () => void }) {
-  const [wageInput, setWageInput] = useState('');
-  const [monthlyWageInput, setMonthlyWageInput] = useState('');
-  const [dependentsInput, setDependentsInput] = useState('1');
-  const [taxMode, setTaxMode] = useState<'daily' | 'regular'>('daily');
+export default function GongsuWageSummary({
+  refreshKey,
+  onChanged,
+}: {
+  refreshKey?: number;
+  onChanged?: () => void;
+}) {
+  const [wageInput, setWageInput] = useState("");
+  const [monthlyWageInput, setMonthlyWageInput] = useState("");
+  const [dependentsInput, setDependentsInput] = useState("1");
+  const [taxMode, setTaxMode] = useState<"daily" | "regular">("daily");
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editGongsu, setEditGongsu] = useState('');
-  const [editWage, setEditWage] = useState('');
+  const [editGongsu, setEditGongsu] = useState("");
+  const [editWage, setEditWage] = useState("");
   const [loading, setLoading] = useState(true);
 
   function loadRecords() {
@@ -37,15 +50,23 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
     setLoading(true);
     fetch(`/api/work-records?from=${from}&to=${to}`)
       .then((r) => r.json())
-      .then((data) => setRecords((data.records ?? []).filter((r: WorkRecord) => r.gongsu_type !== 'absent')))
+      .then((data) =>
+        setRecords(
+          (data.records ?? []).filter(
+            (r: WorkRecord) => r.gongsu_type !== "absent",
+          ),
+        ),
+      )
       .finally(() => setLoading(false));
   }
 
   function loadTaxSettings() {
     fetchTaxSettings().then((data) => {
       if (!data) return;
-      if (data.taxMode === "regular" || data.taxMode === "daily") setTaxMode(data.taxMode as "daily" | "regular");
-      if (typeof data.dependents === "number") setDependentsInput(String(data.dependents));
+      if (data.taxMode === "regular" || data.taxMode === "daily")
+        setTaxMode(data.taxMode as "daily" | "regular");
+      if (typeof data.dependents === "number")
+        setDependentsInput(String(data.dependents));
     });
   }
 
@@ -55,16 +76,16 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
-  async function saveTaxSettings(mode: 'daily' | 'regular', deps: number) {
-    await fetch('/api/auth/tax-settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+  async function saveTaxSettings(mode: "daily" | "regular", deps: number) {
+    await fetch("/api/auth/tax-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taxMode: mode, dependents: deps }),
     }).catch(() => {});
     invalidateTaxSettingsCache();
   }
 
-  function selectTaxMode(mode: 'daily' | 'regular') {
+  function selectTaxMode(mode: "daily" | "regular") {
     setTaxMode(mode);
     saveTaxSettings(mode, sanitizeDependents(dependentsInput));
   }
@@ -76,25 +97,33 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
   }
 
   const wage = sanitizeWage(wageInput);
-  const dailyResult = wage > 0 ? calcDailyNetPay({ dailyWage: wage, includePensionHealth: false }) : null;
+  const dailyResult =
+    wage > 0
+      ? calcDailyNetPay({ dailyWage: wage, includePensionHealth: false })
+      : null;
 
   const monthlyWage = sanitizeMonthlyWage(monthlyWageInput);
   const dependents = sanitizeDependents(dependentsInput);
   const regularResult =
-    monthlyWage > 0 ? calcRegularEmployeeMonthlyNetPay({ monthlyWage, dependents }) : null;
+    monthlyWage > 0
+      ? calcRegularEmployeeMonthlyNetPay({ monthlyWage, dependents })
+      : null;
 
   function startEdit(r: WorkRecord) {
     setEditingId(r.id);
     setEditGongsu(r.gongsu_type);
-    setEditWage(r.daily_wage != null ? String(r.daily_wage) : '');
+    setEditWage(r.daily_wage != null ? String(r.daily_wage) : "");
   }
 
   async function saveEdit(id: number) {
     const wageNum = Number(editWage);
     const res = await fetch(`/api/work-records/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gongsuType: editGongsu, ...(wageNum > 0 ? { dailyWage: wageNum } : {}) }),
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gongsuType: editGongsu,
+        ...(wageNum > 0 ? { dailyWage: wageNum } : {}),
+      }),
     });
     if (res.ok) {
       setEditingId(null);
@@ -104,7 +133,7 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
   }
 
   async function deleteRecord(id: number) {
-    const res = await fetch(`/api/work-records/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/work-records/${id}`, { method: "DELETE" });
     if (res.ok) {
       loadRecords();
       onChanged?.();
@@ -123,25 +152,29 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
       <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
         <button
           type="button"
-          onClick={() => selectTaxMode('daily')}
+          onClick={() => selectTaxMode("daily")}
           className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-            taxMode === 'daily' ? 'bg-white text-[#1e3a5f] shadow-sm' : 'text-gray-400'
+            taxMode === "daily"
+              ? "bg-white text-[#1e3a5f] shadow-sm"
+              : "text-gray-400"
           }`}
         >
           일용직
         </button>
         <button
           type="button"
-          onClick={() => selectTaxMode('regular')}
+          onClick={() => selectTaxMode("regular")}
           className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-            taxMode === 'regular' ? 'bg-white text-[#1e3a5f] shadow-sm' : 'text-gray-400'
+            taxMode === "regular"
+              ? "bg-white text-[#1e3a5f] shadow-sm"
+              : "text-gray-400"
           }`}
         >
           상용직
         </button>
       </div>
 
-      {taxMode === 'daily' ? (
+      {taxMode === "daily" ? (
         <>
           <input
             type="text"
@@ -155,17 +188,24 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
             <div className="bg-gray-50 rounded-xl px-4 py-3.5 space-y-2 mb-4">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">세전 일당</span>
-                <span className="font-medium text-gray-700">{dailyResult.dailyWage.toLocaleString()}원</span>
+                <span className="font-medium text-gray-700">
+                  {dailyResult.dailyWage.toLocaleString()}원
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">소득세+지방세</span>
                 <span className="font-medium text-gray-700">
-                  {(dailyResult.incomeTax + dailyResult.localTax).toLocaleString()}원
+                  {(
+                    dailyResult.incomeTax + dailyResult.localTax
+                  ).toLocaleString()}
+                  원
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">고용보험료</span>
-                <span className="font-medium text-gray-700">{dailyResult.employmentInsurance.toLocaleString()}원</span>
+                <span className="font-medium text-gray-700">
+                  {dailyResult.employmentInsurance.toLocaleString()}원
+                </span>
               </div>
               <div className="flex justify-between font-bold text-[#1e3a5f] pt-2 border-t border-gray-200">
                 <span>실수령액</span>
@@ -185,7 +225,9 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
             className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-3 text-sm mb-3 outline-none transition-all focus:bg-white focus:border-[#1e3a5f] focus:ring-4 focus:ring-[#1e3a5f]/10"
           />
           <div className="flex items-center gap-3 mb-4 bg-gray-50 rounded-xl px-4 py-3">
-            <span className="text-sm text-gray-500 shrink-0">부양가족 수(본인 포함)</span>
+            <span className="text-sm text-gray-500 shrink-0">
+              부양가족 수(본인 포함)
+            </span>
             <input
               type="text"
               inputMode="numeric"
@@ -199,11 +241,16 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">소득세+지방세</span>
                 <span className="font-medium text-gray-700">
-                  {(regularResult.incomeTax + regularResult.localTax).toLocaleString()}원
+                  {(
+                    regularResult.incomeTax + regularResult.localTax
+                  ).toLocaleString()}
+                  원
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">4대보험(국민연금·건강·요양·고용)</span>
+                <span className="text-gray-500">
+                  4대보험(국민연금·건강·요양·고용)
+                </span>
                 <span className="font-medium text-gray-700">
                   {(
                     regularResult.nationalPension +
@@ -221,7 +268,8 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
             </div>
           )}
           <p className="text-[11px] text-gray-400 mb-4">
-            * 국세청 근로소득 간이세액표를 근사 계산한 추정치입니다. 실제 원천징수액과 다소 차이 날 수 있습니다.
+            * 국세청 근로소득 간이세액표를 근사 계산한 추정치입니다. 실제
+            원천징수액과 다소 차이 날 수 있습니다.
           </p>
         </>
       )}
@@ -238,8 +286,13 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
         )}
         <div className="space-y-2">
           {records.map((r) => (
-            <div key={r.id} className="flex items-center gap-2 text-sm bg-gray-50 rounded-xl px-3 py-2.5">
-              <span className="text-gray-400 w-14 shrink-0 font-medium">{r.work_date.slice(5)}</span>
+            <div
+              key={r.id}
+              className="flex items-center gap-2 text-sm bg-gray-50 rounded-xl px-3 py-2.5"
+            >
+              <span className="text-gray-400 w-14 shrink-0 font-medium">
+                {r.work_date.slice(5)}
+              </span>
               {editingId === r.id ? (
                 <>
                   <input
@@ -260,7 +313,7 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
                   <button
                     onClick={() => saveEdit(r.id)}
                     className="text-xs font-bold px-3 py-1.5 rounded-lg text-white shadow-sm"
-                    style={{ background: '#f97316' }}
+                    style={{ background: "#f97316" }}
                   >
                     저장
                   </button>
@@ -274,7 +327,12 @@ export default function GongsuWageSummary({ refreshKey, onChanged }: { refreshKe
               ) : (
                 <>
                   <span className="text-gray-700 flex-1 font-medium">
-                    {r.gongsu_type}공수{r.daily_wage ? ` · ${r.daily_wage.toLocaleString()}원` : ''}
+                    {r.gongsu_type === "absent"
+                      ? "결근"
+                      : r.gongsu_type + "공수"}
+                    {r.daily_wage
+                      ? " · " + r.daily_wage.toLocaleString() + "원"
+                      : ""}
                   </span>
                   <button
                     onClick={() => startEdit(r)}

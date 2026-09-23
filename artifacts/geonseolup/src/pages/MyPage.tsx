@@ -38,7 +38,7 @@ export default function MyPage() {
             <GongsuInput onSaved={() => setRefreshKey((k) => k + 1)} />
             <GongsuMonthSummary refreshKey={refreshKey} />
             <GongsuRetirementFund refreshKey={refreshKey} />
-            <GongsuCalendar refreshKey={refreshKey} />
+            <GongsuCalendar refreshKey={refreshKey} onChanged={() => setRefreshKey((k) => k + 1)} />
             <GongsuWageSummary refreshKey={refreshKey} onChanged={() => setRefreshKey((k) => k + 1)} />
             <GongsuReminderSettings />
           </>
