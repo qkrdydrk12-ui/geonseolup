@@ -279,7 +279,7 @@ export default function Header() {
                 href="/mypage"
                 className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-extrabold text-white no-underline transition-all hover:-translate-y-px whitespace-nowrap leading-tight bg-[#f97316] shadow-[0_2px_8px_rgba(249,115,22,0.30)]"
               >
-                📋 마이페이지
+                <span>📋</span><span className="whitespace-nowrap">마이페이지</span>
               </Link>
             )}
             <div className="relative" data-openchat-menu>
