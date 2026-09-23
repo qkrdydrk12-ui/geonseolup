@@ -153,6 +153,7 @@ const SOURCE_STYLE: Record<string, { label: string; color: string; icon: string 
   naver_other:  { label: '네이버(기타)', color: '#65a30d', icon: 'N' },
   daum_search:  { label: '다음 검색', color: '#4c6ef5', icon: 'D' },
   daum_cafe:    { label: '다음 카페', color: '#4263eb', icon: '☕' },
+  daangn_cafe:  { label: '당근 카페', color: '#ff8a3d', icon: '🥕' },
   daum_blog:    { label: '다음 블로그', color: '#5c7cfa', icon: '📝' },
   daum_other:   { label: '다음(기타)', color: '#748ffc', icon: 'D' },
   tistory:      { label: '티스토리', color: '#f05a28', icon: 'T' },
