@@ -38,3 +38,6 @@ channel = "stable-25_05"
 
 [userenv.shared]
 GOOGLE_INDEXING_CLIENT_EMAIL = "geonseolup-indexing@geonseolup-indexing.iam.gserviceaccount.com"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-98092354-cd19-4563-b679-f7c6f19c131e"

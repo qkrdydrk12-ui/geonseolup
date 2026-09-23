@@ -1,7 +1,9 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from 'wouter';
 import { useEffect, useRef } from 'react';
 import Header from '@/components/Header';
+import UpdateNoticeModal from "@/components/UpdateNoticeModal";
 import Home from '@/pages/Home';
+import Guide from "@/pages/Guide";
 import Detail from '@/pages/Detail';
 import Post from '@/pages/Post';
 import Admin from '@/pages/Admin';
@@ -173,6 +175,7 @@ function Router() {
       <Route path="/">
         <Header />
         <Home />
+        <UpdateNoticeModal />
       </Route>
       <Route path="/detail/:id">
         {(params) => (
@@ -242,6 +245,9 @@ function Router() {
       </Route>
       <Route path="/alerts">
         <AlertSettings />
+      </Route>
+      <Route path="/guide">
+        <Guide />
       </Route>
         <Route path="/job-alerts">
           <JobAlerts />

@@ -20,6 +20,7 @@ import contentEngagementRouter from "./contentEngagement";
 import authRouter from "./auth";
 import workRecordsRouter from "./workRecords";
 import gongsuPushRouter from "./gongsuPush";
+import mediaRouter from "./media";
 
 const router: IRouter = Router();
 
@@ -36,6 +37,7 @@ router.use(jobAlertSubscriptionsRouter);
 router.use(authRouter);
 router.use(workRecordsRouter);
 router.use(gongsuPushRouter);
+router.use(mediaRouter);
 router.use(subscribeRouter);
 router.use(infoRouter);
 router.use(threadsImageRouter);
