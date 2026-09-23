@@ -28,7 +28,7 @@ export function buildReminderPayload(): string {
   return JSON.stringify({
     title: "🔨 오늘 공수 기록하셨나요?",
     body: "탭 한 번으로 오늘 공수를 기록해보세요",
-    url: "/mypage",
+    url: "/mypage/checkin",
   });
 }
 
