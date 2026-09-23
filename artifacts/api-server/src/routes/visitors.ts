@@ -50,6 +50,7 @@ const SOURCE_LABELS: Record<string, string> = {
   naver_other: "네이버(기타)",
   daum_search: "다음 검색",
   daum_cafe: "다음 카페",
+  daangn_cafe: "당근 카페",
   daum_blog: "다음 블로그",
   daum_other: "다음(기타)",
   tistory: "티스토리",
@@ -134,6 +135,7 @@ function categorizeHost(host: string): string {
   if (h === "naver.com" || h.endsWith(".naver.com")) return "naver_other";
 
   if (h === "cafe.daum.net" || h.endsWith(".cafe.daum.net")) return "daum_cafe";
+  if (h === "cafe.daangn.com" || h.endsWith(".cafe.daangn.com")) return "daangn_cafe";
   if (h === "blog.daum.net" || h.endsWith(".blog.daum.net")) return "daum_blog";
   if (h === "search.daum.net" || h.endsWith(".search.daum.net")) return "daum_search";
   if (h === "daum.net" || h.endsWith(".daum.net")) return "daum_other";
@@ -180,6 +182,7 @@ function categorizeUtmSource(utmSource: string): string {
   if (u.includes("naver") && (u.includes("blog") || u.includes("post"))) return "naver_blog";
   if (u.includes("naver")) return "naver_search";
   if (u.includes("daum") && u.includes("cafe")) return "daum_cafe";
+  if (u.includes("daangn")) return "daangn_cafe";
   if (u.includes("daum") && u.includes("blog")) return "daum_blog";
   if (u.includes("daum")) return "daum_search";
   if (u.includes("tistory")) return "tistory";
