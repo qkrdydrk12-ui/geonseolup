@@ -246,8 +246,8 @@ function Router() {
         <Route path="/job-alerts">
           <JobAlerts />
         </Route>
-      <Route path="/mypage">
-        <MyPage />
+      <Route path="/mypage/:tab?">
+        {(params) => <MyPage tab={params.tab} />}
       </Route>
       <Route path="/contact">
         <Contact />
