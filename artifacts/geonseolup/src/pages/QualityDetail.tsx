@@ -123,7 +123,7 @@ export default function QualityDetail({ slug }: Props) {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#f8fafc' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: '#f8fafc' }}>
       <Header />
 
       <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5282 100%)' }}>
@@ -188,7 +188,7 @@ export default function QualityDetail({ slug }: Props) {
                   {block.subtitle}
                 </h2>
               )}
-              <div className="text-[14px] text-gray-700 leading-relaxed">
+              <div className="text-[14px] text-gray-700 leading-relaxed break-words">
                 {renderRichText(block.text)}
               </div>
             </div>

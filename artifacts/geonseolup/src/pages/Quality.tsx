@@ -54,7 +54,7 @@ export default function Quality() {
   }, [topics, query, category]);
 
   return (
-    <div className="min-h-screen" style={{ background: '#f8fafc' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: '#f8fafc' }}>
       <Header />
 
       {/* 히어로: 와디즈 스타일 — 큰 타이틀 + 핵심 숫자 강조 + 설명 */}

@@ -26,6 +26,10 @@ async function initTables() {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS quality_topics_code_key ON quality_topics(code);
     CREATE INDEX IF NOT EXISTS idx_quality_topics_category ON quality_topics(category);
+    -- 2026-09-25 추가: 목록용 경량 썸네일(리사이즈된 소형 JPEG, 보통 20~60KB) 전용 컬럼.
+    -- images 컬럼(원본 2~4MB 사진)을 목록에서 직접 select하면 500 에러 재발(위쪽 주석 참고) —
+    -- 반드시 이 작은 별도 컬럼만 목록에서 select한다.
+    ALTER TABLE quality_topics ADD COLUMN IF NOT EXISTS thumbnail TEXT;
   `);
 }
 initTables().catch((e) => console.error("[DB] quality_topics initTables error:", e));
@@ -43,13 +47,14 @@ interface QualityTopicRow {
   keywords: string[];
   body: BodyBlock[];
   images: ImageBlock[];
+  thumbnail: string | null;
   source_page: number | null;
   published: boolean;
   created_at: string;
   updated_at: string;
 }
 
-function toApiList(row: QualityTopicRow & { thumb?: string | null }) {
+function toApiList(row: QualityTopicRow) {
   return {
     id: row.id,
     code: row.code,
@@ -58,7 +63,7 @@ function toApiList(row: QualityTopicRow & { thumb?: string | null }) {
     slug: row.slug,
     summary: row.summary,
     keywords: row.keywords,
-    thumbnail: row.thumb ?? null,
+    thumbnail: row.thumbnail ?? null,
     sourcePage: row.source_page,
   };
 }
@@ -87,7 +92,7 @@ function toApiDetail(row: QualityTopicRow) {
 router.get("/quality-topics", async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query(
-      `SELECT id, code, category, title, slug, summary, keywords, source_page
+      `SELECT id, code, category, title, slug, summary, keywords, source_page, thumbnail
        FROM quality_topics WHERE published = true ORDER BY code ASC LIMIT 1000`
     );
     res.json({ rows: result.rows.map((r) => toApiList(r)) });
@@ -101,7 +106,7 @@ router.get("/quality-topics", async (_req: Request, res: Response) => {
 router.get("/quality-topics/all", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query(
-      `SELECT id, code, category, title, slug, summary, keywords, source_page, published
+      `SELECT id, code, category, title, slug, summary, keywords, source_page, published, thumbnail
        FROM quality_topics ORDER BY code ASC LIMIT 1000`
     );
     res.json({ rows: result.rows.map((r) => ({ ...toApiList(r), published: r.published })) });
@@ -177,15 +182,16 @@ router.put("/quality-topics/:id", requireAdmin, jsonBig, async (req: Request, re
     }
     const body = req.body as {
       category?: string; title?: string; summary?: string;
-      keywords?: string[]; body?: BodyBlock[]; images?: ImageBlock[]; published?: boolean;
+      keywords?: string[]; body?: BodyBlock[]; images?: ImageBlock[]; thumbnail?: string | null; published?: boolean;
     };
     const result = await pgPool.query<QualityTopicRow>(
-      `UPDATE quality_topics SET category=$1, title=$2, summary=$3, keywords=$4, body=$5, images=$6, published=$7, updated_at=now()
-       WHERE id=$8
-       RETURNING id, code, category, title, slug, summary, keywords, body, images, source_page, published, created_at, updated_at`,
+      `UPDATE quality_topics SET category=$1, title=$2, summary=$3, keywords=$4, body=$5, images=$6, thumbnail=$7, published=$8, updated_at=now()
+       WHERE id=$9
+       RETURNING id, code, category, title, slug, summary, keywords, body, images, thumbnail, source_page, published, created_at, updated_at`,
       [
         (body.category ?? "").trim(), (body.title ?? "").trim(), (body.summary ?? "").trim(),
         JSON.stringify(body.keywords ?? []), JSON.stringify(body.body ?? []), JSON.stringify(body.images ?? []),
+        body.thumbnail ?? null,
         body.published !== false, id,
       ]
     );
