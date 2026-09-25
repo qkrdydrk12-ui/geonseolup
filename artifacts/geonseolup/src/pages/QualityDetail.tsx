@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -38,7 +38,6 @@ export default function QualityDetail({ slug }: Props) {
   const [topic, setTopic] = useState<QualityTopicDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,20 +91,6 @@ export default function QualityDetail({ slug }: Props) {
     if (nextTopic) navigate(`/quality/${nextTopic.slug}`);
   }
 
-  // 스와이프: 왼쪽으로 밀면 다음, 오른쪽으로 밀면 이전.
-  function onTouchStart(e: React.TouchEvent) {
-    touchStartX.current = e.touches[0]?.clientX ?? null;
-  }
-  function onTouchEnd(e: React.TouchEvent) {
-    if (touchStartX.current == null) return;
-    const endX = e.changedTouches[0]?.clientX ?? touchStartX.current;
-    const delta = endX - touchStartX.current;
-    touchStartX.current = null;
-    if (Math.abs(delta) < 60) return;
-    if (delta < 0) goNext();
-    else goPrev();
-  }
-
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'ArrowRight') goNext();
@@ -138,7 +123,7 @@ export default function QualityDetail({ slug }: Props) {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#f8fafc' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    <div className="min-h-screen" style={{ background: '#f8fafc' }}>
       <Header />
 
       <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5282 100%)' }}>
@@ -192,7 +177,6 @@ export default function QualityDetail({ slug }: Props) {
             <span className="text-lg shrink-0">→</span>
           </button>
         </div>
-        <p className="text-center text-[10px] text-gray-400 mt-1.5 sm:hidden">← 좌우로 밀어서 넘길 수도 있어요 →</p>
       </div>
 
       <main className="max-w-[860px] mx-auto px-4 py-5">
