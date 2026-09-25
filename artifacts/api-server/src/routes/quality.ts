@@ -49,7 +49,7 @@ interface QualityTopicRow {
   updated_at: string;
 }
 
-function toApiList(row: QualityTopicRow) {
+function toApiList(row: QualityTopicRow & { thumb?: string | null }) {
   return {
     id: row.id,
     code: row.code,
@@ -58,7 +58,7 @@ function toApiList(row: QualityTopicRow) {
     slug: row.slug,
     summary: row.summary,
     keywords: row.keywords,
-    thumbnail: row.images?.[0]?.imageBase64 ?? null,
+    thumbnail: row.thumb ?? null,
     sourcePage: row.source_page,
   };
 }
@@ -82,28 +82,32 @@ function toApiDetail(row: QualityTopicRow) {
 const SELECT_LIST = `id, code, category, title, slug, summary, keywords,
   (images -> 0 ->> 'imageBase64') AS thumb, source_page`;
 
-// GET /api/quality-topics — 공개, 전체 목록(경량 — body 제외, 썸네일 1장만). 172건 정도라 페이지네이션 없이 한번에.
+// GET /api/quality-topics — 공개, 전체 목록(경량 — body/images 전체 대신 썸네일 1장만 SQL에서 추출).
+// ⚠️ 2026-09-25 사고: images 컬럼 전체(코덱스 생성 이미지, 장당 1~3MB)를 그대로 SELECT해서 161건 쌓이니
+// 응답이 너무 커져 500 에러가 났다(blog_articles 37MB 사고와 동일 패턴). 절대 images 전체를 목록에서 select하지 않는다.
 router.get("/quality-topics", async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query(
-      `SELECT id, code, category, title, slug, summary, keywords, images, source_page
+      `SELECT id, code, category, title, slug, summary, keywords, source_page,
+        (images -> 0 ->> 'imageBase64') AS thumb
        FROM quality_topics WHERE published = true ORDER BY code ASC LIMIT 1000`
     );
-    res.json({ rows: result.rows.map((r: QualityTopicRow) => toApiList(r)) });
+    res.json({ rows: result.rows.map((r) => toApiList(r)) });
   } catch (err) {
     console.error("[Quality] GET list error:", err);
     res.status(500).json({ error: "품질기준 목록 조회 실패" });
   }
 });
 
-// GET /api/quality-topics/all — 관리자 전용, 비공개 포함 전체
+// GET /api/quality-topics/all — 관리자 전용, 비공개 포함 전체 (마찬가지로 썸네일만, images 전체 금지)
 router.get("/quality-topics/all", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query(
-      `SELECT id, code, category, title, slug, summary, keywords, images, source_page, published
+      `SELECT id, code, category, title, slug, summary, keywords, source_page, published,
+        (images -> 0 ->> 'imageBase64') AS thumb
        FROM quality_topics ORDER BY code ASC LIMIT 1000`
     );
-    res.json({ rows: result.rows.map((r: QualityTopicRow) => ({ ...toApiList(r), published: r.published })) });
+    res.json({ rows: result.rows.map((r) => ({ ...toApiList(r), published: r.published })) });
   } catch (err) {
     console.error("[Quality] GET all error:", err);
     res.status(500).json({ error: "품질기준 목록 조회 실패" });

@@ -162,23 +162,6 @@ export default function Quality() {
           </div>
         </div>
 
-        {/* 카테고리 필터 */}
-        <div className="flex flex-wrap gap-1.5 mb-5">
-          {categories.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer transition-colors whitespace-nowrap ${
-                category === c
-                  ? 'bg-[#1e3a5f] border-[#1e3a5f] text-white'
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-[#1e3a5f]'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
         {loading ? (
           <div className="text-center py-16 text-gray-400 text-sm">불러오는 중...</div>
         ) : filtered.length === 0 ? (
