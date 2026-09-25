@@ -125,6 +125,28 @@ export default function QualityDetail({ slug }: Props) {
     <div className="min-h-screen overflow-x-hidden" style={{ background: '#f8fafc' }}>
       <Header />
 
+      {/* 화면 옆 반투명 화살표 — 스크롤 위치와 상관없이 항상 눌러서 이전/다음으로 넘길 수 있음 (시범 적용) */}
+      <button
+        onClick={goPrev}
+        disabled={!prevTopic}
+        aria-label="이전 항목"
+        className={`fixed left-1 sm:left-3 top-1/2 -translate-y-1/2 z-[100] w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-lg sm:text-xl transition-opacity ${
+          prevTopic ? 'bg-black/20 text-white hover:bg-black/35 cursor-pointer' : 'bg-black/5 text-white/30 cursor-not-allowed'
+        }`}
+      >
+        ←
+      </button>
+      <button
+        onClick={goNext}
+        disabled={!nextTopic}
+        aria-label="다음 항목"
+        className={`fixed right-1 sm:right-3 top-1/2 -translate-y-1/2 z-[100] w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-lg sm:text-xl transition-opacity ${
+          nextTopic ? 'bg-black/20 text-white hover:bg-black/35 cursor-pointer' : 'bg-black/5 text-white/30 cursor-not-allowed'
+        }`}
+      >
+        →
+      </button>
+
       <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5282 100%)' }}>
         <div className="max-w-[860px] mx-auto px-4 pt-8 pb-7">
           <div className="flex items-center justify-between mb-3">
