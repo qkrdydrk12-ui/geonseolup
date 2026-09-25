@@ -297,6 +297,31 @@ export const contentLikesTable = pgTable(
 // 댓글(2026-09-10 신설) — 로그인 없이 IP 기준으로 남기는 익명 댓글. content_likes와 동일한
 // (content_type, content_id) 키 체계를 그대로 쓴다. 관리자가 hidden=true로 숨길 수 있다(하드 삭제 대신
 // 소프트 삭제 — 스팸 판단이 잘못됐을 때 복구 가능하도록).
+// 품질기준(2026-09-25 신설) — "DS부문 표준시방 해설서-설비" PDF(172페이지) 전체를 항목별로
+// 구조화해서 담은 검색형 레퍼런스 콘텐츠. 각 행이 PDF 한 페이지(=하나의 시공 기준 항목)에 대응.
+export const qualityTopics = pgTable("quality_topics", {
+	id: serial().primaryKey().notNull(),
+	code: varchar({ length: 30 }).notNull(),
+	category: varchar({ length: 100 }).notNull(),
+	title: varchar({ length: 200 }).notNull(),
+	slug: varchar({ length: 150 }).notNull(),
+	summary: varchar({ length: 300 }).notNull(),
+	// 검색용 키워드(예: ["용접","배관","방청도장"]) — 리스트 검색창/버튼에서 매칭.
+	keywords: jsonb().default([]).notNull(),
+	// 본문: {subtitle?, text}[] — richText.tsx 서식(굵게/색상/인용/구분선) 그대로 사용.
+	body: jsonb().default([]).notNull(),
+	// 적합/부적합 비교사진 등 이미지 갤러리: {imageBase64, caption?, kind?}[] (kind: 'correct'|'defect'|'step'|'diagram')
+	images: jsonb().default([]).notNull(),
+	sourcePage: integer("source_page"),
+	published: boolean().default(true).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("idx_quality_topics_category").using("btree", table.category.asc().nullsLast().op("text_ops")),
+	unique("quality_topics_slug_key").on(table.slug),
+	unique("quality_topics_code_key").on(table.code),
+]);
+
 export const contentCommentsTable = pgTable(
   "content_comments",
   {

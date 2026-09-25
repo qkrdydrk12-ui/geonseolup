@@ -13,6 +13,8 @@ import Toon from '@/pages/Toon';
 import ToonDetail from '@/pages/ToonDetail';
 import News from '@/pages/News';
 import NewsDetail from '@/pages/NewsDetail';
+import Quality from '@/pages/Quality';
+import QualityDetail from '@/pages/QualityDetail';
 import Shop from '@/pages/Shop';
 import InfoDetail from '@/pages/InfoDetail';
 import RetirementFundCalculator from '@/pages/RetirementFundCalculator';
@@ -216,6 +218,12 @@ function Router() {
       </Route>
       <Route path="/news/:slug">
         {(params) => <NewsDetail slug={params.slug} />}
+      </Route>
+      <Route path="/quality">
+        <Quality />
+      </Route>
+      <Route path="/quality/:slug">
+        {(params) => <QualityDetail slug={params.slug} />}
       </Route>
       <Route path="/retirement-fund-calculator">
         <RetirementFundCalculator />
