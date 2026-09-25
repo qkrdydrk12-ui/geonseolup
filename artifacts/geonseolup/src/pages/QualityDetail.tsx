@@ -140,7 +140,7 @@ export default function QualityDetail({ slug }: Props) {
             <span className="text-[11px] font-bold text-white bg-white/15 border border-white/25 px-2 py-0.5 rounded-full">
               {topic.category}
             </span>
-            <span className="text-[11px] text-white/50 font-mono">{topic.code}</span>
+            <span className="text-[11px] text-white/50 font-mono">{topic.code.replace(/-v\d+$/, '')}</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-snug mb-2">{topic.title}</h1>
           <p className="text-sm text-white/70">{topic.summary}</p>

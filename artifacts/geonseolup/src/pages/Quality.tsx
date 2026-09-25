@@ -189,7 +189,7 @@ export default function Quality() {
                     <div className="flex-1 min-w-0 flex flex-col">
                       <div className="flex items-center gap-1.5 mb-1">
                         <span className="text-[10px] font-bold text-[#f97316] bg-orange-50 px-1.5 py-0.5 rounded">{t.category}</span>
-                        <span className="text-[10px] text-gray-400 font-mono">{t.code}</span>
+                        <span className="text-[10px] text-gray-400 font-mono">{t.code.replace(/-v\d+$/, '')}</span>
                       </div>
                       <h2 className="text-[13px] font-bold text-[#1e3a5f] leading-snug mb-1 line-clamp-2">{t.title}</h2>
                       <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2">{t.summary}</p>
