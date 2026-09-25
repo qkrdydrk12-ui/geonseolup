@@ -2,41 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-
-interface QualityTopicListItem {
-  id: number;
-  code: string;
-  category: string;
-  title: string;
-  slug: string;
-  summary: string;
-  keywords: string[];
-  thumbnail: string | null;
-  sourcePage: number | null;
-}
-
-function useQualityTopics() {
-  const [topics, setTopics] = useState<QualityTopicListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/quality-topics')
-      .then((res) => res.json())
-      .then((data: { rows?: QualityTopicListItem[] }) => {
-        if (!cancelled) setTopics(data.rows ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setTopics([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  return { topics, loading };
-}
+import { useQualityTopics } from '@/lib/useQualityTopics';
 
 // 자주 찾을 만한 주제를 버튼으로 먼저 보여준다(검색창에 안 쳐도 바로 클릭). 실제 카테고리와
 // 정확히 매칭 안 돼도 괜찮게, 클릭 시 검색어로 채워서 제목·요약·키워드 전체에서 느슨하게 찾는다.
@@ -57,6 +23,21 @@ export default function Quality() {
     const set = new Set<string>();
     topics.forEach((t) => set.add(t.category));
     return ['전체', ...Array.from(set).sort()];
+  }, [topics]);
+
+  // "자주 찾는 항목" — 항목 수가 많은 상위 카테고리별로 대표 항목(그 카테고리의 첫 항목) 1개씩 뽑아
+  // 검색 없이 바로 클릭해서 들어갈 수 있게 목록 맨 위에 따로 빼둔다.
+  const featured = useMemo(() => {
+    const byCategory = new Map<string, typeof topics>();
+    topics.forEach((t) => {
+      const arr = byCategory.get(t.category) ?? [];
+      arr.push(t);
+      byCategory.set(t.category, arr);
+    });
+    return Array.from(byCategory.entries())
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, 8)
+      .map(([, arr]) => arr[0]!);
   }, [topics]);
 
   const filtered = useMemo(() => {
@@ -89,9 +70,9 @@ export default function Quality() {
             삼성 반도체 팹 설비 표준시방서 172개 항목을 그대로 옮겨왔습니다. 용접·배관·전기·도장 등
             공종별로 적합/부적합 사진과 기준 수치를 쉬운 말로 정리했어요.
           </p>
-          <div className="flex items-center justify-center gap-6 text-white mb-2">
+          <div className="flex items-center justify-center gap-6 text-white mb-6">
             <div>
-              <div className="text-2xl font-extrabold">{topics.length || 172}</div>
+              <div className="text-2xl font-extrabold">{topics.length || 161}</div>
               <div className="text-[11px] text-white/60">전체 항목</div>
             </div>
             <div className="w-px h-8 bg-white/20" />
@@ -100,10 +81,49 @@ export default function Quality() {
               <div className="text-[11px] text-white/60">공종 분류</div>
             </div>
           </div>
+          {topics.length > 0 && (
+            <Link
+              href={`/quality/${topics[0]!.slug}`}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-white no-underline border border-white/30 bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              📖 처음부터 책으로 넘겨보기
+            </Link>
+          )}
         </div>
       </div>
 
       <main className="max-w-[1000px] mx-auto px-4 py-6">
+        {/* 자주 찾는 항목 — 검색 없이 바로 클릭 */}
+        {featured.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-sm font-bold text-[#1e3a5f] mb-2.5">⭐ 자주 찾는 항목</h2>
+            <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+              {featured.map((t) => (
+                <Link
+                  key={t.slug}
+                  href={`/quality/${t.slug}`}
+                  className="shrink-0 w-[150px] sm:w-[170px] block no-underline bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
+                >
+                  <div
+                    className="relative h-[90px] flex items-center justify-center"
+                    style={{ background: 'linear-gradient(135deg,#1e3a5f,#2d5282)' }}
+                  >
+                    {t.thumbnail ? (
+                      <img src={t.thumbnail} alt={t.title} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-2xl">📐</span>
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    <span className="text-[9px] font-bold text-[#f97316] bg-orange-50 px-1.5 py-0.5 rounded">{t.category}</span>
+                    <p className="text-[11px] font-bold text-[#1e3a5f] leading-snug mt-1 line-clamp-2">{t.title}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 검색창 */}
         <div className="sticky top-[56px] sm:top-[64px] z-[50] bg-[#f8fafc]/95 backdrop-blur pt-3 pb-3 -mx-4 px-4">
           <div className="relative">
@@ -168,7 +188,7 @@ export default function Quality() {
           </div>
         ) : (
           <>
-            <p className="text-xs text-gray-400 mb-3">{filtered.length}개 항목</p>
+            <p className="text-xs text-gray-400 mb-3">{filtered.length}개 항목 — 클릭하면 그 항목부터 이전/다음으로 이어볼 수 있어요</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {filtered.map((t) => (
                 <Link key={t.slug} href={`/quality/${t.slug}`} className="block no-underline">

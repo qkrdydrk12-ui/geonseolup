@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'wouter';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { renderRichText } from '@/lib/richText';
+import { useQualityTopics } from '@/lib/useQualityTopics';
 
 interface BodyBlock { subtitle?: string; text: string }
 interface ImageBlock { imageBase64: string; caption?: string; kind?: 'correct' | 'defect' | 'step' | 'diagram' }
@@ -32,14 +33,18 @@ interface Props {
 }
 
 export default function QualityDetail({ slug }: Props) {
+  const [, navigate] = useLocation();
+  const { topics } = useQualityTopics();
   const [topic, setTopic] = useState<QualityTopicDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setNotFound(false);
+    setTopic(null);
     fetch(`/api/quality-topics/${encodeURIComponent(slug)}`)
       .then((res) => {
         if (res.status === 404) {
@@ -65,7 +70,50 @@ export default function QualityDetail({ slug }: Props) {
     document.title = `${topic.title} — 건설 품질기준 — 건설UP`;
     let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     if (meta) meta.content = topic.summary;
+    window.scrollTo(0, 0);
   }, [topic]);
+
+  // 목록(코드순 정렬)에서 현재 항목의 위치를 찾아 이전/다음 항목을 계산 — 책 넘기듯 이어보기용.
+  const { prevTopic, nextTopic, position } = useMemo(() => {
+    if (topics.length === 0) return { prevTopic: null, nextTopic: null, position: null };
+    const idx = topics.findIndex((t) => t.slug === slug);
+    if (idx === -1) return { prevTopic: null, nextTopic: null, position: null };
+    return {
+      prevTopic: idx > 0 ? topics[idx - 1]! : null,
+      nextTopic: idx < topics.length - 1 ? topics[idx + 1]! : null,
+      position: { index: idx + 1, total: topics.length },
+    };
+  }, [topics, slug]);
+
+  function goPrev() {
+    if (prevTopic) navigate(`/quality/${prevTopic.slug}`);
+  }
+  function goNext() {
+    if (nextTopic) navigate(`/quality/${nextTopic.slug}`);
+  }
+
+  // 스와이프: 왼쪽으로 밀면 다음, 오른쪽으로 밀면 이전.
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current == null) return;
+    const endX = e.changedTouches[0]?.clientX ?? touchStartX.current;
+    const delta = endX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(delta) < 60) return;
+    if (delta < 0) goNext();
+    else goPrev();
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') goNext();
+      if (e.key === 'ArrowLeft') goPrev();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [prevTopic, nextTopic]);
 
   if (loading) {
     return (
@@ -90,14 +138,19 @@ export default function QualityDetail({ slug }: Props) {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#f8fafc' }}>
+    <div className="min-h-screen" style={{ background: '#f8fafc' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <Header />
 
       <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5282 100%)' }}>
         <div className="max-w-[860px] mx-auto px-4 pt-8 pb-7">
-          <Link href="/quality" className="text-white/70 text-xs no-underline hover:text-white">
-            ← 품질기준 목록
-          </Link>
+          <div className="flex items-center justify-between mb-3">
+            <Link href="/quality" className="text-white/70 text-xs no-underline hover:text-white">
+              ← 품질기준 목록
+            </Link>
+            {position && (
+              <span className="text-white/50 text-xs font-mono">{position.index} / {position.total}</span>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-3 mb-2">
             <span className="text-[11px] font-bold text-white bg-white/15 border border-white/25 px-2 py-0.5 rounded-full">
               {topic.category}
@@ -109,7 +162,40 @@ export default function QualityDetail({ slug }: Props) {
         </div>
       </div>
 
-      <main className="max-w-[860px] mx-auto px-4 py-7">
+      {/* 상단 이전/다음 내비게이션 — 책 넘기듯 바로 이어보기 */}
+      <div className="max-w-[860px] mx-auto px-4 pt-4">
+        <div className="flex items-stretch gap-2">
+          <button
+            onClick={goPrev}
+            disabled={!prevTopic}
+            className={`flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+              prevTopic ? 'bg-white border-gray-200 hover:border-[#1e3a5f] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <span className="text-lg shrink-0">←</span>
+            <span className="min-w-0">
+              <span className="block text-[9px] text-gray-400 font-bold">이전 항목</span>
+              <span className="block text-[11px] font-bold text-gray-700 truncate">{prevTopic?.title ?? '-'}</span>
+            </span>
+          </button>
+          <button
+            onClick={goNext}
+            disabled={!nextTopic}
+            className={`flex-1 flex items-center justify-end gap-2 px-3 py-2.5 rounded-xl border text-right transition-colors ${
+              nextTopic ? 'bg-white border-gray-200 hover:border-[#1e3a5f] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <span className="min-w-0">
+              <span className="block text-[9px] text-gray-400 font-bold">다음 항목</span>
+              <span className="block text-[11px] font-bold text-gray-700 truncate">{nextTopic?.title ?? '-'}</span>
+            </span>
+            <span className="text-lg shrink-0">→</span>
+          </button>
+        </div>
+        <p className="text-center text-[10px] text-gray-400 mt-1.5 sm:hidden">← 좌우로 밀어서 넘길 수도 있어요 →</p>
+      </div>
+
+      <main className="max-w-[860px] mx-auto px-4 py-5">
         <article className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-7">
           {topic.body.map((block, i) => (
             <div key={i} className={i > 0 ? 'mt-6' : ''}>
@@ -151,13 +237,40 @@ export default function QualityDetail({ slug }: Props) {
           </div>
         )}
 
-        <div className="mt-7 text-center">
-          <Link
-            href="/quality"
-            className="inline-block px-5 py-2.5 rounded-lg text-sm font-bold text-white no-underline"
-            style={{ background: '#f97316' }}
+        {/* 하단 이전/다음 — 본문 다 읽고 바로 이어보기 */}
+        <div className="mt-7 flex items-stretch gap-2">
+          <button
+            onClick={goPrev}
+            disabled={!prevTopic}
+            className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl border text-left transition-colors ${
+              prevTopic ? 'bg-white border-gray-200 hover:border-[#1e3a5f] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
+            }`}
           >
-            다른 품질기준도 보기 →
+            <span className="text-lg shrink-0">←</span>
+            <span className="min-w-0">
+              <span className="block text-[9px] text-gray-400 font-bold">이전 항목</span>
+              <span className="block text-[12px] font-bold text-gray-700 truncate">{prevTopic?.title ?? '-'}</span>
+            </span>
+          </button>
+          <button
+            onClick={goNext}
+            disabled={!nextTopic}
+            className={`flex-1 flex items-center justify-end gap-2 px-4 py-3 rounded-xl border text-right transition-colors ${
+              nextTopic ? 'text-white border-[#f97316] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
+            }`}
+            style={nextTopic ? { background: '#f97316' } : undefined}
+          >
+            <span className="min-w-0">
+              <span className={`block text-[9px] font-bold ${nextTopic ? 'text-white/80' : 'text-gray-400'}`}>다음 항목</span>
+              <span className={`block text-[12px] font-bold truncate ${nextTopic ? 'text-white' : 'text-gray-700'}`}>{nextTopic?.title ?? '-'}</span>
+            </span>
+            <span className="text-lg shrink-0">→</span>
+          </button>
+        </div>
+
+        <div className="mt-5 text-center">
+          <Link href="/quality" className="text-xs text-gray-400 no-underline hover:text-gray-600">
+            목록으로 돌아가기
           </Link>
         </div>
       </main>
