@@ -73,14 +73,13 @@ export default function QualityDetail({ slug }: Props) {
   }, [topic]);
 
   // 목록(코드순 정렬)에서 현재 항목의 위치를 찾아 이전/다음 항목을 계산 — 책 넘기듯 이어보기용.
-  const { prevTopic, nextTopic, position } = useMemo(() => {
-    if (topics.length === 0) return { prevTopic: null, nextTopic: null, position: null };
+  const { prevTopic, nextTopic } = useMemo(() => {
+    if (topics.length === 0) return { prevTopic: null, nextTopic: null };
     const idx = topics.findIndex((t) => t.slug === slug);
-    if (idx === -1) return { prevTopic: null, nextTopic: null, position: null };
+    if (idx === -1) return { prevTopic: null, nextTopic: null };
     return {
       prevTopic: idx > 0 ? topics[idx - 1]! : null,
       nextTopic: idx < topics.length - 1 ? topics[idx + 1]! : null,
-      position: { index: idx + 1, total: topics.length },
     };
   }, [topics, slug]);
 
@@ -132,15 +131,11 @@ export default function QualityDetail({ slug }: Props) {
             <Link href="/quality" className="text-white/70 text-xs no-underline hover:text-white">
               ← 품질기준 목록
             </Link>
-            {position && (
-              <span className="text-white/50 text-xs font-mono">{position.index} / {position.total}</span>
-            )}
           </div>
           <div className="flex items-center gap-2 mt-3 mb-2">
             <span className="text-[11px] font-bold text-white bg-white/15 border border-white/25 px-2 py-0.5 rounded-full">
               {topic.category}
             </span>
-            <span className="text-[11px] text-white/50 font-mono">{topic.code.replace(/-v\d+$/, '')}</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-snug mb-2">{topic.title}</h1>
           <p className="text-sm text-white/70">{topic.summary}</p>
@@ -153,7 +148,7 @@ export default function QualityDetail({ slug }: Props) {
           <button
             onClick={goPrev}
             disabled={!prevTopic}
-            className={`flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+            className={`flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${
               prevTopic ? 'bg-white border-gray-200 hover:border-[#1e3a5f] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
             }`}
           >
@@ -166,7 +161,7 @@ export default function QualityDetail({ slug }: Props) {
           <button
             onClick={goNext}
             disabled={!nextTopic}
-            className={`flex-1 flex items-center justify-end gap-2 px-3 py-2.5 rounded-xl border text-right transition-colors ${
+            className={`flex-1 min-w-0 flex items-center justify-end gap-2 px-3 py-2.5 rounded-xl border text-right transition-colors ${
               nextTopic ? 'bg-white border-gray-200 hover:border-[#1e3a5f] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
             }`}
           >
@@ -226,7 +221,7 @@ export default function QualityDetail({ slug }: Props) {
           <button
             onClick={goPrev}
             disabled={!prevTopic}
-            className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-xl border text-left transition-colors ${
+            className={`flex-1 min-w-0 flex items-center gap-2 px-4 py-3 rounded-xl border text-left transition-colors ${
               prevTopic ? 'bg-white border-gray-200 hover:border-[#1e3a5f] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
             }`}
           >
@@ -239,7 +234,7 @@ export default function QualityDetail({ slug }: Props) {
           <button
             onClick={goNext}
             disabled={!nextTopic}
-            className={`flex-1 flex items-center justify-end gap-2 px-4 py-3 rounded-xl border text-right transition-colors ${
+            className={`flex-1 min-w-0 flex items-center justify-end gap-2 px-4 py-3 rounded-xl border text-right transition-colors ${
               nextTopic ? 'text-white border-[#f97316] cursor-pointer' : 'bg-gray-50 border-gray-100 opacity-40 cursor-not-allowed'
             }`}
             style={nextTopic ? { background: '#f97316' } : undefined}
