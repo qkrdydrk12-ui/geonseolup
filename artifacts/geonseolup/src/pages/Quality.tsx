@@ -67,8 +67,8 @@ export default function Quality() {
             "이렇게 하면 맞는 거야?" — 현장에서 바로 찾아보는 품질기준
           </h1>
           <p className="text-sm text-white/75 max-w-[600px] mx-auto mb-6">
-            삼성 반도체 팹 설비 표준시방서 172개 항목을 그대로 옮겨왔습니다. 용접·배관·전기·도장 등
-            공종별로 적합/부적합 사진과 기준 수치를 쉬운 말로 정리했어요.
+            삼성 반도체 현장에서 9년간 일하며 모아온 자료를 분석해 172개 항목으로 정리했습니다. 용접·배관·전기·도장 등
+            공종별로 적합/부적합 사진과 기준 수치를 현장에서 바로 쓰는 말로 풀어 담았어요.
           </p>
           <div className="flex items-center justify-center gap-6 text-white mb-6">
             <div>
