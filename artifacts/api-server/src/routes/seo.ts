@@ -704,6 +704,17 @@ const JOB_DISPLAY_ALIAS: Record<string, string> = {
   "배관": "배관공",
 };
 
+// 프론트 lib/utils.ts의 WELD_SUBS/isWeld()를 그대로 복제(2026-09-25 추가) — "용접"은 실제
+// 공고에 그 값 그대로 저장되지 않고 TIG/아크/CO2/PVC/자동 세부값으로 저장된다. Home.tsx는
+// job==='용접'으로 필터할 때 이 세부값들도 함께 매칭하도록 이미 짜여 있었는데, 이 SSR 핸들러는
+// 그 로직이 없어 완전일치만 하다 보니 `/jobs/:region/용접`이 실제 용접 공고(CO2 등)가 있어도
+// 항상 0건으로 렌더링되고 있었다(사용자가 "다른 글은 이상없냐"고 재확인 요청해서 발견 —
+// region==='전체' 버그와 같은 종류의 SSR/CSR 불일치, 9개 relatedJob 글 중 "용접" 글에만 해당).
+const WELD_SUBS = ["TIG", "아크", "CO2", "PVC", "자동"];
+function isWeld(job: string): boolean {
+  return job === "용접" || WELD_SUBS.includes(job);
+}
+
 router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
   const region = decodeURIComponent(String(req.params.region));
   const jobType = decodeURIComponent(String(req.params.job));
@@ -724,10 +735,11 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     // 글 9개(철근/형틀/전기/포설/덕트/용접/조공/안전담당자/배관) 모두 CTA가 `/jobs/전체/:job`으로
     // 연결되므로, 이 랜딩페이지들 전부가 이 버그의 영향을 받고 있었다(실사용자는 React가 mount된
     // 뒤엔 Home.tsx 로직으로 정상 표시됐지만, 검색엔진이 색인하는 초기 HTML은 계속 0건이었음).
-    const matched = jobs.filter(
-      (j) => (region === "전체" || getJobRegion(j) === region) &&
-             (typeof j.job === "string" ? j.job : "") === jobType
-    );
+    const matched = jobs.filter((j) => {
+      if (region !== "전체" && getJobRegion(j) !== region) return false;
+      const jJob = typeof j.job === "string" ? j.job : "";
+      return jobType === "용접" ? isWeld(jJob) : jJob === jobType;
+    });
 
     const pageTitle = escapeHtmlAttr(`${region} ${jobDisplay} 구인 공고 (${matched.length}건) - 건설UP`);
     const pageDesc = escapeHtmlAttr(
