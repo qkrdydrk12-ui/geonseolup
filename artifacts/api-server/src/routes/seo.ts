@@ -458,9 +458,9 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
       // 클라이언트 전용 커스텀 페이지(CUSTOM_INFO_PAGES, 아래 /info/:slug 라우트 참고)도
       // 일반 글과 동일하게 사이트맵에 넣어야 검색엔진이 발견할 수 있다(2026-08-29 추가 —
       // URL 검사에선 색인 생성 요청으로 등록했지만 사이트맵 누락도 같이 발견해서 보강).
-      ...Object.keys(CUSTOM_INFO_PAGES).map((slug) => ({
+      ...Object.entries(CUSTOM_INFO_PAGES).map(([slug, page]) => ({
         loc: `/info/${encodeURIComponent(slug)}`, changefreq: "weekly", priority: "0.6",
-        lastmod: undefined as string | undefined,
+        lastmod: page.updatedAt as string | undefined,
       })),
     ];
 
@@ -1080,17 +1080,29 @@ router.get("/info", async (_req: Request, res: Response) => {
 // 페이지(ShuttleScheduleYonginSK.tsx의 CUSTOM_INFO_PAGES와 대응) — 아래 404 처리에서
 // "존재하지 않는 글"로 오인되지 않도록 여기 등록해야 검색엔진이 실제로 색인할 수 있다
 // (2026-08-29 실측 — 등록 전엔 URL 검사에서 404로 색인 생성 요청이 거부됨).
-const CUSTOM_INFO_PAGES: Record<string, { title: string; description: string; imageUrl?: string }> = {
+// 2026-09-25 발견: 아래 두 페이지의 Article 구조화 데이터에 datePublished/dateModified가
+// 계속 빠져 있었다 — buildArticleLd()는 meta.date/meta.updated가 있을 때만 그 필드를 넣는데,
+// custom 페이지의 base 객체엔 date/updated 자체가 없어서 항상 undefined였다(본문 폴백 누락과
+// 같은 근본원인: "DB 글이 아니라서 메타데이터 전반이 반쪽만 채워짐"). 검색결과에 게시일 배지가
+// 안 뜨고 Article 리치결과 자격 요건도 못 채웠을 가능성 — createdAt/updatedAt을 명시해 수정.
+const CUSTOM_INFO_PAGES: Record<
+  string,
+  { title: string; description: string; imageUrl?: string; createdAt: string; updatedAt: string }
+> = {
   "yongin-sk-shuttle-schedule": {
     title: "용인 셔틀버스 시간표 — SK 반도체 현장 통근버스 정류장 19곳",
     description: "용인 셔틀버스(SK 반도체 현장 통근버스) 정류장 19곳 출근·퇴근 시간표를 한눈에. 용인 셔틀버스 시간표, 픽업 장소별로 눌러서 바로 확인하세요.",
     imageUrl: "/images/shuttle-yongin-sk-hero.jpg",
+    createdAt: "2026-08-29", // 페이지 최초 신설일
+    updatedAt: "2026-09-25", // 크롤러용 본문 폴백 추가로 실질 개정된 날짜
   },
   // 2026-08-30 신설 — ShuttleSchedulePyeongtaekSamsung.tsx의 CUSTOM_INFO_PAGES와 대응.
   "pyeongtaek-samsung-shuttle-schedule": {
     title: "평택 셔틀버스 시간표 — 삼성 기술인 통근버스 노선 20곳",
     description: "평택 셔틀버스(삼성 기술인 통근버스) 노선 20곳 출근·퇴근·주말 시간표를 한눈에. 노선을 눌러서 바로 확인하세요.",
     imageUrl: "/images/shuttle-pyeongtaek-samsung-hero.jpg",
+    createdAt: "2026-08-30",
+    updatedAt: "2026-09-25",
   },
 };
 
@@ -1222,7 +1234,9 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       getAllInfoOverrides().catch(() => ({}) as Record<string, InfoOverride>),
     ]);
     const custom = CUSTOM_INFO_PAGES[slug];
-    const base = custom ? { slug, title: custom.title, description: custom.description, imageUrl: custom.imageUrl } : metaList.find((a) => a.slug === slug);
+    const base = custom
+      ? { slug, title: custom.title, description: custom.description, imageUrl: custom.imageUrl, date: custom.createdAt, updated: custom.updatedAt }
+      : metaList.find((a) => a.slug === slug);
     const ov = overrides[slug];
     const meta = base
       ? {
