@@ -312,6 +312,8 @@ export const qualityTopics = pgTable("quality_topics", {
 	body: jsonb().default([]).notNull(),
 	// 적합/부적합 비교사진 등 이미지 갤러리: {imageBase64, caption?, kind?}[] (kind: 'correct'|'defect'|'step'|'diagram')
 	images: jsonb().default([]).notNull(),
+	// 목록 카드용 경량 썸네일(리사이즈된 소형 JPEG) — images(원본, 장당 2~4MB) 대신 목록에서 이것만 select.
+	thumbnail: text(),
 	sourcePage: integer("source_page"),
 	published: boolean().default(true).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),

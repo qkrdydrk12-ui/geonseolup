@@ -80,7 +80,7 @@ export function renderRichText(text: string): ReactNode {
   const flushBuf = () => {
     if (buf.length === 0) return;
     parts.push(
-      <p key={`p${key++}`} className="whitespace-pre-line">
+      <p key={`p${key++}`} className="whitespace-pre-line break-words">
         {renderInline(buf.join('\n'), `p${key}`)}
       </p>
     );
@@ -91,7 +91,7 @@ export function renderRichText(text: string): ReactNode {
     parts.push(
       <blockquote
         key={`q${key++}`}
-        className="border-l-4 border-[#f97316] bg-orange-50/60 rounded-r-lg px-4 py-3 my-3 text-gray-700 whitespace-pre-line"
+        className="border-l-4 border-[#f97316] bg-orange-50/60 rounded-r-lg px-4 py-3 my-3 text-gray-700 whitespace-pre-line break-words"
       >
         {renderInline(quote.join('\n'), `q${key}`)}
       </blockquote>
