@@ -1094,6 +1094,124 @@ const CUSTOM_INFO_PAGES: Record<string, { title: string; description: string; im
   },
 };
 
+// ── CUSTOM_INFO_PAGES 크롤러용 본문 요약 (2026-09-25 신설) ─────────────────────
+// 아래 두 커스텀 페이지는 DB blog_article이 아니라 프론트 전용 인터랙티브 컴포넌트라
+// getBlogArticleFull(slug)가 항상 null을 반환한다 — 그 결과 아래 /info/:slug 핸들러의
+// "fallbackBlocks가 있을 때만 본문을 채운다" 로직에서 완전히 제외되어, 실제 노선·시간표
+// 내용이 하나도 없이 index.html 기본 껍데기(구인공고용 범용 H1/H2)만 크롤러에게 내려가고
+// 있었다. 서치콘솔 실측(2026-09-25)으로 확인: 이 페이지 관련 검색어("기술인셔틀버스" 등)가
+// 게재순위 4~5위로 이미 상위 노출되는데도 클릭이 0건 — 순위 문제가 아니라, 구글이 스니펫을
+// 만들 근거로 삼을 실제 본문 텍스트가 없어서로 추정된다. 프론트 데이터 파일
+// (lib/shuttleSchedulePyeongtaekSamsung.ts, lib/shuttleScheduleYonginSK.ts)을 이 서버
+// 패키지에서 직접 import할 수 없어(57번 줄 stripRichMarks와 동일한 제약), 노선별
+// 출근/퇴근 첫차·막차 시각만 요약해 그대로 복제해 둔다 — 관리자가 Firestore
+// settings/shuttle_schedule_* 값을 바꿔도 이 요약까지 자동 반영되진 않으니, 노선이 크게
+// 바뀌면 이 값도 같이 갱신할 것.
+interface ShuttleSummaryItem {
+  label: string;
+  from: string;
+  to: string;
+  commuteIn: string; // "첫차~막차" 또는 "정보없음"
+  commuteOut: string;
+}
+interface ShuttleSummaryGroup {
+  title: string;
+  items: ShuttleSummaryItem[];
+}
+
+const CUSTOM_INFO_PAGE_SHUTTLE_SUMMARY: Record<string, ShuttleSummaryGroup[]> = {
+  "pyeongtaek-samsung-shuttle-schedule": [
+    {
+      title: "삼성물산",
+      items: [
+        { label: "1번 독곡/지산동B", from: "희성상사 앞", to: "GATE2", commuteIn: "04:00~06:10", commuteOut: "16:20~21:40" },
+        { label: "4번 독곡/지산동B 조출", from: "문영M타워", to: "2번 게이트", commuteIn: "03:10", commuteOut: "정보없음" },
+        { label: "5번 서정동", from: "지장초교 버스정류장", to: "GATE2", commuteIn: "04:00~06:30", commuteOut: "16:20~21:30" },
+        { label: "6번 첨단로주차장-2번Gate", from: "첨단로 주차장", to: "2번Gate", commuteIn: "04:00~07:30", commuteOut: "16:20~00:15" },
+        { label: "7번 첨단로주차장-5번Gate", from: "첨단로주차장", to: "5번Gate", commuteIn: "04:00~06:30", commuteOut: "17:05~19:20" },
+        { label: "9번 서정리역", from: "서정리역 2번출구", to: "W4 승강장", commuteIn: "04:40~07:20", commuteOut: "16:30~00:10" },
+        { label: "10번 지산동A", from: "삼익아파트", to: "W4 셔틀버스 승강장", commuteIn: "05:15~05:55", commuteOut: "17:20~17:50" },
+        { label: "11번 신장동", from: "정문김밥", to: "W4 셔틀버스 승강장", commuteIn: "04:50~05:50", commuteOut: "17:10~21:20" },
+        { label: "12번 이충동", from: "부락산분수공원", to: "W4승강장", commuteIn: "04:50~06:10", commuteOut: "17:10~19:35" },
+        { label: "16번 송탄역", from: "송탄역", to: "2번Gate", commuteIn: "05:20~05:50", commuteOut: "17:20~19:40" },
+      ],
+    },
+    {
+      title: "삼성E&A",
+      items: [
+        { label: "2번 동삭동-평택A-1", from: "큰부동산", to: "셔틀버스 승강장", commuteIn: "03:50~07:30(낮시간 별도운행)", commuteOut: "05:00~00:30" },
+        { label: "3번 동삭동-평택A-2", from: "페리카나 앞", to: "셔틀버스 승강장", commuteIn: "03:50~07:30(낮시간 별도운행)", commuteOut: "05:00~00:30" },
+        { label: "8번 평택역-평택D", from: "SK2차 합정 아파트", to: "셔틀버스 승강장", commuteIn: "04:30~07:20", commuteOut: "16:40~23:30" },
+        { label: "13번 비전동-평택B", from: "뉴코아 평택점", to: "셔틀버스 승강장", commuteIn: "04:40~06:30", commuteOut: "16:45~19:50" },
+        { label: "15번 셔틀버스 승강장", from: "W4 승강장", to: "5번GATE", commuteIn: "04:15~06:30(낮/밤 별도운행)", commuteOut: "04:40~23:40" },
+        { label: "17번 용이동-평택C", from: "용이동 반도유보라", to: "셔틀버스 승강장", commuteIn: "04:50~06:30", commuteOut: "16:45~21:30" },
+        { label: "19번 팽성읍-평택E", from: "안정6리 버스정류장", to: "W4 외부주차", commuteIn: "05:25~05:35", commuteOut: "17:30~19:30" },
+        { label: "20번 기술인 2단지 순환셔틀", from: "W4", to: "W2 GATE", commuteIn: "04:40~18:40", commuteOut: "05:10~00:10" },
+      ],
+    },
+    {
+      title: "삼성중공업",
+      items: [
+        { label: "14번 광동제약", from: "광동제약 앞", to: "셔틀버스 승강장", commuteIn: "05:50", commuteOut: "17:30" },
+        { label: "18번 칠원동", from: "동광APT 맞은편", to: "힐맘시티APT2단지", commuteIn: "05:20~05:50", commuteOut: "18:00" },
+      ],
+    },
+  ],
+  "yongin-sk-shuttle-schedule": [
+    {
+      title: "현장 인근 4곳",
+      items: [
+        { label: "독성리 1주차장", from: "독성리 1주차장", to: "SK 용인 현장", commuteIn: "02:20~16:20", commuteOut: "07:10~23:30" },
+        { label: "독성리 5주차장", from: "독성리 5주차장", to: "SK 용인 현장", commuteIn: "03:30~16:20", commuteOut: "07:10~23:30" },
+        { label: "가좌리 3주차장", from: "가좌리 3주차장", to: "SK 용인 현장", commuteIn: "03:30~16:20", commuteOut: "07:10~23:30" },
+        { label: "가재월리 4주차장", from: "가재월리 4주차장", to: "SK 용인 현장", commuteIn: "03:30~16:20", commuteOut: "07:10~23:30" },
+      ],
+    },
+    {
+      title: "중간 경유지 7곳",
+      items: [
+        { label: "두창리", from: "두창리", to: "SK 용인 현장", commuteIn: "05:30~06:30", commuteOut: "17:10~22:00" },
+        { label: "원삼초등학교", from: "원삼초등학교", to: "SK 용인 현장", commuteIn: "04:30~12:40", commuteOut: "04:40~21:40" },
+        { label: "양지", from: "양지", to: "SK 용인 현장", commuteIn: "03:30~20:00", commuteOut: "05:20~22:40" },
+        { label: "백암", from: "백암", to: "SK 용인 현장", commuteIn: "03:30~20:00", commuteOut: "05:20~22:40" },
+        { label: "천리", from: "천리", to: "SK 용인 현장", commuteIn: "03:30~20:00", commuteOut: "05:20~22:40" },
+        { label: "양지 파인리조트", from: "양지 파인리조트", to: "SK 용인 현장", commuteIn: "03:30~20:00", commuteOut: "05:20~22:40" },
+        { label: "지원시설(2주차장)", from: "지원시설(2주차장)", to: "SK 용인 현장 4 GATE", commuteIn: "04:20~19:30", commuteOut: "04:35~23:30" },
+      ],
+    },
+    {
+      title: "안성·평택 8곳",
+      items: [
+        { label: "안성B(롯데마트앞)", from: "안성B", to: "SK 용인 현장", commuteIn: "03:30~20:00", commuteOut: "05:40~22:40" },
+        { label: "안성C1(중앙대 정문)", from: "안성C1", to: "SK 용인 현장", commuteIn: "03:30~20:00", commuteOut: "05:20~22:40" },
+        { label: "안성C2(내리후문)", from: "안성C2", to: "SK 용인 현장", commuteIn: "03:30~18:10", commuteOut: "05:40~22:40" },
+        { label: "안성E(죽산면)", from: "안성E", to: "SK 용인 현장", commuteIn: "03:30~06:30", commuteOut: "13:20~22:40" },
+        { label: "평택A(서정리)", from: "평택A", to: "SK 용인 현장", commuteIn: "03:30~06:20", commuteOut: "13:20~22:40" },
+        { label: "평택B(동삭동)", from: "평택B", to: "SK 용인 현장", commuteIn: "03:30~06:20", commuteOut: "13:20~22:40" },
+        { label: "평택C(합정동)", from: "평택C", to: "SK 용인 현장", commuteIn: "03:30~06:10", commuteOut: "13:20~22:40" },
+        { label: "평택D(용이동)", from: "평택D", to: "SK 용인 현장", commuteIn: "03:30~06:20", commuteOut: "13:20~22:40" },
+      ],
+    },
+  ],
+};
+
+function buildShuttleSummaryHtml(slug: string): string {
+  const groups = CUSTOM_INFO_PAGE_SHUTTLE_SUMMARY[slug];
+  if (!groups || groups.length === 0) return "";
+  return groups
+    .map((group) => {
+      const rows = group.items
+        .map(
+          (item) =>
+            `<li style="margin-bottom:8px;color:#334155"><b style="color:#1e3a5f">${escapeHtmlAttr(item.label)}</b> — ${escapeHtmlAttr(item.from)} → ${escapeHtmlAttr(item.to)} · 출근 ${escapeHtmlAttr(item.commuteIn)} · 퇴근 ${escapeHtmlAttr(item.commuteOut)}</li>`
+        )
+        .join("\n");
+      return `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(group.title)}</h2>
+        <ul style="margin:0 0 14px;padding-left:18px">${rows}</ul>`;
+    })
+    .join("\n");
+}
+
 router.get("/info/:slug", async (req: Request, res: Response) => {
   const slug = String(req.params.slug);
   try {
@@ -1149,10 +1267,6 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       // 크롤러가 JS 실행 없이도 읽을 수 있게 <div id="root"> 폴백에 직접 넣는다.
       const full = await getBlogArticleFull(slug).catch(() => null);
       const fallbackBlocks = ov?.body?.length ? ov.body : full?.body;
-      // 클라이언트 사이드 글목록 fetch가 느리거나 실패하면 InfoDetail.tsx가 정상 글을 "찾을 수 없음"으로 오판단하는 버그(2026-09-24 Google Soft404 원인 파악) —
-      // 서버가 이미 가지고 있는 및을 window.__ARTICLE_META__로 미리 주어서 클라이언트 fetch를 기다리지 않고도 글이 있다고 판단하게 한다.
-      const articleMetaJson = JSON.stringify({ slug, title: meta.title, description: meta.description, imageUrl, body: fallbackBlocks || [] }).replace(/</g, "\\u003c");
-      html = html.replace("</head>", `<script>window.__ARTICLE_META__=${articleMetaJson};</script></head>`);
       if (fallbackBlocks) {
         const bodyHtml = fallbackBlocks
           .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(stripRichMarks(b.text))}</p>`)
@@ -1164,6 +1278,26 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
         <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(meta.title)}</h1>
         <p style="margin:0 0 16px;color:#64748b;font-size:14px">${escapeHtmlAttr(meta.description)}</p>
         ${bodyHtml}
+        ${relatedHtml}
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
+      </div>
+    </div>`;
+        html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
+      } else if (custom) {
+        // DB 글이 아닌 커스텀 인터랙티브 페이지(셔틀버스 시간표 등)는 fallbackBlocks가 항상
+        // 없어서 위 분기를 안 타고 index.html 기본 껍데기(구인공고용 범용 H1/H2)가 그대로
+        // 크롤러에 내려가고 있었다 — 위 CUSTOM_INFO_PAGE_SHUTTLE_SUMMARY 요약으로 대체한다.
+        const summaryHtml = buildShuttleSummaryHtml(slug);
+        const relatedHtml = await buildRelatedLinksHtml(`info:${slug}`);
+        const fallbackBody = `
+    <div id="root">
+      <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
+        <h1 style="font-size:22px;font-weight:700;color:#f97316;margin:0 0 8px">${escapeHtmlAttr(meta.title)}</h1>
+        <p style="margin:0 0 16px;color:#64748b;font-size:14px">${escapeHtmlAttr(meta.description)}</p>
+        ${summaryHtml}
         ${relatedHtml}
         <p style="margin:0;color:#64748b;font-size:14px">
           페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
@@ -1254,10 +1388,6 @@ router.get("/news/:slug", async (req: Request, res: Response) => {
       // 관리자 패널("현장 소식" 코너)에서 DB로 발행한 글이면 실제 제목·본문을
       // 초기 HTML에 넣어 크롤러가 JS 실행 없이도 읽을 수 있게 한다.
       if (full) {
-        // 클라이언트 useMergedNews() fetch가 느리거나 30/100건 한도에 안 잡히면 NewsDetail.tsx가 "찾을 수 없음"으로 오판단하는 버그(2026-09-24 Google Soft404 원인 파악, 기존 limit 100 대응은 근본 해결 아님) —
-        // 서버가 이미 가지고 있는 글을 window.__NEWS_META__로 미리 주어서 클라이언트 fetch를 기다리지 않고도 글이 있다고 판단하게 한다.
-        const newsMetaJson = JSON.stringify({ slug, title: meta.title, description: meta.description, imageUrl, date: meta.date, rawBody: full.body }).replace(/</g, "\\u003c");
-        html = html.replace("</head>", `<script>window.__NEWS_META__=${newsMetaJson};</script></head>`);
         // full.body는 "## 소제목" 마크다운 스타일 문자열이다(business1-threads.txt 4번).
         // 헤딩을 실제 <h2>로, 그 아래 문단을 <p>로 변환해 크롤러가 진짜 구조를 읽게 한다
         // (예전엔 "## 배경"이 그대로 본문 텍스트처럼 노출됐음, 2026-08-09 발견).
