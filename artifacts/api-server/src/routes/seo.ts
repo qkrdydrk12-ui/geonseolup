@@ -717,8 +717,15 @@ router.get("/jobs/:region/:job", async (req: Request, res: Response) => {
     // 사용자가 "총 0개"만 보는 사고로 확인됨, site-news ?limit=30 버그와 동일 계열).
     const jobs = filterActiveJobs(cachedJobs);
 
+    // 2026-09-25 수정: region이 "전체"면 지역 필터 자체를 건너뛴다 — 실제 공고 region 값은
+    // "평택"·"용인"처럼 항상 구체적인 도시명이라 "전체"와 정확히 일치하는 공고는 존재할 수 없다.
+    // 프론트 Home.tsx의 필터 로직(`state.region !== '전체'`일 때만 지역 매칭)과 동일하게 맞춘 것 —
+    // 전엔 이 SSR 분기만 안 맞아서 크롤러가 "현재 0건의 공고"를 보고 있었다. relatedJob이 지정된
+    // 글 9개(철근/형틀/전기/포설/덕트/용접/조공/안전담당자/배관) 모두 CTA가 `/jobs/전체/:job`으로
+    // 연결되므로, 이 랜딩페이지들 전부가 이 버그의 영향을 받고 있었다(실사용자는 React가 mount된
+    // 뒤엔 Home.tsx 로직으로 정상 표시됐지만, 검색엔진이 색인하는 초기 HTML은 계속 0건이었음).
     const matched = jobs.filter(
-      (j) => getJobRegion(j) === region &&
+      (j) => (region === "전체" || getJobRegion(j) === region) &&
              (typeof j.job === "string" ? j.job : "") === jobType
     );
 
