@@ -79,17 +79,15 @@ function toApiDetail(row: QualityTopicRow) {
   };
 }
 
-const SELECT_LIST = `id, code, category, title, slug, summary, keywords,
-  (images -> 0 ->> 'imageBase64') AS thumb, source_page`;
-
-// GET /api/quality-topics — 공개, 전체 목록(경량 — body/images 전체 대신 썸네일 1장만 SQL에서 추출).
-// ⚠️ 2026-09-25 사고: images 컬럼 전체(코덱스 생성 이미지, 장당 1~3MB)를 그대로 SELECT해서 161건 쌓이니
-// 응답이 너무 커져 500 에러가 났다(blog_articles 37MB 사고와 동일 패턴). 절대 images 전체를 목록에서 select하지 않는다.
+// GET /api/quality-topics — 공개, 전체 목록(경량 — 이미지 데이터 전혀 select 안 함).
+// ⚠️ 2026-09-25 사고: 처음엔 images 컬럼 전체를 그대로 SELECT해서 500 에러(blog_articles 37MB 사고와 동일 패턴).
+// 이후 "썸네일 1장만 SQL에서 추출"로 고쳤는데도 여전히 500 재발 — 코덱스가 재생성한 이미지 자체가 장당
+// 2~4MB라서 "첫 이미지 1장"도 그대로 몇 MB였음. 그래서 목록에서는 이미지 데이터를 아예 select하지 않는다.
+// 목록 카드는 썸네일 없이 카테고리 아이콘(📐)으로 대체 표시(프론트 Quality.tsx가 이미 fallback 처리함).
 router.get("/quality-topics", async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query(
-      `SELECT id, code, category, title, slug, summary, keywords, source_page,
-        (images -> 0 ->> 'imageBase64') AS thumb
+      `SELECT id, code, category, title, slug, summary, keywords, source_page
        FROM quality_topics WHERE published = true ORDER BY code ASC LIMIT 1000`
     );
     res.json({ rows: result.rows.map((r) => toApiList(r)) });
@@ -99,12 +97,11 @@ router.get("/quality-topics", async (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/quality-topics/all — 관리자 전용, 비공개 포함 전체 (마찬가지로 썸네일만, images 전체 금지)
+// GET /api/quality-topics/all — 관리자 전용, 비공개 포함 전체 (마찬가지로 이미지 데이터 select 금지)
 router.get("/quality-topics/all", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const result = await pgPool.query(
-      `SELECT id, code, category, title, slug, summary, keywords, source_page, published,
-        (images -> 0 ->> 'imageBase64') AS thumb
+      `SELECT id, code, category, title, slug, summary, keywords, source_page, published
        FROM quality_topics ORDER BY code ASC LIMIT 1000`
     );
     res.json({ rows: result.rows.map((r) => ({ ...toApiList(r), published: r.published })) });
