@@ -16,6 +16,7 @@ import blogArticlesRouter from "./blogArticles";
 import relatedLinksRouter from "./relatedLinks";
 import toonRouter from "./toon";
 import contentEngagementRouter from "./contentEngagement";
+import qualityRouter from "./quality";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(blogArticlesRouter);
 router.use(relatedLinksRouter);
 router.use(toonRouter);
 router.use(contentEngagementRouter);
+router.use(qualityRouter);
 
 export default router;
