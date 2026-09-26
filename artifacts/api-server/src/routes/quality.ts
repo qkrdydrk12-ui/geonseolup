@@ -185,7 +185,7 @@ router.put("/quality-topics/:id", requireAdmin, jsonBig, async (req: Request, re
       keywords?: string[]; body?: BodyBlock[]; images?: ImageBlock[]; thumbnail?: string | null; published?: boolean;
     };
     const result = await pgPool.query<QualityTopicRow>(
-      `UPDATE quality_topics SET category=$1, title=$2, summary=$3, keywords=$4, body=$5, images=$6, thumbnail=$7, published=$8, updated_at=now()
+      `UPDATE quality_topics SET category=$1, title=$2, summary=$3, keywords=$4, body=$5, images=$6, thumbnail=COALESCE($7, thumbnail), published=$8, updated_at=now()
        WHERE id=$9
        RETURNING id, code, category, title, slug, summary, keywords, body, images, thumbnail, source_page, published, created_at, updated_at`,
       [
