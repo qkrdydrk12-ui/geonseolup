@@ -121,8 +121,8 @@ export default function QualityDetail({ slug }: Props) {
     );
   }
 
-  // 시범 적용(2026-09-26): 첫 항목(A-01-001)만 사진 1장을 제목 바로 아래·본문 위에 크게 배치. 나머지 항목은 기존 그대로.
-  const imageOnTop = topic.code === 'A-01-001' && topic.images.length > 0;
+  // 전체 적용(2026-09-26): 모든 항목의 첫 사진 1장을 제목 바로 아래·본문 위에 크게 배치. 나머지 사진은 본문 아래.
+  const imageOnTop = topic.images.length > 0;
   const restImages = imageOnTop ? topic.images.slice(1) : topic.images;
 
   return (
