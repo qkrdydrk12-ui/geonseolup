@@ -121,6 +121,10 @@ export default function QualityDetail({ slug }: Props) {
     );
   }
 
+  // 시범 적용(2026-09-26): 첫 항목(A-01-001)만 사진 1장을 제목 바로 아래·본문 위에 크게 배치. 나머지 항목은 기존 그대로.
+  const imageOnTop = topic.code === 'A-01-001' && topic.images.length > 0;
+  const restImages = imageOnTop ? topic.images.slice(1) : topic.images;
+
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: '#f8fafc' }}>
       <Header />
@@ -197,6 +201,17 @@ export default function QualityDetail({ slug }: Props) {
       </div>
 
       <main className="max-w-[860px] mx-auto px-4 py-5">
+        {imageOnTop && (
+          <div className="mb-5 flex justify-center">
+            <div className="w-full max-w-[520px] bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <img src={topic.images[0]!.imageBase64} alt={topic.images[0]!.caption || topic.title} className="w-full h-auto" />
+              {topic.images[0]!.caption && (
+                <p className="text-xs text-gray-500 p-2.5 leading-relaxed">{topic.images[0]!.caption}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         <article className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-7">
           {topic.body.map((block, i) => (
             <div key={i} className={i > 0 ? 'mt-6' : ''}>
@@ -212,11 +227,11 @@ export default function QualityDetail({ slug }: Props) {
           ))}
         </article>
 
-        {topic.images.length > 0 && (
+        {restImages.length > 0 && (
           <div className="mt-6">
             <h2 className="text-base font-bold text-[#1e3a5f] mb-3">📷 현장 사진으로 확인하기</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              {topic.images.map((img, i) => {
+              {restImages.map((img, i) => {
                 const kindInfo = img.kind ? KIND_LABEL[img.kind] : null;
                 return (
                   <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
