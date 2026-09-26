@@ -63,10 +63,16 @@ function MapLinks({ name, address, lat, lng }: { name: string; address: string; 
   );
 }
 
-function RouteCard({ route }: { route: ShuttleRoute }) {
+function RouteCard({ route, expandSignal, highlighted }: { route: ShuttleRoute; expandSignal: { id: string; token: number } | null; highlighted: boolean }) {
   const [open, setOpen] = useState(false);
   const [dir, setDir] = useState<'in' | 'out'>('in');
   const [day, setDay] = useState<'weekday' | 'weekend'>('weekday');
+
+  // 검색 결과에서 이 노선이 선택되면(token이 바뀔 때마다) 이미 열려있어도 다시 펼친다.
+  useEffect(() => {
+    if (expandSignal && expandSignal.id === route.id) setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandSignal?.token]);
 
   const hasWeekend = route.weekendCommuteIn.length > 0 || route.weekendCommuteOut.length > 0;
   const times = day === 'weekday'
@@ -74,7 +80,15 @@ function RouteCard({ route }: { route: ShuttleRoute }) {
     : (dir === 'in' ? route.weekendCommuteIn : route.weekendCommuteOut);
 
   return (
-    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white transition-shadow" style={open ? { boxShadow: '0 4px 20px rgba(20,40,160,0.08)' } : undefined}>
+    <div
+      id={`route-${route.id}`}
+      className="border rounded-2xl overflow-hidden bg-white transition-all scroll-mt-24"
+      style={
+        highlighted
+          ? { borderColor: BLUE, borderWidth: 2, boxShadow: '0 0 0 4px rgba(20,40,160,0.12)' }
+          : open ? { borderColor: '#e5e7eb', boxShadow: '0 4px 20px rgba(20,40,160,0.08)' } : { borderColor: '#e5e7eb' }
+      }
+    >
       <div
         role="button"
         tabIndex={0}
@@ -194,8 +208,17 @@ function RouteCard({ route }: { route: ShuttleRoute }) {
   );
 }
 
+// 검색창에서 노선을 선택하면 그 카드로 스크롤 + 자동 펼침(2026-09-25 신설, 사용자 요청).
+interface RouteMatch {
+  route: ShuttleRoute;
+  groupTitle: string;
+}
+
 export default function ShuttleSchedulePyeongtaekSamsung() {
   const [groups, setGroups] = useState<ShuttleCompanyGroup[]>(loadCache);
+  const [query, setQuery] = useState('');
+  const [expandSignal, setExpandSignal] = useState<{ id: string; token: number } | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = '평택 삼성 셔틀버스 시간표 — 삼성 기술인 통근버스 노선 20곳 | 건설UP';
@@ -211,6 +234,34 @@ export default function ShuttleSchedulePyeongtaekSamsung() {
   }, []);
 
   const totalRoutes = groups.reduce((n, g) => n + g.routes.length, 0);
+
+  const q = query.trim().toLowerCase();
+  const matches: RouteMatch[] = q
+    ? groups.flatMap((g) =>
+        g.routes
+          .filter(
+            (r) =>
+              r.name.toLowerCase().includes(q) ||
+              r.routeNumber.toLowerCase().includes(q) ||
+              r.origin.name.toLowerCase().includes(q) ||
+              r.destination.name.toLowerCase().includes(q) ||
+              r.stops.some((s) => s.name.toLowerCase().includes(q))
+          )
+          .map((r) => ({ route: r, groupTitle: g.title }))
+      ).slice(0, 8)
+    : [];
+
+  function goToRoute(route: ShuttleRoute) {
+    setQuery('');
+    setHighlightId(route.id);
+    setExpandSignal({ id: route.id, token: Date.now() });
+    requestAnimationFrame(() => {
+      document.getElementById(`route-${route.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    window.setTimeout(() => {
+      setHighlightId((cur) => (cur === route.id ? null : cur));
+    }, 2400);
+  }
 
   return (
     <div className="min-h-screen" style={{ background: '#f8f9fb' }}>
@@ -254,6 +305,53 @@ export default function ShuttleSchedulePyeongtaekSamsung() {
           평일/주말 탭을 확인하고, 정류장이 여러 곳이면 경유 순서도 같이 참고하세요.
         </p>
 
+        {/* 노선 검색 — 2026-09-25 신설. 노선번호·정류장·출발지로 검색하면 바로 그 카드로 이동+펼침 */}
+        <div className="relative mb-7">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[15px] pointer-events-none">🔍</span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && matches.length > 0) {
+                  e.preventDefault();
+                  goToRoute(matches[0].route);
+                } else if (e.key === 'Escape') {
+                  setQuery('');
+                }
+              }}
+              placeholder="노선번호·정류장·출발지로 검색 (예: 1번, 독곡, 서정리역)"
+              className="w-full pl-11 pr-4 py-3.5 rounded-2xl border-2 text-[14px] font-medium outline-none transition-colors placeholder:text-gray-400"
+              style={{ borderColor: q ? BLUE : '#e5e7eb' }}
+            />
+          </div>
+          {q && (
+            <div className="absolute z-20 left-0 right-0 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden max-h-80 overflow-y-auto">
+              {matches.length > 0 ? (
+                matches.map((m) => (
+                  <button
+                    key={m.route.id}
+                    type="button"
+                    onClick={() => goToRoute(m.route)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <span className="shrink-0 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md" style={{ background: '#eef0fb', color: BLUE }}>
+                      {m.route.routeNumber}번
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-bold text-gray-900 truncate">{m.route.name}</span>
+                      <span className="block text-[11px] text-gray-400 truncate">{m.groupTitle} · {m.route.origin.name} → {m.route.destination.name}</span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-6 text-center text-[13px] text-gray-400">일치하는 노선이 없습니다.</div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* 회사별 그룹 */}
         <div className="space-y-7">
           {groups.map((group) => (
@@ -264,7 +362,12 @@ export default function ShuttleSchedulePyeongtaekSamsung() {
               </div>
               <div className="space-y-2.5">
                 {group.routes.map((route) => (
-                  <RouteCard key={route.id} route={route} />
+                  <RouteCard
+                    key={route.id}
+                    route={route}
+                    expandSignal={expandSignal}
+                    highlighted={highlightId === route.id}
+                  />
                 ))}
               </div>
             </section>

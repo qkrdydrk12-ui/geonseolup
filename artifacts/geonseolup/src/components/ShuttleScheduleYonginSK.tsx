@@ -53,13 +53,27 @@ function MapLinks({ address }: { address: string }) {
   );
 }
 
-function StopCard({ stop }: { stop: ShuttleStop }) {
+function StopCard({ stop, expandSignal, highlighted }: { stop: ShuttleStop; expandSignal: { id: string; token: number } | null; highlighted: boolean }) {
   const [open, setOpen] = useState(false);
   const [dir, setDir] = useState<'in' | 'out'>('in');
   const times = dir === 'in' ? stop.commuteIn : stop.commuteOut;
 
+  // 검색 결과에서 이 정류장이 선택되면(token이 바뀔 때마다) 이미 열려있어도 다시 펼친다.
+  useEffect(() => {
+    if (expandSignal && expandSignal.id === stop.name) setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandSignal?.token]);
+
   return (
-    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white transition-shadow" style={open ? { boxShadow: '0 4px 20px rgba(238,28,37,0.08)' } : undefined}>
+    <div
+      id={`stop-${encodeURIComponent(stop.name)}`}
+      className="border rounded-2xl overflow-hidden bg-white transition-all scroll-mt-24"
+      style={
+        highlighted
+          ? { borderColor: RED, borderWidth: 2, boxShadow: '0 0 0 4px rgba(238,28,37,0.12)' }
+          : open ? { borderColor: '#e5e7eb', boxShadow: '0 4px 20px rgba(238,28,37,0.08)' } : { borderColor: '#e5e7eb' }
+      }
+    >
       <div
         role="button"
         tabIndex={0}
@@ -133,8 +147,17 @@ function StopCard({ stop }: { stop: ShuttleStop }) {
   );
 }
 
+// 검색창에서 정류장을 선택하면 그 카드로 스크롤 + 자동 펼침(2026-09-25 신설, 사용자 요청).
+interface StopMatch {
+  stop: ShuttleStop;
+  groupTitle: string;
+}
+
 export default function ShuttleScheduleYonginSK() {
   const [groups, setGroups] = useState<ShuttleGroup[]>(loadCache);
+  const [query, setQuery] = useState('');
+  const [expandSignal, setExpandSignal] = useState<{ id: string; token: number } | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = '용인 셔틀버스 시간표 — SK 반도체 현장 통근버스 정류장 19곳 | 건설UP';
@@ -150,6 +173,32 @@ export default function ShuttleScheduleYonginSK() {
   }, []);
 
   const totalStops = groups.reduce((n, g) => n + g.stops.length, 0);
+
+  const q = query.trim().toLowerCase();
+  const matches: StopMatch[] = q
+    ? groups.flatMap((g) =>
+        g.stops
+          .filter(
+            (s) =>
+              s.name.toLowerCase().includes(q) ||
+              (s.destination || '').toLowerCase().includes(q) ||
+              (s.address || '').toLowerCase().includes(q)
+          )
+          .map((s) => ({ stop: s, groupTitle: g.title }))
+      ).slice(0, 8)
+    : [];
+
+  function goToStop(stop: ShuttleStop) {
+    setQuery('');
+    setHighlightId(stop.name);
+    setExpandSignal({ id: stop.name, token: Date.now() });
+    requestAnimationFrame(() => {
+      document.getElementById(`stop-${encodeURIComponent(stop.name)}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    window.setTimeout(() => {
+      setHighlightId((cur) => (cur === stop.name ? null : cur));
+    }, 2400);
+  }
 
   return (
     <div className="min-h-screen" style={{ background: '#f8f9fb' }}>
@@ -193,6 +242,50 @@ export default function ShuttleScheduleYonginSK() {
           멀어질수록 하루 몇 대뿐이니 놓치지 않게 미리 확인하는 게 좋습니다.
         </p>
 
+        {/* 정류장 검색 — 2026-09-25 신설. 정류장명·행선지·주소로 검색하면 바로 그 카드로 이동+펼침 */}
+        <div className="relative mb-7">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[15px] pointer-events-none">🔍</span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && matches.length > 0) {
+                  e.preventDefault();
+                  goToStop(matches[0].stop);
+                } else if (e.key === 'Escape') {
+                  setQuery('');
+                }
+              }}
+              placeholder="정류장 이름으로 검색 (예: 독성리, 양지, 백암)"
+              className="w-full pl-11 pr-4 py-3.5 rounded-2xl border-2 text-[14px] font-medium outline-none transition-colors placeholder:text-gray-400"
+              style={{ borderColor: q ? RED : '#e5e7eb' }}
+            />
+          </div>
+          {q && (
+            <div className="absolute z-20 left-0 right-0 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden max-h-80 overflow-y-auto">
+              {matches.length > 0 ? (
+                matches.map((m) => (
+                  <button
+                    key={m.stop.name}
+                    type="button"
+                    onClick={() => goToStop(m.stop)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-bold text-gray-900 truncate">{m.stop.name}</span>
+                      <span className="block text-[11px] text-gray-400 truncate">{m.groupTitle}{m.stop.destination ? ` · → ${m.stop.destination}` : ''}</span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-6 text-center text-[13px] text-gray-400">일치하는 정류장이 없습니다.</div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* 정류장 그룹 */}
         <div className="space-y-7">
           {groups.map((group) => (
@@ -203,7 +296,12 @@ export default function ShuttleScheduleYonginSK() {
               </div>
               <div className="space-y-2.5">
                 {group.stops.map((stop) => (
-                  <StopCard key={stop.name} stop={stop} />
+                  <StopCard
+                    key={stop.name}
+                    stop={stop}
+                    expandSignal={expandSignal}
+                    highlighted={highlightId === stop.name}
+                  />
                 ))}
               </div>
             </section>
