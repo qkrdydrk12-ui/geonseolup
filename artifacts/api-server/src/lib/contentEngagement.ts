@@ -235,6 +235,35 @@ export async function getRangedCounts(
   }
 }
 
+// 계산기·셔틀시간표·동영상·품질기준처럼 글 단위 조회 API(POST .../view)가 없는 페이지의 조회수.
+// 사이트 전체 페이지 이동을 기록하는 page_view_events(PageFlowTracker)에서 path별로 집계한다.
+// 위 콘텐츠 조회수와 같은 기준이 되도록 "같은 날 같은 방문자(IP 해시)는 1회"로 센다.
+// days=null이면 전체 누적, exact=true면 그 날짜 하루만, 아니면 오늘부터 days일 전까지 누적.
+export async function getPageViewCounts(
+  days: number | null,
+  exact: boolean
+): Promise<{ contentId: string; views: number; likes: number }[]> {
+  try {
+    const params: unknown[] = [];
+    let dateClause = "";
+    if (days !== null) {
+      params.push(kstDateOffset(days));
+      dateClause = exact ? "WHERE visit_date = $1" : "WHERE visit_date >= $1";
+    }
+    const result = await pgPool.query<{ path: string; views: string }>(
+      `SELECT path, COUNT(DISTINCT (visit_date, ip_hash)) AS views
+       FROM page_view_events
+       ${dateClause}
+       GROUP BY path`,
+      params
+    );
+    return result.rows.map((r) => ({ contentId: r.path, views: Number(r.views), likes: 0 }));
+  } catch (err) {
+    logger.warn({ err: String(err), days, exact }, "[content-engagement] 페이지별 조회수 조회 실패");
+    return [];
+  }
+}
+
 // ── 댓글(2026-09-10 신설) ───────────────────────────────────────────────
 // 로그인 없이 IP 기준으로 남기는 익명 댓글. content_likes와 같은 (content_type, content_id) 키.
 

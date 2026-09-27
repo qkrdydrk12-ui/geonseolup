@@ -13,6 +13,7 @@ interface FunnelResponse {
 }
 
 const PERIODS = [
+  { days: 1, label: '오늘' }, // 서버는 days=1을 "오늘 하루만"으로 계산한다(since = 오늘)
   { days: 7, label: '최근 7일' },
   { days: 14, label: '최근 14일' },
   { days: 30, label: '최근 30일' },

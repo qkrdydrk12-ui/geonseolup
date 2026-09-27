@@ -5,7 +5,7 @@
 import { Router, type Request, type Response } from "express";
 import { requireAdmin } from "../lib/adminStore";
 import {
-  getAllCounts, getRangedCounts, CONTENT_TYPES, type ContentType,
+  getAllCounts, getRangedCounts, getPageViewCounts, CONTENT_TYPES, type ContentType,
   getRecentCommentsAdmin, setCommentHidden, deleteComment,
 } from "../lib/contentEngagement.js";
 
@@ -17,11 +17,25 @@ const router = Router();
 // 그 기간만큼 조회수를 좁혀서 응답 — [[job-views]] admin.ts의 range 처리와 동일한 원리.
 router.get("/admin/content-views", requireAdmin, async (req: Request, res: Response) => {
   const type = req.query["type"];
-  if (typeof type !== "string" || !CONTENT_TYPES.includes(type as ContentType)) {
-    res.status(400).json({ ok: false, message: `type은 ${CONTENT_TYPES.join("/")} 중 하나여야 합니다` });
+  const rangeParam = typeof req.query["range"] === "string" ? req.query["range"] : "";
+  // type=page: 계산기·셔틀시간표·동영상·품질기준 등 글 단위 조회 API가 없는 페이지 — 경로(path)별 조회수.
+  // contentId가 slug가 아니라 "/net-pay-calculator" 같은 경로다. 같은 range 규칙을 그대로 쓴다.
+  if (type === "page") {
+    if (!rangeParam) {
+      res.json({ ok: true, rows: await getPageViewCounts(null, false), range: null });
+      return;
+    }
+    const exact = rangeParam === "today" || rangeParam === "yesterday";
+    const days = exact
+      ? (rangeParam === "yesterday" ? 1 : 0)
+      : Math.max(1, Math.min(90, Number(rangeParam) || 7));
+    res.json({ ok: true, rows: await getPageViewCounts(days, exact), range: rangeParam });
     return;
   }
-  const rangeParam = typeof req.query["range"] === "string" ? req.query["range"] : "";
+  if (typeof type !== "string" || !CONTENT_TYPES.includes(type as ContentType)) {
+    res.status(400).json({ ok: false, message: `type은 ${CONTENT_TYPES.join("/")}/page 중 하나여야 합니다` });
+    return;
+  }
   if (!rangeParam) {
     const rows = await getAllCounts(type as ContentType);
     res.json({ ok: true, rows, range: null });

@@ -15,7 +15,9 @@ export default function PageFlowTracker() {
 
     const enteredAt = Date.now();
     currentRef.current = { id: null, enteredAt };
-    recordPageEnter(pathname).then((id) => {
+    // 동영상 페이지(/guide)는 ?v=영상키 로 영상이 갈려서 그 값까지 함께 기록한다(영상별 조회수 집계용).
+    const trackedPath = pathname === '/guide' ? pathname + window.location.search : pathname;
+    recordPageEnter(trackedPath).then((id) => {
       // 응답이 오는 사이 페이지가 또 바뀌었으면(빠른 연속 이동) 이 결과는 버린다.
       if (currentRef.current.enteredAt === enteredAt) currentRef.current.id = id;
     });

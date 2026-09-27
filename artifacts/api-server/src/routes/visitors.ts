@@ -265,9 +265,15 @@ function safePageViewPath(value: unknown): string | null {
     /^\/$/u.test(path) ||
     /^\/detail\/[A-Za-z0-9_-]{1,100}$/u.test(path) ||
     /^\/jobs\/[^/]{1,120}\/[^/]{1,120}$/u.test(path) ||
-    /^\/(?:post|shop|info|news|toon|contact|terms|privacy|admin|retirement-fund-calculator|net-pay-calculator|severance-pay-calculator|labor-contract-template)$/u.test(path) ||
-    /^\/(?:info|news|toon)\/[A-Za-z0-9_-]{1,160}$/u.test(path);
-  return allowedRoute ? path : null;
+    /^\/(?:post|shop|info|news|toon|quality|guide|contact|terms|privacy|admin|retirement-fund-calculator|net-pay-calculator|severance-pay-calculator|labor-contract-template)$/u.test(path) ||
+    /^\/(?:info|news|toon|quality)\/[A-Za-z0-9_-]{1,160}$/u.test(path);
+  if (!allowedRoute) return null;
+  // 동영상 페이지(/guide)는 ?v=영상키 로 영상이 갈리므로 그 값만 보존해서 영상별 조회수를 나눈다.
+  if (path === "/guide") {
+    const v = /[?&]v=([a-z0-9-]{1,40})(?:&|#|$)/u.exec(value)?.[1];
+    return v ? `/guide?v=${v}` : path;
+  }
+  return path;
 }
 
 function safeSessionId(value: unknown): string | null {
@@ -288,6 +294,9 @@ function pathLabel(path: string): string {
   if (/^\/news\//.test(path)) return "현장 소식 상세";
   if (path === "/toon") return "노가다툰 목록";
   if (/^\/toon\//.test(path)) return "노가다툰 상세";
+  if (path === "/quality") return "품질기준 목록";
+  if (/^\/quality\//.test(path)) return "품질기준 상세";
+  if (/^\/guide/.test(path)) return "동영상";
   if (path === "/admin") return "관리자";
   if (path === "/retirement-fund-calculator") return "퇴직금 계산기";
   if (path === "/net-pay-calculator") return "실수령액 계산기";
