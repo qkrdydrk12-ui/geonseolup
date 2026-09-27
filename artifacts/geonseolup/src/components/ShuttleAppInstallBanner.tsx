@@ -7,18 +7,19 @@ import { getDeferredInstallPrompt, consumeDeferredInstallPrompt } from '@/lib/pw
 // 1차: 처음엔 브라우저 자동 설치신호(beforeinstallprompt)가 떴을 때만 배너를 보여줬는데, 이 신호는
 //      크롬 참여도 휴리스틱을 통과해야만 뜨고 특히 데스크톱에서는 거의 안 떠서 배너 자체가 안 보이는
 //      사고가 있었다 — 이제 항상 배너를 보여준다.
-// 2차(이번 수정): 그래도 "설치하기"를 눌렀을 때 자동신호가 없으면 그냥 수동 설치 방법만 안내하고
-//      끝났는데, 사용자가 이미 건설UP 앱을 설치해둔 상태(사이트 소유자 본인 폰 등)라 크롬이 "같은
-//      origin에 이미 관련 앱이 설치돼 있다"고 보고 이 페이지 전용 manifest에 대한 beforeinstallprompt를
-//      아예 다시 안 띄워주는 경우가 실사용에서 나왔다("한방에 다운받는걸로 만들어야해"). 이건 코드 버그가
+// 2차: 그래도 "설치하기"를 눌렀을 때 자동신호가 없으면 그냥 수동 설치 방법만 안내하고 끝났는데,
+//      사용자가 이미 건설UP 앱을 설치해둔 상태(사이트 소유자 본인 폰 등)라 크롬이 "같은 origin에
+//      이미 관련 앱이 설치돼 있다"고 보고 이 페이지 전용 manifest에 대한 beforeinstallprompt를 아예
+//      다시 안 띄워주는 경우가 실사용에서 나왔다("한방에 다운받는걸로 만들어야해"). 이건 코드 버그가
 //      아니라 크롬의 플랫폼 제약(같은 origin·같은 scope에 이미 설치된 관련 앱이 있으면 두 번째 설치
 //      제안을 억제)이라 "새 아이콘을 하나 더 강제로 뜨게" 만들 방법이 없다. 대신 아래 방식으로 우회한다:
 //      클릭하는 모든 경로(신규 설치 수락/이미 설치됨/수동 안내 전부)에서 localStorage에 "이 페이지를
 //      시작화면으로" 표시를 남기고, main.tsx가 앱(standalone) 실행 시 "/"에 있으면 이 값으로 즉시
-//      리다이렉트한다 — 그러면 신규 방문자는 이 배너에서 바로 이 시간표용 아이콘이 설치되고(관련 앱이
-//      없으니 크롬이 정상적으로 새 설치를 제안함), 이미 건설UP을 설치해둔 사람은 새 아이콘 대신 기존
-//      건설UP 아이콘을 다시 열면 이 시간표부터 보이게 된다 — 두 경우 다 "한 번 조작하면 다음부터 바로
-//      이 화면"이라는 실질 목표는 달성한다.
+//      리다이렉트한다.
+// 3차: 이미 앱이 설치된 사람(standalone으로 이 페이지를 보고 있는 경우)한테도 큰 배너가 그대로
+//      보여서 "화면을 너무 많이 가린다"는 지적을 받았다 — 이 경우는 UI 없이 조용히 시작화면만
+//      저장해두고 배너 자체를 아예 숨긴다(이미 앱 안에 들어와 있다는 것 자체가 "이 페이지를 좋아한다"는
+//      신호라 물어볼 필요도 없음). 배너는 오직 "아직 설치 안 한" 사람에게만 보인다.
 interface Props {
   manifestHref: string;
   startPath: string;
@@ -73,8 +74,12 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
   }, [manifestHref]);
 
   useEffect(() => {
-    setStandalone(isStandaloneNow());
-  }, []);
+    const standaloneNow = isStandaloneNow();
+    setStandalone(standaloneNow);
+    // 이미 설치된 앱 안에서 이 페이지를 보고 있다는 것 자체가 "이 페이지를 원한다"는 신호라
+    // 묻지 않고 조용히 시작화면으로 저장한다(배너는 아래에서 숨김 처리).
+    if (standaloneNow) saveStartPath(startPath);
+  }, [startPath]);
 
   useEffect(() => {
     if (!iosHelp && !samsungHelp && !genericHelp) return;
@@ -96,13 +101,6 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
   }
 
   async function handleClick() {
-    // 이미 설치된 앱(홈 화면 아이콘) 안에서 이 페이지를 보고 있는 경우 — 새로 설치할 건 없고,
-    // "다음에 아이콘을 열면 여기부터 보여주기"만 저장한다. 100% 확실하게 동작하는 경로다.
-    if (standalone) {
-      saveStartPath(startPath);
-      flashSaved();
-      return;
-    }
     if (isIOSDevice()) {
       saveStartPath(startPath);
       setIosHelp((v) => !v);
@@ -142,6 +140,10 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
     setGenericHelp((v) => !v);
   }
 
+  // 이미 앱이 설치돼 있어 이 페이지를 standalone으로 보고 있는 경우 — 배너를 아예 숨긴다
+  // (화면을 많이 가린다는 지적, 2026-09-27). 시작화면 저장은 위 useEffect에서 이미 조용히 처리됨.
+  if (standalone) return null;
+
   return (
     <div
       className="relative rounded-2xl border-2 p-4 sm:p-5 mb-6 flex items-center gap-3.5"
@@ -155,11 +157,7 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
         <p className="font-extrabold text-[14px] sm:text-[15px]" style={{ color: accentColor }}>
           {appName} 앱
         </p>
-        <p className="text-[11.5px] sm:text-xs text-gray-500 mt-0.5">
-          {standalone
-            ? '이 화면을 앱 시작화면으로 저장해두면 다음에 아이콘 누를 때 바로 여기부터 열려요'
-            : '홈 화면에 설치하면 클릭 한 번으로 바로 시간표를 볼 수 있어요'}
-        </p>
+        <p className="text-[11.5px] sm:text-xs text-gray-500 mt-0.5">홈 화면에 설치하면 클릭 한 번으로 바로 시간표를 볼 수 있어요</p>
       </div>
       <button
         type="button"
@@ -168,7 +166,7 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
         className="shrink-0 px-4 py-2 rounded-full text-[12.5px] sm:text-[13px] font-extrabold text-white cursor-pointer border-none transition-transform hover:-translate-y-px disabled:opacity-60"
         style={{ background: accentColor, boxShadow: `0 3px 10px ${accentColor}55` }}
       >
-        {saved ? '✅ 저장됨' : standalone ? '📌 시작화면 지정' : '📲 설치하기'}
+        {saved ? '✅ 저장됨' : '📲 설치하기'}
       </button>
 
       {iosHelp && (
