@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import ShuttleAppInstallBanner from '@/components/ShuttleAppInstallBanner';
 import { fbGetSetting } from '@/lib/firebase';
 import { DEFAULT_ROUTES, type ShuttleCompanyGroup, type ShuttleRoute } from '@/lib/shuttleSchedulePyeongtaekSamsung';
 
@@ -299,6 +300,13 @@ export default function ShuttleSchedulePyeongtaekSamsung() {
             노선별로 운영사가 다름
           </span>
         </div>
+
+        <ShuttleAppInstallBanner
+          manifestHref="/manifest-shuttle-pyeongtaek.json"
+          appName="평택 삼성 셔틀시간표"
+          accentColor={BLUE}
+          icon="🚌"
+        />
 
         <p className="text-sm text-gray-500 leading-relaxed mb-6">
           노선을 눌러서 그 자리에서 출근·퇴근 시간표를 바로 확인하세요. 노선에 따라 주말 시간표가 따로 있으니

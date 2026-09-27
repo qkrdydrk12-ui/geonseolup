@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import ShuttleAppInstallBanner from '@/components/ShuttleAppInstallBanner';
 import { fbGetSetting } from '@/lib/firebase';
 import { DEFAULT_STOPS, type ShuttleGroup, type ShuttleStop } from '@/lib/shuttleScheduleYonginSK';
 
@@ -236,6 +237,13 @@ export default function ShuttleScheduleYonginSK() {
             일요일 운행 없음
           </span>
         </div>
+
+        <ShuttleAppInstallBanner
+          manifestHref="/manifest-shuttle-yongin.json"
+          appName="용인 SK 셔틀시간표"
+          accentColor={RED}
+          icon="🚌"
+        />
 
         <p className="text-sm text-gray-500 leading-relaxed mb-6">
           용인 셔틀버스 정류장을 눌러서 그 자리에서 출근·퇴근 시간표를 바로 확인하세요. 현장 바로 앞은 5~10분 간격으로 자주 오지만,

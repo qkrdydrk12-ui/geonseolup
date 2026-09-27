@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchAuthUser } from "@/lib/authUser";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { fbGetSetting } from "@/lib/firebase";
 import {
   subscribeToPush,
@@ -15,7 +15,17 @@ import {
 // 2026-08-29: 상단 헤더의 "문의" 팝업 버튼은 제거됨 — 푸터의 "문의하기"(/contact 페이지)와
 // 중복이라 정리했다. 관련 팝업 UI(ContactModal)도 트리거가 사라져 함께 제거.
 
+// 이 두 페이지는 사이트 전체 설치 버튼 대신 페이지 전용 앱 설치 배너(ShuttleAppInstallBanner)를
+// 쓴다 — 헤더 버튼(시작 화면이 항상 홈)과 페이지 배너(시작 화면이 이 시간표)가 동시에 떠서
+// 브라우저의 설치 프롬프트 하나를 두고 경쟁하는 걸 막기 위해 헤더 쪽을 숨긴다.
+const SHUTTLE_APP_PATHS = new Set([
+  "/info/pyeongtaek-samsung-shuttle-schedule",
+  "/info/yongin-sk-shuttle-schedule",
+]);
+
 export default function Header() {
+  const [currentPath] = useLocation();
+  const hideGlobalInstall = SHUTTLE_APP_PATHS.has(currentPath);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pushOn, setPushOn] = useState(isPushMarkedSubscribed());
   const [pushBusy, setPushBusy] = useState(false);
@@ -360,7 +370,7 @@ export default function Header() {
               )}
             </div>
             <div className="relative" data-install-menu>
-              {installVisible && (
+              {installVisible && !hideGlobalInstall && (
                 <button
                   type="button"
                   className="w-full flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-[11px] py-1.5 sm:py-[5px] rounded-[8px] text-[10px] sm:text-xs font-extrabold text-white border-none cursor-pointer transition-all hover:-translate-y-px whitespace-nowrap leading-tight"

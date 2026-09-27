@@ -1104,6 +1104,16 @@ router.get("/info", async (_req: Request, res: Response) => {
 // custom 페이지의 base 객체엔 date/updated 자체가 없어서 항상 undefined였다(본문 폴백 누락과
 // 같은 근본원인: "DB 글이 아니라서 메타데이터 전반이 반쪽만 채워짐"). 검색결과에 게시일 배지가
 // 안 뜨고 Article 리치결과 자격 요건도 못 채웠을 가능성 — createdAt/updatedAt을 명시해 수정.
+// 셔틀시간표 페이지 전용 PWA manifest — "홈 화면에 설치하면 클릭 한 번으로 바로 이 페이지"를
+// 위해 사이트 전체 manifest(/manifest.json, start_url="/") 대신 이 slug 전용 manifest로
+// <head>의 <link rel="manifest">를 바꿔서 내려준다(2026-09-27 신설, ShuttleAppInstallBanner.tsx와 대응).
+// 반드시 SSR 시점에 바꿔야 한다 — 브라우저의 설치 가능 여부 판단이 페이지 로드 초기에 이뤄지므로
+// JS 실행 후(하이드레이션 이후) 바꾸면 이미 늦어 사이트 전체 manifest 기준으로 평가된 채로 남는다.
+const SHUTTLE_APP_MANIFEST: Record<string, string> = {
+  "pyeongtaek-samsung-shuttle-schedule": "/manifest-shuttle-pyeongtaek.json",
+  "yongin-sk-shuttle-schedule": "/manifest-shuttle-yongin.json",
+};
+
 const CUSTOM_INFO_PAGES: Record<
   string,
   { title: string; description: string; imageUrl?: string; createdAt: string; updatedAt: string }
@@ -1277,6 +1287,10 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
       url: meta ? pageUrl : `${SITE_URL}/info`,
       image: imageUrl,
     });
+    const shuttleManifest = SHUTTLE_APP_MANIFEST[slug];
+    if (shuttleManifest) {
+      html = html.replace(/<link rel="manifest" href="\/manifest\.json" ?\/>/, `<link rel="manifest" href="${shuttleManifest}" />`);
+    }
     if (meta) {
       // Article 구조화 데이터 + 탐색경로 — 글별 독립 검색 노출용.
       const ldTags =

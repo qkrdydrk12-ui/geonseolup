@@ -1,0 +1,32 @@
+{
+  "id": "/info/pyeongtaek-samsung-shuttle-schedule",
+  "name": "평택 삼성 셔틀시간표",
+  "short_name": "평택셔틀",
+  "description": "평택 삼성 반도체 현장 통근버스 노선 20개 출근·퇴근·주말 시간표",
+  "start_url": "/info/pyeongtaek-samsung-shuttle-schedule?pwa=shuttle",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fb",
+  "theme_color": "#1428A0",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
