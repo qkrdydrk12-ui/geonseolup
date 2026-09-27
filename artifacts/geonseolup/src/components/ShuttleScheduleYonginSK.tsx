@@ -240,6 +240,7 @@ export default function ShuttleScheduleYonginSK() {
 
         <ShuttleAppInstallBanner
           manifestHref="/manifest-shuttle-yongin.json"
+          startPath="/info/yongin-sk-shuttle-schedule"
           appName="용인 SK 셔틀시간표"
           accentColor={RED}
           icon="🚌"
