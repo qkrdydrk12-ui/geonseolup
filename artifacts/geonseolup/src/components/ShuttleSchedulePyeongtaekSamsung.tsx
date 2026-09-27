@@ -303,7 +303,6 @@ export default function ShuttleSchedulePyeongtaekSamsung() {
 
         <ShuttleAppInstallBanner
           manifestHref="/manifest-shuttle-pyeongtaek.json"
-          startPath="/info/pyeongtaek-samsung-shuttle-schedule"
           appName="평택 삼성 셔틀시간표"
           accentColor={BLUE}
           icon="🚌"

@@ -3,32 +3,28 @@ import { getDeferredInstallPrompt, consumeDeferredInstallPrompt } from '@/lib/pw
 
 // 셔틀시간표 페이지 전용 "앱 설치" 배너.
 //
-// ⚠️ 2026-09-27 두 차례 수정 기록(중요 — 이 파일을 다시 고칠 때 아래 두 사고를 반복하지 말 것):
+// ⚠️ 2026-09-27 수정 기록(중요 — 이 파일을 다시 고칠 때 아래 사고들을 반복하지 말 것):
 // 1차: 처음엔 브라우저 자동 설치신호(beforeinstallprompt)가 떴을 때만 배너를 보여줬는데, 이 신호는
 //      크롬 참여도 휴리스틱을 통과해야만 뜨고 특히 데스크톱에서는 거의 안 떠서 배너 자체가 안 보이는
-//      사고가 있었다 — 이제 항상 배너를 보여준다.
-// 2차: 그래도 "설치하기"를 눌렀을 때 자동신호가 없으면 그냥 수동 설치 방법만 안내하고 끝났는데,
-//      사용자가 이미 건설UP 앱을 설치해둔 상태(사이트 소유자 본인 폰 등)라 크롬이 "같은 origin에
-//      이미 관련 앱이 설치돼 있다"고 보고 이 페이지 전용 manifest에 대한 beforeinstallprompt를 아예
-//      다시 안 띄워주는 경우가 실사용에서 나왔다("한방에 다운받는걸로 만들어야해"). 이건 코드 버그가
-//      아니라 크롬의 플랫폼 제약(같은 origin·같은 scope에 이미 설치된 관련 앱이 있으면 두 번째 설치
-//      제안을 억제)이라 "새 아이콘을 하나 더 강제로 뜨게" 만들 방법이 없다. 대신 아래 방식으로 우회한다:
-//      클릭하는 모든 경로(신규 설치 수락/이미 설치됨/수동 안내 전부)에서 localStorage에 "이 페이지를
-//      시작화면으로" 표시를 남기고, main.tsx가 앱(standalone) 실행 시 "/"에 있으면 이 값으로 즉시
-//      리다이렉트한다.
+//      사고가 있었다 — 이제 항상 배너를 보여준다(설치 안 한 사람에게만, standalone이면 아래에서 숨김).
+// 2차: 크롬은 같은 origin에 이미 관련 앱(건설UP)이 설치돼 있으면 이 페이지 전용 manifest에 대한
+//      beforeinstallprompt를 다시 안 띄워주는 경우가 있다 — 플랫폼 제약이라 "새 아이콘을 하나 더
+//      강제로 뜨게" 만들 방법이 없다. 한때 이걸 우회하려고 "클릭 시 localStorage에 시작페이지를
+//      저장 → 앱(standalone) 실행 시 그 페이지로 강제 리다이렉트"를 시도했는데, 아이콘이 하나뿐인
+//      기기에서는 결국 "기존 건설UP 앱을 열어도 무조건 셔틀시간표로만 가고 홈으로 못 감" 사고로
+//      이어졌다("일반 건설 앱 눌렀는데 평택 셔틀버스페이지로 가짐"). **이 리다이렉트 우회책은 완전히
+//      제거했다(main.tsx도 함께 확인) — 다시 추가하지 말 것.** 새 아이콘이 뜨는 건 관련 앱이 아직
+//      없는 신규 방문자뿐이고, 그 경우엔 아래 beforeinstallprompt 경로가 정상 동작한다. 이미 앱이
+//      설치된 사람에게는 "브라우저에서 홈 화면에 추가"를 다시 안내하는 것 이상은 해줄 수 있는 게 없다.
 // 3차: 이미 앱이 설치된 사람(standalone으로 이 페이지를 보고 있는 경우)한테도 큰 배너가 그대로
-//      보여서 "화면을 너무 많이 가린다"는 지적을 받았다 — 이 경우는 UI 없이 조용히 시작화면만
-//      저장해두고 배너 자체를 아예 숨긴다(이미 앱 안에 들어와 있다는 것 자체가 "이 페이지를 좋아한다"는
-//      신호라 물어볼 필요도 없음). 배너는 오직 "아직 설치 안 한" 사람에게만 보인다.
+//      보여서 "화면을 너무 많이 가린다"는 지적을 받았다 — 배너는 오직 "아직 설치 안 한" 사람에게만
+//      보인다(standalone이면 조용히 숨김, 아무것도 저장하지 않음).
 interface Props {
   manifestHref: string;
-  startPath: string;
   appName: string;
   accentColor: string;
   icon: string;
 }
-
-const START_PATH_KEY = 'cj_pwa_start_path';
 
 function isIOSDevice() {
   return /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -48,18 +44,11 @@ function isStandaloneNow() {
     (navigator as unknown as { standalone?: boolean }).standalone === true
   );
 }
-function saveStartPath(path: string) {
-  try {
-    localStorage.setItem(START_PATH_KEY, path);
-  } catch {
-    /* localStorage 사용 불가 시 무시 — 리다이렉트 안 되는 것 외엔 기능에 영향 없음 */
-  }
-}
 
-export default function ShuttleAppInstallBanner({ manifestHref, startPath, appName, accentColor, icon }: Props) {
+export default function ShuttleAppInstallBanner({ manifestHref, appName, accentColor, icon }: Props) {
   const [standalone, setStandalone] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [installed, setInstalled] = useState(false);
   const [iosHelp, setIosHelp] = useState(false);
   const [samsungHelp, setSamsungHelp] = useState(false);
   const [genericHelp, setGenericHelp] = useState(false);
@@ -74,12 +63,8 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
   }, [manifestHref]);
 
   useEffect(() => {
-    const standaloneNow = isStandaloneNow();
-    setStandalone(standaloneNow);
-    // 이미 설치된 앱 안에서 이 페이지를 보고 있다는 것 자체가 "이 페이지를 원한다"는 신호라
-    // 묻지 않고 조용히 시작화면으로 저장한다(배너는 아래에서 숨김 처리).
-    if (standaloneNow) saveStartPath(startPath);
-  }, [startPath]);
+    setStandalone(isStandaloneNow());
+  }, []);
 
   useEffect(() => {
     if (!iosHelp && !samsungHelp && !genericHelp) return;
@@ -95,14 +80,8 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
     return () => window.removeEventListener('click', onClick);
   }, [iosHelp, samsungHelp, genericHelp]);
 
-  function flashSaved() {
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 3000);
-  }
-
   async function handleClick() {
     if (isIOSDevice()) {
-      saveStartPath(startPath);
       setIosHelp((v) => !v);
       return;
     }
@@ -113,10 +92,7 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
       try {
         await promptEvent.prompt();
         const choice = await promptEvent.userChoice;
-        if (choice.outcome === 'accepted') {
-          saveStartPath(startPath);
-          flashSaved();
-        }
+        if (choice.outcome === 'accepted') setInstalled(true);
       } catch {
         /* 사용자가 설치 선택창을 닫은 경우 등 — 무시 */
       } finally {
@@ -125,7 +101,6 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
       return;
     }
     if (isSamsungBrowser()) {
-      saveStartPath(startPath);
       setSamsungHelp((v) => !v);
       return;
     }
@@ -135,13 +110,12 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
       return;
     }
     // 자동 설치신호가 없을 때(이미 건설UP이 설치돼 있어 크롬이 재제안을 억제한 경우가 가장 흔함,
-    // 또는 데스크톱/휴리스틱 미충족) — 시작화면 지정은 지금 확정해두고, 수동 설치 방법도 안내한다.
-    saveStartPath(startPath);
+    // 또는 데스크톱/휴리스틱 미충족) — 수동 설치 방법을 안내한다.
     setGenericHelp((v) => !v);
   }
 
   // 이미 앱이 설치돼 있어 이 페이지를 standalone으로 보고 있는 경우 — 배너를 아예 숨긴다
-  // (화면을 많이 가린다는 지적, 2026-09-27). 시작화면 저장은 위 useEffect에서 이미 조용히 처리됨.
+  // (화면을 많이 가린다는 지적, 2026-09-27).
   if (standalone) return null;
 
   return (
@@ -166,7 +140,7 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
         className="shrink-0 px-4 py-2 rounded-full text-[12.5px] sm:text-[13px] font-extrabold text-white cursor-pointer border-none transition-transform hover:-translate-y-px disabled:opacity-60"
         style={{ background: accentColor, boxShadow: `0 3px 10px ${accentColor}55` }}
       >
-        {saved ? '✅ 저장됨' : '📲 설치하기'}
+        {installed ? '✅ 설치됨' : '📲 설치하기'}
       </button>
 
       {iosHelp && (
@@ -176,7 +150,6 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
             <li>하단 공유 버튼(⬆️) 탭</li>
             <li>아래로 스크롤 후 '홈 화면에 추가' 선택</li>
           </ol>
-          <p className="text-gray-400 mt-2">이미 건설UP 앱이 있다면, 그 앱을 다시 열어도 다음부터 이 화면이 먼저 떠요.</p>
         </div>
       )}
       {samsungHelp && (
@@ -186,24 +159,26 @@ export default function ShuttleAppInstallBanner({ manifestHref, startPath, appNa
             <li>하단 메뉴(☰ 또는 ⋮) 탭</li>
             <li>'홈 화면에 추가' 선택 (또는 '페이지 추가' 하위 메뉴에서 선택)</li>
           </ol>
-          <p className="text-gray-400 mt-2">이미 건설UP 앱이 있다면, 그 앱을 다시 열어도 다음부터 이 화면이 먼저 떠요.</p>
         </div>
       )}
       {genericHelp && (
         <div className="absolute right-0 top-[calc(100%+6px)] z-[300] w-[280px] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-xs leading-relaxed">
-          <p className="font-bold text-sm mb-2">이미 건설UP 앱이 있다면</p>
-          <p className="text-gray-600 mb-3">그 앱 아이콘을 다시 열면 다음부터 이 화면부터 바로 떠요 (지금 저장해뒀어요).</p>
-          <p className="font-bold text-sm mb-2">아직 설치 전이라면</p>
           {isAndroidDevice() ? (
-            <ol className="list-decimal list-inside space-y-1.5">
-              <li>우측 상단 브라우저 메뉴(⋮) 탭</li>
-              <li>'앱 설치' 또는 '홈 화면에 추가' 선택</li>
-            </ol>
+            <>
+              <p className="font-bold text-sm mb-2">앱처럼 설치하기</p>
+              <ol className="list-decimal list-inside space-y-1.5">
+                <li>우측 상단 브라우저 메뉴(⋮) 탭</li>
+                <li>'앱 설치' 또는 '홈 화면에 추가' 선택</li>
+              </ol>
+            </>
           ) : (
-            <ol className="list-decimal list-inside space-y-1.5">
-              <li>주소창 오른쪽의 설치 아이콘(⊕ 또는 화면 모양 아이콘)을 클릭</li>
-              <li>안 보이면 브라우저 메뉴(⋮) → '앱 설치'를 선택</li>
-            </ol>
+            <>
+              <p className="font-bold text-sm mb-2">앱처럼 설치하기</p>
+              <ol className="list-decimal list-inside space-y-1.5">
+                <li>주소창 오른쪽의 설치 아이콘(⊕ 또는 화면 모양 아이콘)을 클릭</li>
+                <li>안 보이면 브라우저 메뉴(⋮) → '앱 설치'를 선택</li>
+              </ol>
+            </>
           )}
         </div>
       )}
