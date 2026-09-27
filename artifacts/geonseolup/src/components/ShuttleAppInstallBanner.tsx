@@ -26,12 +26,20 @@ function isSamsungBrowser() {
 function isInAppBrowser() {
   return /KAKAOTALK|FBAN|FBAV|Instagram|NAVER\(|Line\/|; ?wv\)/i.test(navigator.userAgent);
 }
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent);
+}
 
 export default function ShuttleAppInstallBanner({ manifestHref, appName, accentColor, icon }: Props) {
-  const [visible, setVisible] = useState(false);
+  // ⚠️ 2026-09-27: 처음엔 브라우저의 자동 설치신호(beforeinstallprompt)가 떴을 때만 배너를 보여줬는데,
+  // 이 신호는 크롬의 재방문·참여도 휴리스틱을 통과해야만 뜨고 특히 데스크톱에서는 거의 안 떠서
+  // 실사용자에게 배너 자체가 안 보이는 사고가 있었다("다운로드가 어디있냐"는 지적). 이제 항상 배너를
+  // 보여주고, 클릭 시 자동신호가 있으면 그걸 쓰고 없으면 브라우저별 수동 설치 방법을 안내한다.
+  const [visible, setVisible] = useState(true);
   const [busy, setBusy] = useState(false);
   const [iosHelp, setIosHelp] = useState(false);
   const [samsungHelp, setSamsungHelp] = useState(false);
+  const [genericHelp, setGenericHelp] = useState(false);
 
   useEffect(() => {
     const link = document.querySelector('link[rel="manifest"]');
@@ -43,38 +51,34 @@ export default function ShuttleAppInstallBanner({ manifestHref, appName, accentC
   }, [manifestHref]);
 
   useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches) return;
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setVisible(false);
+      return;
+    }
     if (isIOSDevice()) {
       setVisible(!isIOSStandalone());
       return;
     }
-    setVisible(!!getDeferredInstallPrompt() || isInAppBrowser());
-    function onAvailable() {
-      setVisible(true);
-    }
     function onInstalled() {
       setVisible(false);
     }
-    window.addEventListener('pwa-install-available', onAvailable);
     window.addEventListener('pwa-app-installed', onInstalled);
-    return () => {
-      window.removeEventListener('pwa-install-available', onAvailable);
-      window.removeEventListener('pwa-app-installed', onInstalled);
-    };
+    return () => window.removeEventListener('pwa-app-installed', onInstalled);
   }, []);
 
   useEffect(() => {
-    if (!iosHelp && !samsungHelp) return;
+    if (!iosHelp && !samsungHelp && !genericHelp) return;
     function onClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (!target.closest('[data-shuttle-install-help]')) {
         setIosHelp(false);
         setSamsungHelp(false);
+        setGenericHelp(false);
       }
     }
     window.addEventListener('click', onClick);
     return () => window.removeEventListener('click', onClick);
-  }, [iosHelp, samsungHelp]);
+  }, [iosHelp, samsungHelp, genericHelp]);
 
   async function handleClick() {
     if (isIOSDevice()) {
@@ -82,7 +86,7 @@ export default function ShuttleAppInstallBanner({ manifestHref, appName, accentC
       return;
     }
     if (busy) return;
-    const promptEvent = consumeDeferredInstallPrompt();
+    const promptEvent = consumeDeferredInstallPrompt() ?? getDeferredInstallPrompt();
     if (promptEvent) {
       setBusy(true);
       try {
@@ -103,7 +107,10 @@ export default function ShuttleAppInstallBanner({ manifestHref, appName, accentC
     if (isInAppBrowser()) {
       const target = window.location.host + window.location.pathname + window.location.search;
       window.location.href = `intent://${target}#Intent;scheme=https;package=com.android.chrome;end`;
+      return;
     }
+    // 자동 설치신호가 아직 안 떴을 때(데스크톱 크롬/엣지, 또는 일반 안드로이드 크롬) — 직접 안내한다.
+    setGenericHelp((v) => !v);
   }
 
   if (!visible) return null;
@@ -145,6 +152,23 @@ export default function ShuttleAppInstallBanner({ manifestHref, appName, accentC
             <li>하단 메뉴(☰ 또는 ⋮) 탭</li>
             <li>'홈 화면에 추가' 선택 (또는 '페이지 추가' 하위 메뉴에서 선택)</li>
           </ol>
+        </div>
+      )}
+      {genericHelp && (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-[300] w-[270px] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-xs leading-relaxed">
+          <p className="font-bold text-sm mb-2">앱처럼 설치하기</p>
+          {isAndroidDevice() ? (
+            <ol className="list-decimal list-inside space-y-1.5">
+              <li>우측 상단 브라우저 메뉴(⋮) 탭</li>
+              <li>'앱 설치' 또는 '홈 화면에 추가' 선택</li>
+            </ol>
+          ) : (
+            <ol className="list-decimal list-inside space-y-1.5">
+              <li>주소창 오른쪽의 설치 아이콘(⊕ 또는 화면 모양 아이콘)을 클릭</li>
+              <li>안 보이면 브라우저 메뉴(⋮) → '앱 설치'를 선택</li>
+            </ol>
+          )}
+          <p className="text-gray-400 mt-2">설치 아이콘이 안 보이면 잠시 후 다시 시도해주세요.</p>
         </div>
       )}
     </div>
