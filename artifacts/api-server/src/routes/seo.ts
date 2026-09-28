@@ -421,9 +421,17 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
 
     // 건설꿀팁·현장 소식 글 목록 — 프론트 데이터 파일과 DB 블로그 글에서 자동 수집.
     // (새 글 등록·수정 시 별도 작업 없이 사이트맵에 자동 반영, DB 글은 updated_at이 lastmod)
-    const [infoArticles, newsArticles] = await Promise.all([
+    const [infoArticles, newsArticles, qualityTopics] = await Promise.all([
       getMergedInfoMeta().catch(() => [] as ArticleMeta[]),
       getMergedNewsMeta().catch(() => [] as ArticleMeta[]),
+      // 품질기준(/quality/:slug) — 2026-09-28 추가: 161개 상세 URL이 사이트맵에서 0개였던
+      // 누락 발견(애드센스 재점검 문서) — 검수 발행된(published=true) 글만 포함.
+      pgPool
+        .query<{ slug: string; updated_at: string | Date }>(
+          `SELECT slug, updated_at FROM quality_topics WHERE published = true`
+        )
+        .then((r) => r.rows)
+        .catch(() => [] as { slug: string; updated_at: string | Date }[]),
     ]);
     const toLastmod = (a: ArticleMeta): string | undefined => {
       const v = a.updated || a.date;
@@ -462,6 +470,14 @@ router.get("/sitemap.xml", async (_req: Request, res: Response) => {
         loc: `/info/${encodeURIComponent(slug)}`, changefreq: "weekly", priority: "0.6",
         lastmod: page.updatedAt as string | undefined,
       })),
+      { loc: "/quality", changefreq: "weekly", priority: "0.7" },
+      ...qualityTopics.map((t) => {
+        const d = new Date(t.updated_at);
+        return {
+          loc: `/quality/${encodeURIComponent(t.slug)}`, changefreq: "monthly", priority: "0.6",
+          lastmod: isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10),
+        };
+      }),
     ];
 
     const jobUrls = jobs
@@ -1361,6 +1377,106 @@ router.get("/info/:slug", async (req: Request, res: Response) => {
     res.status(meta ? 200 : 404).send(html);
   } catch (err) {
     logger.error({ err, slug }, "[info-seo] 렌더링 실패");
+    try {
+      const template = await getIndexTemplate();
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(template);
+    } catch {
+      res.status(500).send("Internal Server Error");
+    }
+  }
+});
+
+// ── GET /quality, /quality/:slug ────────────────────────────────────────────
+// 품질기준(반도체 팹 건설현장 설비 시공 기준, 161개 항목) 목록/상세.
+// 2026-09-28 추가 — 애드센스 재점검에서 이 섹션이 사이트맵에도, 크롤러용 SSR
+// 폴백에도 전혀 없었던 것을 발견(콘텐츠 자체는 실존하는데 JS 미실행 크롤러에는
+// 빈 SPA 셸만 보였을 것) — /info/:slug와 동일한 패턴으로 title/description/
+// Article 구조화 데이터 + 본문 HTML 폴백을 추가한다.
+interface QualitySeoRow {
+  code: string; category: string; title: string; slug: string; summary: string;
+  body: { subtitle?: string; text: string }[];
+  updated_at: string;
+}
+
+router.get("/quality", async (_req: Request, res: Response) => {
+  try {
+    const template = await getIndexTemplate();
+    const html = replaceMetaTags(template, {
+      title: "건설 품질기준 | 건설UP",
+      desc: "반도체 팹 건설현장 설비 시공 품질기준을 항목별로 검색해서 바로 확인하세요. 용접, 배관, 전기, 도장 등 주제별 정리.",
+      url: `${SITE_URL}/quality`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.send(html);
+  } catch (err) {
+    logger.error({ err }, "[quality-seo] 목록 렌더링 실패");
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get("/quality/:slug", async (req: Request, res: Response) => {
+  const slug = String(req.params.slug);
+  try {
+    const [template, result] = await Promise.all([
+      getIndexTemplate(),
+      pgPool.query<QualitySeoRow>(
+        `SELECT code, category, title, slug, summary, body, updated_at
+         FROM quality_topics WHERE slug = $1 AND published = true LIMIT 1`,
+        [slug]
+      ),
+    ]);
+    const row = result.rows[0];
+    const pageUrl = `${SITE_URL}/quality/${encodeURIComponent(slug)}`;
+    let html = replaceMetaTags(template, {
+      title: row ? `${row.title} — 건설 품질기준 | 건설UP` : "건설 품질기준 | 건설UP",
+      desc: row ? row.summary : "반도체 팹 건설현장 설비 시공 품질기준을 항목별로 검색해서 바로 확인하세요.",
+      url: row ? pageUrl : `${SITE_URL}/quality`,
+      image: `${SITE_URL}/og-image.png?v=2`,
+    });
+    if (row) {
+      const ldTags =
+        buildArticleLd({
+          type: "Article",
+          headline: row.title,
+          description: row.summary,
+          url: pageUrl,
+          image: `${SITE_URL}/og-image.png?v=2`,
+          datePublished: row.updated_at,
+          dateModified: row.updated_at,
+        }) +
+        buildBreadcrumbLd([
+          { name: "건설UP", url: `${SITE_URL}/` },
+          { name: "품질기준", url: `${SITE_URL}/quality` },
+          { name: row.title, url: pageUrl },
+        ]);
+      html = html.replace("</head>", `${ldTags}</head>`);
+
+      const bodyHtml = (row.body || [])
+        .map((b) => `${b.subtitle ? `<h2 style="font-size:16px;font-weight:700;color:#1e3a5f;margin:16px 0 6px">${escapeHtmlAttr(b.subtitle)}</h2>` : ""}<p style="margin:0 0 14px;color:#334155">${escapeHtmlAttr(stripRichMarks(b.text))}</p>`)
+        .join("\n");
+      const fallbackBody = `
+    <div id="root">
+      <div style="max-width:760px;margin:0 auto;padding:24px 16px;font-family:Inter,system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#1e3a5f;line-height:1.6">
+        <div style="font-size:11px;font-weight:700;color:#f97316;margin-bottom:6px">${escapeHtmlAttr(row.category)}</div>
+        <h1 style="font-size:22px;font-weight:700;color:#1e3a5f;margin:0 0 8px">${escapeHtmlAttr(row.title)}</h1>
+        <p style="margin:0 0 16px;color:#64748b;font-size:14px">${escapeHtmlAttr(row.summary)}</p>
+        ${bodyHtml}
+        <p style="margin:0;color:#64748b;font-size:14px">
+          페이지를 불러오는 중입니다… 잠시만 기다려 주세요.
+          <noscript>이 사이트는 최신 브라우저(JavaScript 사용)에서 정상적으로 표시됩니다.</noscript>
+        </p>
+      </div>
+    </div>`;
+      html = html.replace(/<div id="root">[\s\S]*?<\/body>/, `${fallbackBody}\n  </body>`);
+    }
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.set("Cache-Control", process.env.NODE_ENV === "production" ? "public, max-age=300" : "no-store");
+    res.status(row ? 200 : 404).send(html);
+  } catch (err) {
+    logger.error({ err, slug }, "[quality-seo] 렌더링 실패");
     try {
       const template = await getIndexTemplate();
       res.set("Content-Type", "text/html; charset=utf-8");

@@ -18,6 +18,8 @@ export interface PublicJob {
   id: string;
   status?: string;
   hidden?: boolean;
+  needsReview?: boolean;
+  reviewStatus?: string;
   _deleted?: boolean;
   date?: string;
   [key: string]: unknown;
@@ -51,13 +53,19 @@ const MIN_INVALIDATE_INTERVAL_MS = Number(
   process.env["JOBS_CACHE_MIN_INVALIDATE_MS"] ?? 3_000
 );
 
-// 한 건의 공고가 공개 노출 가능한지 (삭제/숨김/예약/실패 제외).
+// 한 건의 공고가 공개 노출 가능한지 (삭제/숨김/예약/실패/검수대기 제외).
+// needsReview=true(수기 등록 폼, parseJob.ts 점수<70)와 reviewStatus="needs-review"
+// (배치 자동수집 파이프라인, automation/의 별도 스크립트가 씀 — 필드명이 다르다, 실제 문서에서
+// 확인됨 2026-09-28)는 서로 다른 코드가 쓰는 별개 필드라 둘 다 확인해야 한다. 검수 전까지는
+// 목록/상세/사이트맵/검색 어디에도 노출하지 않는다.
 function isPublic(j: PublicJob): boolean {
   return (
     j._deleted !== true &&
     j.hidden !== true &&
     j.status !== "reserved" &&
-    j.status !== "failed"
+    j.status !== "failed" &&
+    j.needsReview !== true &&
+    j.reviewStatus !== "needs-review"
   );
 }
 
